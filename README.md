@@ -59,7 +59,7 @@ You can also generate a shareable report containing the pitches, decisions, EP n
 
 ## Finishing on a shared computer
 
-Save your work, then use **Settings → Forget** to remove your name and newsroom access from that browser. This does not delete your team’s stories. You’ll need the newsroom code to join again.
+Save your work, then choose **Sign out** beside your name to remove your name and newsroom access from that browser. Signing out also releases any producer roles and editing locks held by that browser, including in other tabs. This does not delete your team’s stories. You’ll need the newsroom code to join again.
 
 ## Feedback and help
 

@@ -87,8 +87,7 @@
         // protect the data, so it's safe for these to be in a public repo.
         // Leave the placeholders in to run in Local Mode (this browser only).
         const SUPABASE_URL = 'https://ushtoubwyopjdlogapew.supabase.co';
-
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaHRvdWJ3eW9wamRsb2dhcGV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTY3MzUsImV4cCI6MjEwODA3MjczNX0.qyukiNYqfnaOrnqGiL9mAGgmSmvBFKHe5YlzD59BFOA';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaHRvdWJ3eW9wamRsb2dhcGV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTY3MzUsImV4cCI6MjEwODA3MjczNX0.qyukiNYqfnaOrnqGiL9mAGgmSmvBFKHe5YlzD59BFOA';
         // Optional: Cloudflare Turnstile site key, if you've turned on CAPTCHA
         // protection in Supabase (see the README). Leave empty otherwise.
         const TURNSTILE_SITE_KEY = '';
@@ -190,6 +189,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         // ==========================================
         let state = {
             localMode: true,
+            signingOut: false,
             connectionState: 'offline',
             rooms: [],                     // newsrooms this browser has joined: [{ id, name }]
             roomDisplayName: 'Local newsroom',
@@ -221,7 +221,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
             }
         };
 
-        const canMutate = () => state.localMode || !!supabaseUser;
+        const canMutate = () => !state.signingOut && (state.localMode || !!supabaseUser);
 
         // ==========================================
         // 3. NOTICES
@@ -324,6 +324,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
                     if (session && session.user) {
                         supabaseUser = session.user;
                     } else {
+                        if (state.signingOut) return;
                         supabaseUser = null;
                         state.connectionState = 'offline';
                         render('header');
@@ -380,8 +381,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
         // Re-check memberships, so a changed code removes access within a minute.
         async function checkAccess() {
-            if (state.localMode || !supabaseUser || !state.currentBulletinId) return;
+            if (state.signingOut || state.localMode || !supabaseUser || !state.currentBulletinId) return;
             try { await loadRooms(); } catch { return; } // offline: try again later
+            if (state.signingOut) return;
             if (!state.rooms.some(r => r.id === state.currentBulletinId)) lostAccess();
             else render('header');
         }
@@ -1022,6 +1024,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         }
 
         async function sendToCuez() {
+            if (!canMutate()) return;
             if (state.localMode) { showError('Sending to Cuez needs a Supabase connection.'); return; }
             if (!state.meta.cuezEpisodeId || !state.meta.cuezPartUid) { showNotice('Cuez', 'This newsroom has no Cuez target yet. Ask your tutor to set one.', 'warn'); return; }
             if (state.ui.cuezSending || cuezSendInProgress()) return;
@@ -1162,6 +1165,54 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
             story.format = format;
             const ok = await conferenceAction('set_story_format', { p_story_id: storyId, p_format: format });
             if (!ok && state.storiesMap[storyId]) { state.storiesMap[storyId].format = before; render('main'); }
+        }
+
+        // Sign out of this browser: first give up the producer role and any
+        // editing locks (in every newsroom), then end the session and clear
+        // what this browser remembers. Getting back in needs the code again.
+        async function signOutBrowser() {
+            if (state.signingOut || state.localMode || !supabaseUser || !supabase) return;
+            if (state.ui.saving || state.ui.pitchBusy || state.ui.cuezSending || state.ui.join?.busy) {
+                showNotice('Please wait', 'Let the current save or send finish before signing out.', 'warn');
+                return;
+            }
+            const lines = ['Sign out of Moira:Desk on this browser?', '',
+                `You'll need the newsroom code to get back in${state.rooms.length ? ` to ${state.rooms.map(r => r.name).join(', ')}` : ''}.`];
+            lines.push('', "Any producer roles and editing locks held by this browser will be released, including in other tabs.");
+            lines.push('', "Any unsaved work in this browser's tabs will be lost.");
+            if (!confirm(lines.join('\n'))) return;
+            state.signingOut = true;
+            stopLockRefresh();
+            render('header');
+            try {
+                // Use the existing, permission-checked RPCs; no schema upgrade is needed.
+                const [rooms, locks] = await Promise.all([
+                    supabase.from('bulletins').select('id').eq('producer_user', supabaseUser.id),
+                    supabase.from('stories').select('id, locked_by_session').eq('locked_by_user', supabaseUser.id),
+                ]);
+                if (rooms.error) throw rooms.error;
+                if (locks.error) throw locks.error;
+                for (const story of locks.data || []) {
+                    const { error } = await supabase.rpc('unlock_story', { p_story_id: story.id, p_session_id: story.locked_by_session });
+                    if (error) throw error;
+                }
+                for (const room of rooms.data || []) {
+                    const { error } = await supabase.rpc('release_producer', { p_bulletin_id: room.id });
+                    if (error) throw error;
+                }
+                const { error } = await supabase.auth.signOut({ scope: 'local' });
+                if (error) throw error;
+                supabaseUser = null;
+                state.ui.editingStoryId = null;
+                if (unsubAll) { unsubAll(); unsubAll = null; }
+                Object.keys(localStorage).filter(k => k.startsWith('moiradesk_')).forEach(k => localStorage.removeItem(k));
+                location.reload();
+            } catch (e) {
+                state.signingOut = false;
+                if (supabaseUser && state.ui.editingStoryId) startLockRefresh(state.ui.editingStoryId);
+                render('header');
+                showError(`Could not finish signing out: ${e.message || 'Please try again.'} Any unsaved text is still on this page. Producer roles or locks may already have been released.`);
+            }
         }
 
         function showView(view) {
@@ -1599,13 +1650,16 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
             else connectionBadge = renderStatusBadge('Local mode', 'fa-hard-drive', 'bg-amber-100 text-amber-800 border border-amber-200');
 
             return `
-                <div class="bg-white border-b border-slate-200 px-3 py-2 md:px-6 md:py-3 flex items-center justify-between gap-3">
-                    <div class="flex items-center gap-3 min-w-0">
+                <div class="bg-white border-b border-slate-200 px-3 py-2 md:px-6 md:py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <div class="flex items-center gap-3 min-w-0 max-w-full">
                         <h1 class="text-xl font-bold tracking-tight text-slate-800 whitespace-nowrap"><i class="fa-solid fa-newspaper text-blue-500 mr-2"></i><span class="hidden sm:inline">Moira:<span class="text-blue-600">Desk</span></span></h1>
                         <button data-action="set-my-name" title="Shown to others when you're editing a story"
                             class="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-3 py-1 rounded-full text-xs font-bold hover:bg-blue-100 transition-colors truncate">
                             <i class="fa-solid fa-user text-[10px] opacity-60"></i>${state.myName ? escapeHTML(state.myName) : '<span class="font-normal italic">Set your name</span>'}
                         </button>
+                        ${!state.localMode && supabaseUser ? `<button data-action="sign-out" title="Sign out of Moira:Desk on this browser" aria-label="Sign out of Moira:Desk" ${state.signingOut ? 'disabled' : ''}
+                            class="shrink-0 flex items-center gap-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 border border-slate-200 px-2.5 py-1 rounded-full text-xs font-bold transition-colors whitespace-nowrap">
+                            <i class="fa-solid fa-right-from-bracket"></i><span class="hidden sm:inline">${state.signingOut ? 'Signing out…' : 'Sign out'}</span></button>` : ''}
                     </div>
                     <div class="flex items-center gap-3">
                         ${renderRoomControl()}
@@ -2183,7 +2237,6 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
                     <i class="fa-solid ${icon}"></i><span class="hidden md:inline">${label}</span>
                 </button>`;
             const tab = state.ui.settingsTab;
-            const roomList = state.rooms.map(r => escapeHTML(r.name)).join(', ');
 
             let body;
             if (tab === 'editorial') {
@@ -2194,9 +2247,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
                 </div>`;
             } else if (tab === 'reset') {
                 body = `<div class="bg-red-50 border border-red-200 rounded-xl p-6">
-                    <h4 class="font-bold text-red-800 text-lg mb-3"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Forget this browser</h4>
-                    <p class="text-sm text-red-700 mb-6">Signs this browser out and clears its Moira:Desk settings${roomList ? `, including your access to ${roomList}` : ''}. You'll need the codes again to get back in. Use this on shared computers. Nothing in the newsrooms or Cuez is deleted.</p>
-                    <button data-action="factory-reset" class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors">Forget this browser</button>
+                    <h4 class="font-bold text-red-800 text-lg mb-3"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Clear this browser</h4>
+                    <p class="text-sm text-red-700 mb-6">Deletes the Local Mode newsroom saved in this browser, and your name. It can't be undone.</p>
+                    <button data-action="factory-reset" class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors">Clear this browser</button>
                 </div>`;
             } else {
                 body = `<div class="p-4 space-y-4 text-center">
@@ -2216,7 +2269,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
                     <div class="flex">
                         ${tabBtn('editorial', 'Formats', 'fa-pen-nib')}
                         ${tabBtn('about', 'About', 'fa-info-circle')}
-                        ${tabBtn('reset', 'Forget', 'fa-right-from-bracket')}
+                        ${state.localMode ? tabBtn('reset', 'Clear', 'fa-right-from-bracket') : ''}
                     </div>
                     <div class="p-6 overflow-y-auto flex-1 min-h-0">${body}</div>
                     <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-2xl flex justify-end items-center gap-3">
@@ -2257,6 +2310,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         // ==========================================
         function bindGlobalEvents() {
             document.addEventListener('keydown', async e => {
+                if (state.signingOut) return;
                 if (e.target && ['join-code', 'join-name'].includes(e.target.id) && e.key === 'Enter') {
                     e.preventDefault();
                     const code = document.getElementById('join-code')?.value || '';
@@ -2297,8 +2351,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
                 if (action === 'open-settings-modal')  { state.ui.isSettingsModalOpen = true; state.ui.settingsTab = 'editorial'; render('modal'); return true; }
                 if (action === 'close-settings-modal') { state.ui.isSettingsModalOpen = false; render('modal'); return true; }
                 if (action === 'set-settings-tab')     { state.ui.settingsTab = val; render('modal'); return true; }
+                if (action === 'sign-out') { signOutBrowser(); return true; }
                 if (action === 'factory-reset') {
-                    if (!confirm('Forget this browser? You will need newsroom codes to get back in.')) return true;
+                    if (!confirm('Clear this browser? The Local Mode newsroom saved here will be deleted.')) return true;
                     if (state.ui.editingStoryId) { stopLockRefresh(); await unlockStory(state.ui.editingStoryId); }
                     try { if (supabase) await supabase.auth.signOut(); } catch {}
                     try {
@@ -2545,6 +2600,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
             };
 
             document.body.addEventListener('click', async e => {
+                if (state.signingOut) return;
                 const btn = e.target.closest('[data-action]');
                 if (!btn || btn.disabled) return;
                 const ctx = { action: btn.getAttribute('data-action'), id: btn.getAttribute('data-id'), val: btn.getAttribute('data-val') };
