@@ -1,0 +1,2620 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moira:Desk</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0/release/index.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0/release/default.css" rel="stylesheet">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .drag-over { border-top: 4px solid #3b82f6 !important; }
+        #main-container { -webkit-overflow-scrolling: touch; overflow-y: auto; }
+
+        .form-label-sm { font-size: 0.625rem; font-weight: 700; color: #64748b; text-transform: uppercase; }
+        .form-input-sm { width: 100%; border: 1px solid #e2e8f0; border-radius: 0.375rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; font-family: monospace; outline: none; }
+        .form-input-sm:focus { border-color: #3b82f6; }
+        .btn-primary   { padding: 0.625rem 1.5rem; border-radius: 0.5rem; background: #2563eb; color: #fff; font-weight: 500; font-size: 0.875rem; box-shadow: 0 1px 2px rgb(0 0 0/0.05); transition: background-color 150ms; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        @keyframes toast-in  { from { opacity:0; transform:translateY(12px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+        @keyframes toast-out { from { opacity:1; } to { opacity:0; transform:translateY(-8px); } }
+        .moira-toast { animation: toast-in 0.2s ease-out forwards; }
+        .moira-toast.leaving { animation: toast-out 0.4s ease-in forwards; }
+
+        @keyframes shake {
+            10%, 90% { transform: translateX(-1px); }
+            20%, 80% { transform: translateX(2px); }
+            30%, 50%, 70% { transform: translateX(-4px); }
+            40%, 60% { transform: translateX(4px); }
+        }
+        .shake { animation: shake 0.4s; }
+
+        /* Touch: hide the grip, show ▲/▼ instead */
+        .row-reorder-btns { display: none; }
+        @media (pointer: coarse) {
+            .row-drag-icon  { display: none; }
+            .row-reorder-btns { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+        }
+
+        .segment-row td { padding: 0; }
+        .segment-divider { display: flex; align-items: center; background: #eef2ff; color: #3730a3; border-top: 1px solid #c7d2fe; border-bottom: 1px solid #c7d2fe; }
+        .segment-label  { font-size: 0.7rem; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.4rem 1rem; white-space: nowrap; }
+        .segment-dur    { font-size: 0.7rem; font-family: monospace; opacity: 0.6; padding-right: 1rem; }
+        .segment-line   { flex: 1; height: 1px; background: #c7d2fe; }
+
+        .cuez-badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.15rem 0.5rem; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+        .cuez-none    { color: #94a3b8; border-color: #e2e8f0; background: #f8fafc; }
+        .cuez-sent    { color: #047857; border-color: #a7f3d0; background: #ecfdf5; cursor: pointer; }
+        .cuez-changed { color: #b45309; border-color: #fcd34d; background: #fffbeb; cursor: pointer; }
+
+        /* "In Cuez" preview chips, in Cuez's block colours */
+        .cuez-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-top: 0.35rem; }
+        .cuez-chips-label { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin-right: 0.15rem; }
+        .cuez-chip { font-size: 0.7rem; padding: 0.1rem 0.45rem; border-radius: 0.3rem; border-left: 3px solid; white-space: nowrap; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
+        .cuez-chip b { font-weight: 800; letter-spacing: 0.04em; }
+        .cuez-chip-prompter { color: #0369a1; background: #f0f9ff; border-color: #38bdf8; }
+        .cuez-chip-clip { color: #7e22ce; background: #faf5ff; border-color: #a855f7; }
+        .cuez-chip-strap { color: #1d4ed8; background: #eff6ff; border-color: #3b82f6; }
+        .cuez-chip-instructions { color: #b91c1c; background: #fef2f2; border-color: #ef4444; }
+        .cuez-chip-arrow { color: #cbd5e1; font-size: 0.75rem; }
+        .script-tool { font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 0.3rem; border: 1px solid; background: #fff; }
+        .script-tool-clip { color: #7e22ce; border-color: #d8b4fe; }
+        .script-tool-strap { color: #1d4ed8; border-color: #93c5fd; }
+        .script-tool-instructions { color: #b91c1c; border-color: #fca5a5; }
+        .script-tool:hover { filter: brightness(0.95); }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col overflow-hidden text-slate-800">
+
+    <div id="header-container" class="shrink-0"></div>
+    <div id="main-container" class="flex-1 overflow-auto"></div>
+    <div id="modal-container" class="relative z-50"></div>
+
+    <script type="module">
+        import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+
+        // ==========================================
+        // 1. CONSTANTS & CONFIGURATION
+        // ==========================================
+
+        // ── YOUR SUPABASE PROJECT ──────────────────────────────────────────
+        // Project Settings → API in the Supabase dashboard. Both values are
+        // designed to be public: the members-only database rules are what
+        // protect the data, so it's safe for these to be in a public repo.
+        // Leave the placeholders in to run in Local Mode (this browser only).
+        const SUPABASE_URL = 'https://ushtoubwyopjdlogapew.supabase.co';
+
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaHRvdWJ3eW9wamRsb2dhcGV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTY3MzUsImV4cCI6MjEwODA3MjczNX0.qyukiNYqfnaOrnqGiL9mAGgmSmvBFKHe5YlzD59BFOA';
+        // Optional: Cloudflare Turnstile site key, if you've turned on CAPTCHA
+        // protection in Supabase (see the README). Leave empty otherwise.
+        const TURNSTILE_SITE_KEY = '';
+        // ───────────────────────────────────────────────────────────────────
+
+        const DEFAULT_FORMATS = ["READ", "WRAP", "CLIP", "OOV", "ULAY", "OOV/CLIP", "ULAY/CLIP", "OVO", "LIVE"];
+        const STALE_LOCK_MS = 1000 * 45;   // heartbeat refreshes every 20s while the editor is open
+        const DEFAULT_WPM = 120;           // Cuez's default prompter read speed; the newsroom's own setting wins
+        const CUEZ_FUNCTION = 'send-to-cuez';
+        const CUEZ_SEND_STALE_MS = 120 * 1000;  // matches SEND_CLAIM_SECONDS in the function
+
+        // Script tags -> Cuez blocks. Keep in step with TAG_RE / parseTag /
+        // storyBlocks in the send-to-cuez function.
+        //   [CLIP:1:20 Title | SOT | LW: last words]   clip (all parts optional)
+        //   [STRAP: Name | Job title]                  lower third
+        //   [any other direction]                      instructions (not read out)
+        const TAG_RE = /\[([^\]\n]+)\]/g;
+        const CLIP_FORMATS = new Set(["WRAP", "CLIP", "OOV", "ULAY", "OOV/CLIP", "ULAY/CLIP", "PKG", "VT"]);
+        const OFF_FORMATS = new Set(["OOV", "ULAY"]);   // clips default to OFF here, SOT elsewhere
+
+        // localStorage keys are prefixed so Moira:Desk and Moira:Rundown can share
+        // an origin (e.g. the same GitHub Pages site) without clobbering each other.
+        const LS = {
+            bulletin: 'moiradesk_bulletin_id',
+            name:     'moiradesk_my_name',
+            view:     'moiradesk_view',
+            local:    (id) => `moiradesk_local_room_${id}`,
+        };
+        const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+        const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+        const lsDel = (k) => { try { localStorage.removeItem(k); } catch {} };
+
+        // Stable per browser, so your own locks are recognisable across tabs and reloads.
+        const BROWSER_ID = (() => {
+            let id = lsGet('moiradesk_browser_id');
+            if (!id) { id = crypto.randomUUID().slice(0, 8); lsSet('moiradesk_browser_id', id); }
+            return id;
+        })();
+
+        const INITIAL_META = {
+            order: [], formats: DEFAULT_FORMATS, targetDuration: null,
+            cuezEpisodeId: null, cuezEpisodeTitle: null, cuezPartUid: null, cuezPartTitle: null, cuezSendingAt: null,
+            producerUser: null, producerName: null, conferenceId: null, conferenceStartedAt: null,
+        };
+
+        const IS_CONFIGURED = /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(SUPABASE_URL) && !/YOUR-/.test(SUPABASE_ANON_KEY);
+
+        let supabase = null;
+        let supabaseUser = null;
+        let lockRefreshInterval = null;
+
+        function startLockRefresh(id) {
+            stopLockRefresh();
+            lockRefreshInterval = setInterval(async () => {
+                if (state.ui.editingStoryId !== id) { stopLockRefresh(); return; }
+                const story = state.storiesMap[id];
+                if (!story || story.lockedBySession !== state.sessionId) { stopLockRefresh(); return; }
+                story.lockedAt = Date.now();
+                try { if (!(await DB.renewLock(id, state.sessionId))) lockLost(id); }
+                catch (e) { console.warn('Lock refresh failed, lock may go stale:', e.message); }
+            }, 20000);
+        }
+        function stopLockRefresh() {
+            if (lockRefreshInterval) { clearInterval(lockRefreshInterval); lockRefreshInterval = null; }
+        }
+        // The server says this tab no longer holds the lock (it went stale and
+        // someone took over). Keep the editor and the text; saving will tell them
+        // whether it can go through.
+        function lockLost(id) {
+            stopLockRefresh();
+            const story = state.storiesMap[id];
+            showNotice('Heads up', `Someone else took over "${story?.slug || 'this story'}" while your editor was idle. Your text is still here; if they're still editing, saving will be refused, so copy it somewhere safe.`, 'warn');
+        }
+
+        // Switching tabs (to Cuez, say) keeps the editor open and your text intact.
+        // Browsers slow timers in hidden tabs, so the heartbeat may lapse and the
+        // lock go stale; on return, renew it. If someone took over meanwhile, warn:
+        // their save bumps the revision, so yours will raise the conflict prompt.
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState !== 'visible') return;
+            const id = state.ui.editingStoryId;
+            const story = id && state.storiesMap[id];
+            if (!story || !canMutate()) return;
+            if (story.lockedBySession === state.sessionId) {
+                story.lockedAt = Date.now();
+                let held = true;
+                try { held = await DB.renewLock(id, state.sessionId); } catch (e) { console.warn('Lock renew failed:', e.message); }
+                if (held) startLockRefresh(id); else lockLost(id);
+            } else if (lockState(story) === 'free') {
+                await lockStory(id);
+                startLockRefresh(id);
+            } else {
+                showNotice('Heads up', `${story.lockedByName} took over "${story.slug}" while you were away. If they've saved, you'll be asked which version to keep when you save.`, 'warn');
+            }
+        });
+
+        // ==========================================
+        // 2. CENTRAL STATE
+        // ==========================================
+        let state = {
+            localMode: true,
+            connectionState: 'offline',
+            rooms: [],                     // newsrooms this browser has joined: [{ id, name }]
+            roomDisplayName: 'Local newsroom',
+            currentBulletinId: IS_CONFIGURED ? null : 'bulletin-local',
+            // "browser/tab": locks from your own other tabs (or a page you
+            // reloaded mid-edit) can be taken over straight away.
+            sessionId: `${BROWSER_ID}/${crypto.randomUUID()}`,
+            myName: lsGet(LS.name) || '',
+            meta: { ...INITIAL_META },
+            storiesMap: {},
+            pitchesMap: {},                // this newsroom's pitches (current conference shown)
+            ui: {
+                view: lsGet(LS.view) === 'conference' ? 'conference' : 'rundown',
+                editingPitchId: null, // pitch being edited inline
+                pitchBusy: false,     // waiting on a pitch/producer action
+                draggedStoryId: null,
+                inlineEditingId: null,
+                editingStoryId: null,
+                pendingConflict: null,
+                pendingScrollToStoryId: null,
+                isSettingsModalOpen: false,
+                settingsTab: 'editorial',
+                join: null,           // { error, busy } while the join dialog/screen is in use
+                needsJoin: false,     // signed in but no newsrooms yet: show the join screen
+                isShortcutsModalOpen: false,
+                cuezSending: false,   // this browser is waiting on a send
+                trash: [],            // [{id, story, orderIndex, deletedAt}]
+                storySnapshots: {},   // {storyId: previous version} for one-step revert
+            }
+        };
+
+        const canMutate = () => state.localMode || !!supabaseUser;
+
+        // ==========================================
+        // 3. NOTICES
+        // ==========================================
+        let _errorContainer = null;
+        function showError(message, actionLabel = null, actionFn = null) {
+            if (!_errorContainer) {
+                _errorContainer = document.createElement('div');
+                _errorContainer.style.cssText = 'position:fixed;bottom:1rem;right:1rem;left:1rem;z-index:9998;display:flex;flex-direction:column;gap:0.5rem;pointer-events:none;max-width:min(26rem,calc(100vw - 2rem));margin-left:auto;';
+                document.body.appendChild(_errorContainer);
+            }
+            const el = document.createElement('div');
+            el.style.cssText = 'background:#1e293b;border:1px solid #ef4444;border-left:4px solid #ef4444;border-radius:0.75rem;padding:0.75rem 1rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);pointer-events:auto;display:flex;flex-direction:column;gap:0.4rem;';
+            el.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+                    <span style="font-size:0.6rem;font-weight:900;color:#ef4444;text-transform:uppercase;letter-spacing:0.1em;">&#9888; Error</span>
+                    <button data-dismiss style="font-size:0.7rem;color:#64748b;background:none;border:none;cursor:pointer;padding:0;">&#10005; Dismiss</button>
+                </div>
+                <div style="font-size:0.82rem;font-weight:600;color:#f1f5f9;line-height:1.45;white-space:pre-wrap;">${escapeHTML(message)}</div>
+                ${actionLabel && actionFn ? `<button data-act style="margin-top:0.2rem;font-size:0.75rem;font-weight:700;color:#93c5fd;background:none;border:none;cursor:pointer;text-align:left;padding:0;text-decoration:underline;">${escapeHTML(actionLabel)}</button>` : ''}`;
+            el.querySelector('[data-dismiss]').addEventListener('click', () => el.remove());
+            if (actionLabel && actionFn) el.querySelector('[data-act]').addEventListener('click', () => { el.remove(); actionFn(); });
+            _errorContainer.appendChild(el);
+            setTimeout(() => { if (el.parentNode) el.remove(); }, 20000);
+        }
+
+        let _toastContainer = null;
+        function showNotice(title, text, tone = 'ok') {
+            if (!_toastContainer) {
+                _toastContainer = document.createElement('div');
+                _toastContainer.style.cssText = 'position:fixed;top:1rem;right:1rem;left:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;pointer-events:none;max-width:min(24rem,calc(100vw - 2rem));margin-left:auto;';
+                document.body.appendChild(_toastContainer);
+            }
+            const colour = tone === 'warn' ? '#f59e0b' : '#10b981';
+            const toast = document.createElement('div');
+            toast.className = 'moira-toast';
+            toast.style.cssText = `background:#1e293b;border:1px solid ${colour};border-left:4px solid ${colour};border-radius:0.75rem;padding:0.75rem 1rem;box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;`;
+            toast.innerHTML = `
+                <div style="font-size:0.6rem;font-weight:900;color:${colour};text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem;">${escapeHTML(title)}</div>
+                <div style="font-size:0.875rem;font-weight:600;color:#f1f5f9;line-height:1.4;white-space:pre-wrap;">${escapeHTML(text)}</div>`;
+            _toastContainer.appendChild(toast);
+            const dismiss = () => { toast.classList.add('leaving'); toast.addEventListener('animationend', () => toast.remove(), { once: true }); };
+            const timer = setTimeout(dismiss, tone === 'warn' ? 15000 : 7000);
+            toast.addEventListener('click', () => { clearTimeout(timer); dismiss(); });
+        }
+
+        // ==========================================
+        // 4. STARTUP
+        // ==========================================
+        // Gets a Cloudflare Turnstile token for signing in, when a site key is set.
+        // Usually invisible; Cloudflare shows a checkbox only if it's unsure.
+        // Only needed the first time a browser signs in: the session is reused after.
+        function captchaToken() {
+            if (!TURNSTILE_SITE_KEY) return Promise.resolve(undefined);
+            return new Promise((resolve, reject) => {
+                const box = document.createElement('div');
+                box.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999';
+                document.body.appendChild(box);
+                const done = (fn, v) => { box.remove(); fn(v); };
+                const render = () => window.turnstile.render(box, {
+                    sitekey: TURNSTILE_SITE_KEY, appearance: 'interaction-only',
+                    callback: (t) => done(resolve, t),
+                    'error-callback': () => done(reject, new Error('The human check failed. Reload to try again.')),
+                    'timeout-callback': () => done(reject, new Error('The human check timed out. Reload to try again.')),
+                });
+                if (window.turnstile) return render();
+                const sc = document.createElement('script');
+                sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+                sc.async = true;
+                sc.onload = render;
+                sc.onerror = () => done(reject, new Error('Could not load the human check (Cloudflare Turnstile). Check your connection.'));
+                document.head.appendChild(sc);
+            });
+        }
+
+        async function boot() {
+            bindGlobalEvents();
+            if (!IS_CONFIGURED) { seedLocalData(); render(); return; }
+
+            state.connectionState = 'connecting';
+            render('header');
+            try {
+                supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                // Reuse this browser's session: signing in afresh on every load
+                // would create a new anonymous user each time, forgetting which
+                // newsrooms it joined (and eating the per-network sign-in limit).
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    supabaseUser = session.user;
+                } else {
+                    const token = await captchaToken();
+                    const { data, error } = await supabase.auth.signInAnonymously(token ? { options: { captchaToken: token } } : undefined);
+                    if (error) throw error;
+                    supabaseUser = data.user;
+                }
+                state.localMode = false;
+                DB = DB_SUPABASE;
+
+                supabase.auth.onAuthStateChange((_event, session) => {
+                    if (session && session.user) {
+                        supabaseUser = session.user;
+                    } else {
+                        supabaseUser = null;
+                        state.connectionState = 'offline';
+                        render('header');
+                        showError('Signed out: changes are not saving. Reload to reconnect.', 'Reload', () => location.reload());
+                    }
+                });
+
+                await loadRooms();
+                setInterval(checkAccess, 60000);
+                document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkAccess(); });
+                const last = lsGet(LS.bulletin);
+                const room = state.rooms.find(r => r.id === last) || state.rooms[0];
+                if (room) openRoom(room.id);
+                else { state.ui.needsJoin = true; state.connectionState = 'connected'; render(); }
+            } catch (e) {
+                state.connectionState = 'error';
+                render('header', 'main');
+                const msg = /fetch/i.test(e.message || '')
+                    ? 'Could not reach the server. Check your internet connection and reload.'
+                    : /anonymous/i.test(e.message || '')
+                        ? 'Sign-in failed: Anonymous Sign-Ins must be enabled for this Supabase project (Authentication → Sign In / Providers).'
+                        : /rate|limit/i.test(e.message || '')
+                            ? 'Too many sign-ins from this network. Wait a minute and reload (or raise the anonymous sign-in rate limit in Supabase).'
+                            : `Sign-in failed: ${e.message}`;
+                showError(msg, 'Reload', () => location.reload());
+            }
+        }
+
+        // Newsrooms this browser has joined (the database only returns those).
+        async function loadRooms() {
+            const { data, error } = await supabase.rpc('my_newsrooms');
+            if (error) throw error;
+            state.rooms = (data || []).map(r => ({ id: r.newsroom_id, name: r.newsroom_name }));
+        }
+
+        function openRoom(bulletinId) {
+            const room = state.rooms.find(r => r.id === bulletinId);
+            if (!room) return;
+            if (state.ui.editingStoryId) { stopLockRefresh(); unlockStory(state.ui.editingStoryId); }
+
+            state.roomDisplayName = room.name;
+            state.currentBulletinId = room.id;
+            state.storiesMap = {};
+            state.pitchesMap = {};
+            state.meta = { ...INITIAL_META };
+            Object.assign(state.ui, {
+                draggedStoryId: null, editingStoryId: null, pendingConflict: null,
+                trash: [], needsJoin: false, join: null, editingPitchId: null,
+            });
+            lsSet(LS.bulletin, room.id);
+            render();
+            setupListeners();
+        }
+
+        // Re-check memberships, so a changed code removes access within a minute.
+        async function checkAccess() {
+            if (state.localMode || !supabaseUser || !state.currentBulletinId) return;
+            try { await loadRooms(); } catch { return; } // offline: try again later
+            if (!state.rooms.some(r => r.id === state.currentBulletinId)) lostAccess();
+            else render('header');
+        }
+
+        // Called when the database stops returning this newsroom: its code was
+        // changed (removing members) or it was deleted.
+        async function lostAccess() {
+            if (!state.currentBulletinId) return;
+            const name = state.roomDisplayName;
+            if (unsubAll) { unsubAll(); unsubAll = null; }
+            state.ui.editingStoryId = null;
+            stopLockRefresh();
+            try { await loadRooms(); } catch {}
+            state.rooms = state.rooms.filter(r => r.id !== state.currentBulletinId);
+            showError(`You no longer have access to ${name}. Its code may have been changed: ask for the new one.`);
+            state.currentBulletinId = null;
+            state.storiesMap = {};
+            state.meta = { ...INITIAL_META };
+            if (state.rooms.length) openRoom(state.rooms[0].id);
+            else { state.ui.needsJoin = true; render(); }
+        }
+
+        async function joinWithCode(code, name) {
+            const j = state.ui.join || (state.ui.join = {});
+            if (name) { state.myName = name.slice(0, 40); lsSet(LS.name, state.myName); }
+            if (!state.myName) { j.error = 'Add your name: it shows others who is editing a story.'; render('main', 'modal'); return; }
+            if (!code.trim()) { j.error = 'Enter the newsroom code.'; render('main', 'modal'); return; }
+            j.busy = true; j.error = null;
+            render('main', 'modal');
+            try {
+                const { data, error } = await supabase.rpc('join_newsroom', { p_code: code });
+                if (error) throw error;
+                const room = data?.[0];
+                if (!room) { Object.assign(j, { busy: false, error: "That code isn't recognised. Check it with your tutor or editor." }); render('main', 'modal'); return; }
+                await loadRooms();
+                state.ui.join = null;
+                openRoom(room.newsroom_id);
+                showNotice('Joined', `You're in ${room.newsroom_name}.`);
+            } catch (e) {
+                Object.assign(j, { busy: false, error: e.message || 'Could not join.' });
+                render('main', 'modal');
+            }
+        }
+
+        function seedLocalData() {
+            if (!state.localMode) return;
+            if (loadLocalState()) { render('header', 'main'); return; }
+            const localId = crypto.randomUUID();
+            state.storiesMap[localId] = {
+                bulletinId: state.currentBulletinId,
+                slug: 'WELCOME TO MOIRA:DESK',
+                script: `Good evening. You're in Local Mode: nothing here leaves this browser.\nTo share newsrooms and send to Cuez, add your Supabase details to index.html.\n[CLIP:0:20 Example clip]\nA [CLIP] tag becomes an empty clip block in Cuez for production to fill.`,
+                format: 'OVO', presenter: '', reporter: '',
+                duration: 35, completed: null, isFloated: false, type: null,
+                lockedBySession: null, lockedByName: null, lockedAt: null, rev: 1,
+                cuezItemUid: null, cuezSentAt: null, cuezSentRev: null, cuezItemNumber: null,
+            };
+            state.meta = { ...INITIAL_META, order: [localId, 'marker-line'] };
+            render('header', 'main');
+        }
+
+        // ==========================================
+        // 5. DATA SYNC
+        // ==========================================
+        let unsubAll = null;
+
+        function setupListeners() {
+            if (!canMutate() || state.localMode || !state.currentBulletinId) return;
+            if (unsubAll) { unsubAll(); unsubAll = null; }
+            const bulletinId = state.currentBulletinId;
+
+            unsubAll = DB.subscribe(
+                (data, err) => {
+                    if (bulletinId !== state.currentBulletinId) return;
+                    if (err) { state.connectionState = 'error'; render('header'); showError('Lost connection to the database: changes are not saving. Reconnecting…'); return; }
+                    state.connectionState = 'connected';
+                    if (!data) { lostAccess(); return; }
+                    const conferenceChanged = data.conferenceId !== state.meta.conferenceId;
+                    state.meta = { ...INITIAL_META, ...data };
+                    if (conferenceChanged) refreshPitches();
+                    render('header', 'main');
+                },
+                (changes, err) => {
+                    if (bulletinId !== state.currentBulletinId) return;
+                    if (err) { state.connectionState = 'error'; render('header'); showError('Story sync lost. Check your connection.'); return; }
+                    const newMap = { ...state.storiesMap };
+                    changes.forEach(({ type, id, data }) => {
+                        if (type === 'removed') delete newMap[id];
+                        else newMap[id] = data;
+                    });
+                    state.storiesMap = newMap;
+                    render('main');
+                },
+                (changes) => {
+                    if (bulletinId !== state.currentBulletinId) return;
+                    const map = { ...state.pitchesMap };
+                    changes.forEach(({ type, id, data }) => { if (type === 'removed') delete map[id]; else map[id] = data; });
+                    state.pitchesMap = map;
+                    render('main');
+                }
+            );
+        }
+
+        // Reload the current conference's pitches (after a change of conference,
+        // and after each pitch action in case a Realtime event was missed).
+        // Only the latest request's answer is used: requests can overlap (a new
+        // conference starts while an earlier load is still in flight), and a
+        // late answer for the old conference must not replace the current one.
+        let _pitchLoadSeq = 0;
+        async function refreshPitches() {
+            if (state.localMode || !state.currentBulletinId) return;
+            const seq = ++_pitchLoadSeq;
+            const bulletinId = state.currentBulletinId;
+            const conferenceId = state.meta.conferenceId;
+            try {
+                const rows = await DB.loadPitches(bulletinId, conferenceId);
+                if (seq !== _pitchLoadSeq || bulletinId !== state.currentBulletinId || conferenceId !== state.meta.conferenceId) return;
+                state.pitchesMap = Object.fromEntries(rows.map(p => [p.id, p]));
+                render('main');
+            } catch (e) { console.warn('Could not load pitches:', e.message); }
+        }
+
+        // ==========================================
+        // 6. DB ADAPTERS
+        // ==========================================
+        // Mutators update state optimistically, then persist through DB.*.
+
+        const DB_NULL = {
+            subscribe:                 () => () => {},
+            updateBulletin:      async () => {},
+            moveStory:           async () => null,
+            createStory:         async () => {},
+            deleteStory:         async () => {},
+            restoreStory:        async () => {},
+            saveStory:           async () => 'ok',
+            lockStory:           async () => {},
+            renewLock:           async () => true,
+            unlockStory:         async () => {},
+            saveSlug:            async () => {},
+            takeLock:            async () => {},
+            setStoryStatus:      async () => {},
+            setStoryFloated:     async () => {},
+            markNotSent:         async () => {},
+            loadPitches:         async () => [],
+            pitchAction:         async () => null,
+            errorMessage:              (e) => e?.message || 'Unknown error',
+        };
+
+        // snake_case columns <-> camelCase objects
+        function bulletinFromRow(row) {
+            return {
+                order: row.order_ids || [],
+                formats: (row.formats && row.formats.length) ? row.formats : DEFAULT_FORMATS,
+                targetDuration: row.target_duration ?? null,
+                cuezEpisodeId: row.cuez_episode_id || null,
+                cuezEpisodeTitle: row.cuez_episode_title || null,
+                cuezPartUid: row.cuez_part_uid || null,
+                cuezPartTitle: row.cuez_part_title || null,
+                cuezSendingAt: row.cuez_sending_at || null,
+                cuezReadSpeed: row.cuez_read_speed ?? null,
+                producerUser: row.producer_user || null,
+                producerName: row.producer_name || null,
+                conferenceId: row.conference_id || null,
+                conferenceStartedAt: row.conference_started_at || null,
+            };
+        }
+        function pitchFromRow(row) {
+            return {
+                id: row.id, conferenceId: row.conference_id, slug: row.slug || '', angle: row.angle || '',
+                format: row.format || '', pitchedBy: row.pitched_by || '', createdBy: row.created_by || null,
+                status: row.status || 'pitched', spikeReason: row.spike_reason || '', epNote: row.ep_note || '',
+                storyId: row.story_id || null, position: row.position ?? 0,
+                createdAt: row.created_at || null, decidedAt: row.decided_at || null,
+            };
+        }
+        const BULLETIN_FIELD_MAP = {
+            order: 'order_ids', formats: 'formats', targetDuration: 'target_duration',
+        };
+        function bulletinToRow(updates) {
+            const row = {};
+            for (const [k, v] of Object.entries(updates)) if (BULLETIN_FIELD_MAP[k]) row[BULLETIN_FIELD_MAP[k]] = v;
+            return row;
+        }
+        function storyFromRow(row) {
+            return {
+                bulletinId: row.bulletin_id,
+                slug: row.slug || '',
+                script: row.script || '',
+                format: row.format || '',
+                presenter: row.presenter || '',
+                reporter: row.reporter || '',
+                duration: row.duration || 0,
+                completed: row.completed || null,
+                isFloated: !!row.is_floated,
+                type: row.type || null,
+                lockedBySession: row.locked_by_session || null,
+                lockedByName: row.locked_by_name || null,
+                lockedAt: row.locked_at || null,
+                rev: row.rev,
+                cuezItemUid: row.cuez_item_uid || null,
+                cuezSentAt: row.cuez_sent_at || null,
+                cuezSentRev: row.cuez_sent_rev ?? null,
+                cuezItemNumber: row.cuez_item_number || null,
+                cuezPendingUid: row.cuez_pending_uid || null,
+                brief: row.brief || '',
+                pitchedBy: row.pitched_by || '',
+            };
+        }
+        const STORY_FIELD_MAP = {
+            slug: 'slug', script: 'script', format: 'format',
+            presenter: 'presenter', reporter: 'reporter',
+            duration: 'duration', completed: 'completed',
+            isFloated: 'is_floated', type: 'type',
+            lockedBySession: 'locked_by_session', lockedByName: 'locked_by_name',
+            lockedAt: 'locked_at', rev: 'rev',
+            cuezItemUid: 'cuez_item_uid', cuezSentAt: 'cuez_sent_at', cuezSentRev: 'cuez_sent_rev', cuezItemNumber: 'cuez_item_number',
+            cuezPendingUid: 'cuez_pending_uid', cuezPendingAt: 'cuez_pending_at', cuezPendingRev: 'cuez_pending_rev', cuezPendingPlan: 'cuez_pending_plan',
+        };
+        function storyToRow(data) {
+            const row = {};
+            for (const [k, v] of Object.entries(data)) if (STORY_FIELD_MAP[k]) row[STORY_FIELD_MAP[k]] = v;
+            return row;
+        }
+
+        const DB_SUPABASE = {
+            // Prime with a select (Realtime only carries future changes), then subscribe.
+            subscribe: (onBulletin, onStories, onPitches) => {
+                const bulletinId = state.currentBulletinId;
+                (async () => {
+                    try {
+                        const { data, error } = await supabase.from('bulletins').select('*').eq('id', bulletinId).maybeSingle();
+                        if (error) throw error;
+                        onBulletin(data ? bulletinFromRow(data) : null);
+                    } catch (e) { onBulletin(null, e); }
+                    refreshPitches();
+                    try {
+                        const { data, error } = await supabase.from('stories').select('*').eq('bulletin_id', bulletinId);
+                        if (error) throw error;
+                        onStories((data || []).map(row => ({ type: 'added', id: row.id, data: storyFromRow(row) })));
+                    } catch (e) { onStories([], e); }
+                })();
+
+                const bulletinChannel = supabase
+                    .channel(`bulletin-${bulletinId}`)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'bulletins', filter: `id=eq.${bulletinId}` }, payload => {
+                        if (payload.eventType === 'DELETE') { onBulletin(null); return; }
+                        onBulletin(bulletinFromRow(payload.new));
+                    })
+                    .subscribe();
+
+                const storiesChannel = supabase
+                    .channel(`stories-${bulletinId}`)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'stories', filter: `bulletin_id=eq.${bulletinId}` }, payload => {
+                        if (payload.eventType === 'DELETE') {
+                            onStories([{ type: 'removed', id: payload.old.id, data: null }]);
+                        } else {
+                            onStories([{ type: payload.eventType === 'INSERT' ? 'added' : 'modified', id: payload.new.id, data: storyFromRow(payload.new) }]);
+                        }
+                    })
+                    .subscribe();
+
+                const pitchesChannel = supabase
+                    .channel(`pitches-${bulletinId}`)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'pitches', filter: `bulletin_id=eq.${bulletinId}` }, payload => {
+                        if (payload.eventType === 'DELETE') onPitches([{ type: 'removed', id: payload.old.id }]);
+                        else onPitches([{ type: 'modified', id: payload.new.id, data: pitchFromRow(payload.new) }]);
+                    })
+                    .subscribe();
+
+                return () => {
+                    supabase.removeChannel(bulletinChannel);
+                    supabase.removeChannel(storiesChannel);
+                    supabase.removeChannel(pitchesChannel);
+                };
+            },
+
+            loadPitches: async (bulletinId, conferenceId) => {
+                if (!conferenceId) return [];
+                const { data, error } = await supabase.from('pitches').select('*')
+                    .eq('bulletin_id', bulletinId).eq('conference_id', conferenceId);
+                if (error) throw error;
+                return (data || []).map(pitchFromRow);
+            },
+
+            // Conference actions all go through database functions that check
+            // membership and who the producer is. Returns the function's result.
+            pitchAction: async (fn, args) => {
+                const { data, error } = await supabase.rpc(fn, args);
+                if (error) throw error;
+                return data;
+            },
+
+            updateBulletin: async (updates) => {
+                const { error } = await supabase.from('bulletins')
+                    .update({ ...bulletinToRow(updates), updated_at: new Date().toISOString() })
+                    .eq('id', state.currentBulletinId);
+                if (error) throw error;
+            },
+
+            // Atomic move in the database; returns the resulting order.
+            moveStory: async (storyId, beforeId) => {
+                const { data, error } = await supabase.rpc('move_story', {
+                    p_bulletin_id: state.currentBulletinId, p_story_id: storyId, p_before_id: beforeId,
+                });
+                if (error) throw error;
+                return data;
+            },
+
+            // Story rows can't be written directly: every change goes through a
+            // database function that checks membership, locks and revisions.
+            setStoryStatus: async (id, completed) => {
+                const { error } = await supabase.rpc('set_story_status', { p_story_id: id, p_completed: completed });
+                if (error) throw error;
+            },
+
+            setStoryFloated: async (id, floated) => {
+                const { error } = await supabase.rpc('set_story_floated', { p_story_id: id, p_floated: floated });
+                if (error) throw error;
+            },
+
+            markNotSent: async (id) => {
+                const { error } = await supabase.rpc('mark_story_not_sent', { p_story_id: id });
+                if (error) throw error;
+            },
+
+            createStory: async (id, storyData) => {
+                const { error } = await supabase.rpc('create_story', {
+                    p_bulletin_id: state.currentBulletinId, p_story_id: id, p_story: storyToRow(storyData),
+                });
+                if (error) throw error;
+            },
+
+            deleteStory: async (id) => {
+                const { error } = await supabase.rpc('delete_story', { p_bulletin_id: state.currentBulletinId, p_story_id: id });
+                if (error) throw error;
+            },
+
+            // Restores the server's own copy of the deleted story.
+            restoreStory: async (id, insertAt) => {
+                const { error } = await supabase.rpc('restore_story', {
+                    p_bulletin_id: state.currentBulletinId, p_story_id: id, p_insert_at: insertAt,
+                });
+                if (error) throw error;
+            },
+
+            // Returns 'conflict' if the server rev has moved on, 'ok' otherwise.
+            saveStory: async (id, data) => {
+                const { rev: expectedRev, ...rest } = data;
+                const { data: result, error } = await supabase.rpc('save_story', {
+                    p_story_id: id, p_data: storyToRow(rest), p_expected_rev: expectedRev,
+                });
+                if (error) throw error;
+                if (result && result.status === 'conflict') {
+                    state.ui.pendingConflict = { storyId: id, serverData: storyFromRow(result.server), localData: data };
+                    return 'conflict';
+                }
+                return 'ok';
+            },
+
+            // Lock times come from the database clock, not the browser's.
+            lockStory: async (id, sessionId, userName) => {
+                const { error } = await supabase.rpc('lock_story', {
+                    p_story_id: id, p_session_id: sessionId, p_user_name: userName,
+                });
+                if (error) throw error;
+            },
+
+            // Returns false if this tab no longer holds the lock.
+            renewLock: async (id, sessionId) => {
+                const { data, error } = await supabase.rpc('renew_lock', { p_story_id: id, p_session_id: sessionId });
+                if (error) throw error;
+                return data !== false;
+            },
+
+            unlockStory: async (id, sessionId) => {
+                const { error } = await supabase.rpc('unlock_story', { p_story_id: id, p_session_id: sessionId });
+                if (error) throw error;
+            },
+
+            saveSlug: async (id, slug, sessionId) => {
+                const { error } = await supabase.rpc('save_slug', { p_story_id: id, p_slug: slug, p_session_id: sessionId });
+                if (error) throw error;
+            },
+
+            takeLock: async (id, sessionId, userName) => {
+                const { error } = await supabase.rpc('take_lock', {
+                    p_story_id: id, p_session_id: sessionId, p_user_name: userName,
+                });
+                if (error) throw error;
+            },
+
+            errorMessage: (e) => {
+                if (!e) return 'Unknown database error';
+                const code = e.code || '';
+                const msg = e.message || '';
+                if (code === '42501' || code === 'PGRST301') return 'Permission denied: check your Supabase Row Level Security policies';
+                if (code === '23505')                        return 'Duplicate record: refresh and try again';
+                if (code === '23503' || code === 'PGRST116') return 'Record not found: it may have been deleted by someone else';
+                if (code === '57014')                        return 'Database timeout: check your connection and try again';
+                if (/JWT|not authenticated|401/i.test(msg))  return 'Not authenticated: try reloading the page';
+                if (/fetch|network/i.test(msg))              return 'Could not reach Supabase: check your internet connection';
+                return msg || 'Database write failed';
+            },
+        };
+
+        let DB = DB_NULL;
+
+        // Calls the send-to-cuez Edge Function. Non-2xx responses carry the
+        // function's JSON on error.context, which is where the useful message is.
+        async function callCuezFunction(body) {
+            if (!supabase) throw new Error('Cuez needs a Supabase connection.');
+            const { data, error } = await supabase.functions.invoke(CUEZ_FUNCTION, { body });
+            if (error) {
+                let detail = null;
+                try { detail = await error.context.json(); } catch { /* not JSON */ }
+                const err = new Error(detail?.message || error.message || 'The send-to-cuez function failed.');
+                err.detail = detail;
+                throw err;
+            }
+            return data;
+        }
+
+        // ==========================================
+        // 7. MUTATORS
+        // ==========================================
+        async function lockStory(id) {
+            if (!canMutate()) return;
+            const userName = getMyName();
+            const now = Date.now();
+            const existing = state.storiesMap[id];
+            // Don't overwrite a fresh lock held by someone else: the banner needs it.
+            const heldByOther = existing?.lockedBySession && existing.lockedBySession !== state.sessionId &&
+                existing.lockedAt && (now - existing.lockedAt <= STALE_LOCK_MS);
+            if (!heldByOther && existing) {
+                existing.lockedBySession = state.sessionId;
+                existing.lockedByName = userName;
+                existing.lockedAt = now;
+            }
+            render('main', 'modal');
+            try { await DB.lockStory(id, state.sessionId, userName); }
+            catch (e) { console.error('Lock failed', e); }
+        }
+
+        async function unlockStory(id) {
+            if (!canMutate()) return;
+            const story = state.storiesMap[id];
+            if (!story || story.lockedBySession !== state.sessionId) return;
+            story.lockedBySession = null;
+            story.lockedByName = null;
+            story.lockedAt = null;
+            render('main', 'modal');
+            try { await DB.unlockStory(id, state.sessionId); }
+            catch (e) { console.error('Unlock failed', e); }
+        }
+
+        // Saves an edit. Nothing changes locally, and the editor stays open with
+        // the draft intact, until the database confirms. A failed save leaves the
+        // draft in place to retry. Returns 'ok', 'conflict' or 'error'.
+        async function saveStory(id, newData) {
+            if (!canMutate() || state.ui.saving) return 'error';
+            const expectedRev = newData.rev;
+            // Take the revert copy now, before awaiting: Realtime can deliver the
+            // saved row before the save call returns, and a copy taken after that
+            // would already hold the new text. Kept only if the save succeeds.
+            const previous = state.storiesMap[id] ? { ...state.storiesMap[id] } : null;
+            state.ui.saving = true;
+            setSaveBusy(true);
+            let result;
+            try {
+                result = await DB.saveStory(id, { ...newData, rev: expectedRev });
+            } catch (e) {
+                state.ui.saving = false;
+                setSaveBusy(false, `Not saved: ${DB.errorMessage(e)}. Your changes are still here: try again.`);
+                if (state.ui.editingStoryId === id) startLockRefresh(id); // keep holding the story while they retry
+                return 'error';
+            }
+            state.ui.saving = false;
+            if (result === 'conflict') { stopLockRefresh(); render('modal'); return 'conflict'; }
+
+            if (previous && previous.rev === expectedRev) state.ui.storySnapshots[id] = previous;
+            state.storiesMap[id] = { ...(state.storiesMap[id] || previous), ...newData, rev: expectedRev + 1, lockedBySession: null, lockedByName: null, lockedAt: null };
+            if (state.ui.editingStoryId === id) { state.ui.editingStoryId = null; stopLockRefresh(); }
+            render('main', 'modal');
+            return 'ok';
+        }
+
+        // Save button state and error line, set directly so the draft isn't redrawn.
+        function setSaveBusy(busy, error = '') {
+            const btn = document.querySelector('#modal-container [data-action="save-edit"]');
+            if (btn) { btn.disabled = busy; btn.textContent = busy ? 'Saving…' : (btn.dataset.label || 'Save'); }
+            const box = document.getElementById('edit-save-error');
+            if (box) { box.textContent = error; box.style.display = error ? '' : 'none'; }
+        }
+
+        async function toggleStoryComplete(id) {
+            if (!canMutate() || !state.storiesMap[id]) return;
+            const current = state.storiesMap[id].completed;
+            const nextState = !current ? 'needs-checking'
+                : current === 'needs-checking' ? 'checked-ok'
+                : current === 'checked-ok' ? 'checked-needs-work'
+                : null;
+            state.storiesMap[id].completed = nextState;
+            render('main');
+            try { await DB.setStoryStatus(id, nextState); }
+            catch (e) { showError('Status not saved: ' + DB.errorMessage(e)); }
+        }
+
+        // Optimistic locally; the database does the move atomically and returns
+        // the true order (which may include others' concurrent changes).
+        async function reorderStory(draggedId, targetId) {
+            if (!canMutate()) return;
+            const o = state.meta.order.filter(id => id !== draggedId);
+            const idx = targetId ? o.indexOf(targetId) : -1;
+            o.splice(idx !== -1 ? idx : o.length, 0, draggedId);
+            state.meta.order = o;
+            render('main');
+            try {
+                const order = await DB.moveStory(draggedId, targetId && targetId !== 'end-of-list' ? targetId : null);
+                if (Array.isArray(order)) { state.meta.order = order; render('main'); }
+            } catch (e) { showError('Reorder failed: ' + DB.errorMessage(e)); }
+        }
+
+        async function updateFormats(formats) {
+            if (!canMutate()) return;
+            state.meta.formats = formats;
+            render('main', 'modal');
+            try { await DB.updateBulletin({ formats }); }
+            catch (e) { showError('Formats not saved: ' + DB.errorMessage(e)); }
+        }
+
+        async function updateTargetDuration(seconds) {
+            if (!canMutate()) return;
+            state.meta.targetDuration = seconds;
+            render('main');
+            try { await DB.updateBulletin({ targetDuration: seconds }); }
+            catch (e) { showError('Target duration not saved: ' + DB.errorMessage(e)); }
+        }
+
+        function blankStory(extra = {}) {
+            return {
+                bulletinId: state.currentBulletinId,
+                slug: 'NEW STORY', script: '',
+                format: (state.meta.formats?.[0]) || 'READ',
+                presenter: '', reporter: '',
+                duration: 10, isFloated: false, completed: null, type: null,
+                lockedBySession: null, lockedByName: null, lockedAt: null, rev: 1,
+                cuezItemUid: null, cuezSentAt: null, cuezSentRev: null, cuezItemNumber: null,
+                ...extra,
+            };
+        }
+
+        async function addStory() {
+            if (!canMutate() || !state.currentBulletinId) return;
+            const newId = crypto.randomUUID();
+            const newStory = blankStory();
+            state.storiesMap[newId] = newStory;
+            insertStoryIntoOrder(newId);
+            state.ui.pendingScrollToStoryId = newId;
+            render('main');
+            try { await DB.createStory(newId, newStory); }
+            catch (e) { showError('Could not save new story: ' + DB.errorMessage(e)); }
+        }
+
+        // Segments are dividers: they count toward TRT but are never sent to Cuez.
+        async function addSegment() {
+            if (!canMutate() || !state.currentBulletinId) return;
+            const newId = crypto.randomUUID();
+            const newStory = blankStory({ type: 'segment', slug: 'BREAK', duration: 0, format: '' });
+            state.storiesMap[newId] = newStory;
+            insertStoryIntoOrder(newId);
+            state.ui.pendingScrollToStoryId = newId;
+            render('main');
+            try { await DB.createStory(newId, newStory); }
+            catch (e) { showError('Could not save new segment: ' + DB.errorMessage(e)); }
+        }
+
+        async function toggleFloat(id) {
+            if (!canMutate() || !state.storiesMap[id]) return;
+            const next = !state.storiesMap[id].isFloated;
+            state.storiesMap[id].isFloated = next;
+            render('main');
+            try { await DB.setStoryFloated(id, next); }
+            catch (e) { showError('Float not saved: ' + DB.errorMessage(e)); }
+        }
+
+        async function deleteStory(id) {
+            if (!canMutate()) return;
+            const story = state.storiesMap[id];
+            if (!story) return;
+            const warning = story.cuezItemUid
+                ? `Delete "${story.slug}"?\n\nIt's already in Cuez, and deleting it here won't remove it there.`
+                : `Delete "${story.slug}"?`;
+            if (!confirm(warning)) return;
+            const orderIndex = state.meta.order.indexOf(id);
+            state.ui.trash.unshift({ id, story: { ...story }, orderIndex, deletedAt: Date.now() });
+            delete state.storiesMap[id];
+            state.meta.order = state.meta.order.filter(i => i !== id);
+            render('main');
+            try { await DB.deleteStory(id); }
+            catch (e) { showError('Could not delete story: ' + DB.errorMessage(e)); }
+        }
+
+        async function rescueStory(id) {
+            if (!canMutate()) return;
+            const entry = state.ui.trash.find(t => t.id === id);
+            if (!entry) return;
+            state.ui.trash = state.ui.trash.filter(t => t.id !== id);
+            const story = { ...entry.story, lockedBySession: null, lockedByName: null, lockedAt: null };
+            const insertAt = Math.min(entry.orderIndex, state.meta.order.length);
+            state.storiesMap[id] = story;
+            state.meta.order.splice(insertAt, 0, id);
+            render('main');
+            try { await DB.restoreStory(id, insertAt); }
+            catch (e) { showError('Could not restore story: ' + DB.errorMessage(e)); }
+        }
+
+        async function revertStory(id) {
+            const snapshot = state.ui.storySnapshots[id];
+            if (!snapshot) return;
+            if (!confirm(`Revert "${state.storiesMap[id]?.slug || id}" to its previous version?`)) return;
+            delete state.ui.storySnapshots[id];
+            const { slug, script, format, presenter, reporter, duration, type } = snapshot;
+            stopLockRefresh();
+            await saveStory(id, { slug, script, format, presenter, reporter, duration, type, rev: state.storiesMap[id]?.rev });
+        }
+
+        // ── Cuez ───────────────────────────────────────────────────────────
+
+        // Clears a story's Cuez link so it will be sent again. The old Cuez item stays.
+        async function unlinkFromCuez(id) {
+            const story = state.storiesMap[id];
+            if (!(story?.cuezItemUid || story?.cuezPendingUid) || !canMutate()) return;
+            if (!confirm(`Mark "${story.slug}" as not sent?\n\nThe item already in Cuez stays there. Sending again adds a second copy, so delete the old one in Cuez first if you're replacing it.`)) return;
+            story.cuezItemUid = null; story.cuezSentAt = null; story.cuezSentRev = null; story.cuezItemNumber = null; story.cuezPendingUid = null;
+            render('main');
+            try { await DB.markNotSent(id); }
+            catch (e) { showError('Could not update the story: ' + DB.errorMessage(e)); }
+        }
+
+        async function sendToCuez() {
+            if (state.localMode) { showError('Sending to Cuez needs a Supabase connection.'); return; }
+            if (!state.meta.cuezEpisodeId || !state.meta.cuezPartUid) { showNotice('Cuez', 'This newsroom has no Cuez target yet. Ask your tutor to set one.', 'warn'); return; }
+            if (state.ui.cuezSending || cuezSendInProgress()) return;
+            if (hasProducer() && !isProducer()) { showNotice('Cuez', `Only the producer (${state.meta.producerName || 'someone else'}) can send the bulletin to Cuez.`, 'warn'); return; }
+
+            const pending = cuezPendingIds();
+            if (!pending.length) { showNotice('Cuez', 'Nothing new to send: every story above the line is already in Cuez.'); return; }
+
+            const stories = pending.map(id => state.storiesMap[id]);
+            const unchecked = stories.filter(s => s.completed !== 'checked-ok').length;
+            const beingEdited = stories.filter(s => isLockedByOther(s)).length;
+            const lines = [`Send ${pending.length} ${pending.length === 1 ? 'story' : 'stories'} to Cuez?`, '', `→ ${cuezTargetLabel()}`];
+            if (unchecked) lines.push('', `${unchecked} ${unchecked === 1 ? "isn't" : "aren't"} marked Checked OK.`);
+            if (beingEdited) lines.push('', `${beingEdited} ${beingEdited === 1 ? 'is' : 'are'} being edited right now: the last saved version will be sent.`);
+            if (!confirm(lines.join('\n'))) return;
+
+            state.ui.cuezSending = true;
+            render('main');
+            try {
+                const data = await callCuezFunction({ action: 'send-bulletin', bulletinId: state.currentBulletinId });
+                const missing = data.missingInCuez || [];
+                showNotice((data.held || []).length ? 'Sent, with some held back' : 'Sent to Cuez', data.message || 'Done.', (data.held || []).length ? 'warn' : 'ok');
+                if (missing.length) {
+                    showNotice('Check Cuez', `${missing.length} sent ${missing.length === 1 ? 'story is' : 'stories are'} no longer in that part: ${missing.map(m => m.slug).join(', ')}. Use the badge to mark them as not sent if they should go again.`, 'warn');
+                }
+            } catch (e) {
+                const d = e.detail;
+                let msg = e.message;
+                if (d?.failedEvents?.length) msg += `\nRejected: ${d.failedEvents.join(', ')}`;
+                showError(msg);
+            } finally {
+                state.ui.cuezSending = false;
+                render('main');
+            }
+        }
+
+        // ── News conference ───────────────────────────────────────────────
+        // Anyone in the newsroom can pitch; the producer (whoever drew the queen
+        // and claimed the role) picks and spikes. The database enforces who may
+        // do what, so these just call it and show what comes back.
+
+        function isProducer() { return !state.localMode && !!supabaseUser && state.meta.producerUser === supabaseUser.id; }
+        function hasProducer() { return !!state.meta.producerUser; }
+        function currentPitches() {
+            return Object.values(state.pitchesMap)
+                .filter(p => p.conferenceId && p.conferenceId === state.meta.conferenceId)
+                .sort((a, b) => a.position - b.position);
+        }
+        function canEditPitch(p) { return p.status === 'pitched' && (isProducer() || (!!supabaseUser && p.createdBy === supabaseUser.id)); }
+
+        async function conferenceAction(fn, args) {
+            if (!canMutate() || state.localMode || state.ui.pitchBusy) return null;
+            state.ui.pitchBusy = true;
+            render('main');
+            try {
+                const result = await DB.pitchAction(fn, args);
+                return result ?? true;
+            } catch (e) {
+                showError(DB.errorMessage(e));
+                return null;
+            } finally {
+                state.ui.pitchBusy = false;
+                await refreshPitches();
+                render('main');
+            }
+        }
+
+        async function claimProducer() {
+            if (!ensureMyName()) return;
+            const ok = await conferenceAction('claim_producer', { p_bulletin_id: state.currentBulletinId, p_name: getMyName() });
+            if (ok) {
+                Object.assign(state.meta, { producerUser: supabaseUser.id, producerName: getMyName() });
+                render('header', 'main');
+                showNotice('Producer', "You're producer: you pick the stories, and you send the bulletin to Cuez.");
+            }
+        }
+
+        async function releaseProducer() {
+            if (!confirm("Step down as producer? Someone else can then claim the role.")) return;
+            const ok = await conferenceAction('release_producer', { p_bulletin_id: state.currentBulletinId });
+            if (ok) { Object.assign(state.meta, { producerUser: null, producerName: null }); render('header', 'main'); }
+        }
+
+        async function addPitch() {
+            const slugEl = document.getElementById('pitch-new-slug');
+            const slug = slugEl?.value.trim() || '';
+            if (!slug) { slugEl?.focus(); return; }
+            if (!ensureMyName()) return;
+            const angleEl = document.getElementById('pitch-new-angle');
+            const ok = await conferenceAction('add_pitch', {
+                p_bulletin_id: state.currentBulletinId,
+                p_slug: slug,
+                p_angle: angleEl?.value || '',
+                p_format: '',
+                p_pitched_by: document.getElementById('pitch-new-by')?.value.trim() || '',
+            });
+            if (ok) {
+                // Ready for the next pitch: keep "pitched by", clear the rest.
+                const s = document.getElementById('pitch-new-slug'), a = document.getElementById('pitch-new-angle');
+                if (s) s.value = ''; if (a) a.value = '';
+                s?.focus();
+            }
+        }
+
+        async function savePitchEdit(id) {
+            const v = (k) => document.getElementById(`pitch-edit-${k}-${id}`)?.value ?? '';
+            if (!v('slug').trim()) { document.getElementById(`pitch-edit-slug-${id}`)?.focus(); return; }
+            const ok = await conferenceAction('update_pitch', {
+                p_pitch_id: id, p_slug: v('slug'), p_angle: v('angle'), p_format: state.pitchesMap[id]?.format || '', p_pitched_by: v('by'),
+            });
+            if (ok) { state.ui.editingPitchId = null; render('main'); }
+        }
+
+        async function spikePitch(id) {
+            const p = state.pitchesMap[id];
+            const reason = prompt(`Spike "${p?.slug || 'this pitch'}"? Say why if you like (kept for the record):`, p?.spikeReason || '');
+            if (reason === null) return;
+            await conferenceAction('spike_pitch', { p_pitch_id: id, p_reason: reason });
+        }
+
+        async function unpickPitch(id) {
+            const p = state.pitchesMap[id];
+            if (!confirm(`Drop "${p?.slug || 'this story'}" from the running order and put it back with the pitches? This only works while nobody has written it yet.`)) return;
+            await conferenceAction('unpick_pitch', { p_pitch_id: id });
+        }
+
+        async function deletePitch(id) {
+            const p = state.pitchesMap[id];
+            if (!confirm(`Remove the pitch "${p?.slug || ''}"? Use Spike instead if you want it kept on the record.`)) return;
+            await conferenceAction('delete_pitch', { p_pitch_id: id });
+        }
+
+        // The producer decides the coverage once a story is picked.
+        async function setPickedFormat(storyId, format) {
+            const story = state.storiesMap[storyId];
+            if (!story || story.format === format) return;
+            const before = story.format;
+            story.format = format;
+            const ok = await conferenceAction('set_story_format', { p_story_id: storyId, p_format: format });
+            if (!ok && state.storiesMap[storyId]) { state.storiesMap[storyId].format = before; render('main'); }
+        }
+
+        function showView(view) {
+            state.ui.view = view === 'conference' ? 'conference' : 'rundown';
+            lsSet(LS.view, state.ui.view);
+            render('main');
+        }
+
+        // ==========================================
+        // 8. HELPERS
+        // ==========================================
+        function getMyName() { return state.myName || 'Someone'; }
+
+        // Asks once per browser; the name appears on edit locks.
+        function ensureMyName() {
+            if (state.myName) return true;
+            const name = (prompt('Your name, so others can see who is editing a story:') || '').trim().slice(0, 40);
+            if (!name) return false;
+            state.myName = name;
+            lsSet(LS.name, name);
+            render('header');
+            return true;
+        }
+
+        // 'free'      unlocked, stale, or locked by this tab
+        // 'elsewhere' locked by you in another tab or an earlier page load
+        // 'other'     locked by someone else
+        function lockState(story) {
+            if (!story?.lockedBySession || story.lockedBySession === state.sessionId) return 'free';
+            if (!story.lockedAt || Date.now() - story.lockedAt > STALE_LOCK_MS) return 'free';
+            return story.lockedBySession.split('/')[0] === BROWSER_ID ? 'elsewhere' : 'other';
+        }
+        function isLockedByOther(story) { return lockState(story) !== 'free'; }
+
+        function insertStoryIntoOrder(id) {
+            const markerIdx = state.meta.order.indexOf('marker-line');
+            if (markerIdx > -1) state.meta.order.splice(markerIdx, 0, id);
+            else state.meta.order.push(id, 'marker-line');
+        }
+
+        function escapeHTML(str) {
+            if (str === null || str === undefined) return '';
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return str.toString().replace(/[&<>"']/g, c => map[c]);
+        }
+
+        function formatDuration(seconds) {
+            const s = Math.max(0, Math.round(seconds || 0));
+            return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+        }
+
+        function parseDurationInput(raw) {
+            const s = (raw || '').trim();
+            if (s.includes(':')) {
+                const [m, sec] = s.split(':');
+                return (parseInt(m, 10) || 0) * 60 + (parseInt(sec, 10) || 0);
+            }
+            return parseInt(s, 10) || 0;
+        }
+
+        // Words per minute for the read estimate: whatever Cuez times this
+        // newsroom's prompter at (stored when the target is set or on a send),
+        // otherwise Cuez's default, so the desk's TRT matches production's.
+        function readWpm() {
+            const w = Number(state.meta.cuezReadSpeed);
+            return w >= 60 && w <= 400 ? w : DEFAULT_WPM;
+        }
+
+        // What a [bracketed] tag means (mirror of parseTag in the function).
+        // Placeholders from the insert buttons, ignored if left untouched.
+        const PLACEHOLDERS = new Set(['clip title', 'last words', 'name', 'job title', 'direction']);
+        const realValue = (v) => (PLACEHOLDERS.has(v.trim().toLowerCase()) ? '' : v.trim());
+
+        function parseTag(inner) {
+            const t = inner.trim();
+            let m = t.match(/^CLIP\b(?::(\d+):(\d{2}))?\s*([\s\S]*)$/i);
+            if (m) {
+                let title = '', sound = null, lastWords = null;
+                for (const part of m[3].split('|').map(x => x.trim()).filter(Boolean)) {
+                    if (/^(SOT|OFF)$/i.test(part)) sound = part.toUpperCase();
+                    else if (/^LW\b/i.test(part)) lastWords = realValue(part.replace(/^LW\b\s*:?\s*/i, '')) || null;
+                    else if (!title) title = realValue(part);
+                }
+                const seconds = m[1] !== undefined ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
+                return { kind: 'clip', title, duration: m[1] !== undefined ? `${parseInt(m[1], 10)}:${m[2]}` : '', seconds, sound, lastWords };
+            }
+            m = t.match(/^STRAP\b\s*:?\s*([\s\S]*)$/i);
+            if (m) {
+                const [name = '', ...rest] = m[1].split('|').map(x => realValue(x));
+                return { kind: 'strap', name, role: rest.filter(Boolean).join(' | ') };
+            }
+            return { kind: 'instructions', text: realValue(t) };
+        }
+
+        // Script analysis: words read aloud ([bracketed] tags stripped), read time,
+        // and clip time from [CLIP...] tags. The estimate is read time plus clips.
+        function scriptTiming(script, format = '') {
+            const text = script || '';
+            const words = text.replace(/\[[^\]]*\]/g, '').split(/\s+/).filter(Boolean).length;
+            const readSeconds = Math.round(words * 60 / readWpm());
+            let clips = 0, clipSeconds = 0;
+            for (const m of text.matchAll(TAG_RE)) {
+                const tag = parseTag(m[1]);
+                if (tag.kind === 'clip') { clips++; clipSeconds += tag.seconds; }
+            }
+            const formatClip = !clips && CLIP_FORMATS.has((format || '').trim().toUpperCase());
+            return { words, readSeconds, clips, clipSeconds, formatClip, estSeconds: readSeconds + clipSeconds };
+        }
+
+        function scriptStatsLabel(script, format) {
+            const t = scriptTiming(script, format);
+            let label = `${t.words} words · ${formatDuration(t.readSeconds)} read at ${readWpm()} wpm`;
+            if (t.clips) label += ` + ${formatDuration(t.clipSeconds)} in ${t.clips} clip${t.clips === 1 ? '' : 's'}`;
+            return label + ` · est. ${formatDuration(t.estSeconds)}`;
+        }
+
+        // The blocks this script becomes in Cuez, in order (mirror of storyBlocks
+        // in the function, assuming the template has every block type).
+        function cuezBlocksPreview(script, format, slug) {
+            const text = script || '';
+            const fmt = (format || '').trim().toUpperCase();
+            const blocks = [];
+            let buf = '', last = 0;
+            const flush = () => { if (buf.split('\n').some(l => l.trim())) blocks.push({ kind: 'prompter' }); buf = ''; };
+            for (const m of text.matchAll(TAG_RE)) {
+                buf += text.slice(last, m.index);
+                last = m.index + m[0].length;
+                const tag = parseTag(m[1]);
+                if ((tag.kind === 'strap' && !tag.name) || (tag.kind === 'instructions' && !tag.text)) continue; // empty placeholder: dropped
+                flush();
+                if (tag.kind === 'instructions' && blocks[blocks.length - 1]?.kind === 'instructions') blocks[blocks.length - 1].lines.push(tag.text);
+                else if (tag.kind === 'instructions') blocks.push({ kind: 'instructions', lines: [tag.text] });
+                else blocks.push(tag);
+            }
+            buf += text.slice(last);
+            flush();
+            let clips = blocks.filter(b => b.kind === 'clip');
+            if (!clips.length && CLIP_FORMATS.has(fmt)) {
+                blocks.push({ kind: 'clip', title: '', duration: '', sound: null, lastWords: null });
+                clips = blocks.filter(b => b.kind === 'clip');
+            }
+            const base = (slug || '').trim() || 'UNTITLED';
+            clips.forEach((c, i) => {
+                if (!c.title) c.title = clips.length > 1 ? `${base} CLIP ${i + 1}` : `${base} CLIP`;
+                if (!c.sound) c.sound = OFF_FORMATS.has(fmt) ? 'OFF' : 'SOT';
+            });
+            if (!blocks.length) blocks.push({ kind: 'prompter' });
+            return blocks;
+        }
+
+        // Coloured chips in Cuez's block colours: what production will receive.
+        function cuezChipsHtml(script, format, slug) {
+            const chip = (b) => {
+                if (b.kind === 'clip') {
+                    const tip = `Empty clip block, sound ${b.sound}${b.lastWords ? `, last words "${b.lastWords}"` : ''}. Production adds the video.`;
+                    return `<span class="cuez-chip cuez-chip-clip" title="${escapeHTML(tip)}"><b>CLIP</b> ${escapeHTML(b.title)}${b.duration ? ` · ${escapeHTML(b.duration)}` : ''} · ${escapeHTML(b.sound)}${b.lastWords ? ' · LW' : ''}</span>`;
+                }
+                if (b.kind === 'strap') return `<span class="cuez-chip cuez-chip-strap" title="Lower third"><b>STRAP</b> ${escapeHTML(b.name)}${b.role ? ` · ${escapeHTML(b.role)}` : ''}</span>`;
+                if (b.kind === 'instructions') return `<span class="cuez-chip cuez-chip-instructions" title="${escapeHTML(b.lines.join(' / '))} (not read out)"><b>DIRECTION</b> ${escapeHTML(b.lines.join(' / '))}</span>`;
+                return `<span class="cuez-chip cuez-chip-prompter"><b>PROMPTER</b></span>`;
+            };
+            return `<span class="cuez-chips-label">In Cuez</span>${cuezBlocksPreview(script, format, slug).map(chip).join('<span class="cuez-chip-arrow">›</span>')}`;
+        }
+
+        // "+ Clip" etc: insert a tag on its own line at the cursor, with the first
+        // placeholder selected ready to type over.
+        const TAG_TEMPLATES = {
+            clip:      { text: '[CLIP:0:00 Clip title | SOT | LW: last words]', select: '0:00' },
+            strap:     { text: '[STRAP: Name | Job title]', select: 'Name' },
+            direction: { text: '[Direction]', select: 'Direction' },
+        };
+        function insertScriptTag(kind) {
+            const ta = document.getElementById('edit-script');
+            const tpl = TAG_TEMPLATES[kind];
+            if (!ta || !tpl || ta.disabled) return;
+            let start = ta.selectionStart ?? ta.value.length, end = ta.selectionEnd ?? start;
+            // If the cursor is inside a tag (e.g. just after typing over a
+            // placeholder), insert after that tag rather than splitting it.
+            const v = ta.value;
+            const open = v.lastIndexOf('[', start - 1), closeBefore = v.lastIndexOf(']', start - 1);
+            const close = v.indexOf(']', start), nextOpen = v.indexOf('[', start), nextNewline = v.indexOf('\n', start);
+            if (open > closeBefore && close !== -1 && (nextOpen === -1 || close < nextOpen) && (nextNewline === -1 || close < nextNewline)) {
+                start = end = close + 1;
+            }
+            const before = ta.value.slice(0, start), after = ta.value.slice(end);
+            const pre = before && !before.endsWith('\n') ? '\n' : '';
+            const post = !after.startsWith('\n') ? '\n' : '';
+            ta.focus();
+            ta.setRangeText(pre + tpl.text + post, start, end, 'end');
+            const selStart = start + pre.length + tpl.text.indexOf(tpl.select);
+            ta.setSelectionRange(selStart, selStart + tpl.select.length);
+            window._moiraUpdateScriptStats();
+        }
+
+        // Live stats under the script. Direct DOM writes, never render('modal'),
+        // so the textarea keeps focus and cursor position.
+        window._moiraUpdateScriptStats = function () {
+            const ta = document.getElementById('edit-script');
+            const fmt = document.getElementById('edit-format');
+            const slug = document.getElementById('edit-slug');
+            if (!ta) return;
+            const format = fmt ? fmt.value : '';
+            const st = document.getElementById('edit-script-stats');
+            if (st) st.textContent = scriptStatsLabel(ta.value, format);
+            const cz = document.getElementById('edit-cuez-preview');
+            if (cz) cz.innerHTML = cuezChipsHtml(ta.value, format, slug ? slug.value : '');
+        };
+
+        // "M:SS" or plain seconds; null for empty, undefined for invalid.
+        function parseTargetDurationInput(raw) {
+            const s = (raw || '').trim();
+            if (/^\d+:\d{1,2}$/.test(s)) {
+                const [m, sec] = s.split(':').map(n => parseInt(n, 10));
+                if (sec > 59) return undefined;
+                return m * 60 + sec;
+            }
+            if (/^\d+$/.test(s)) return parseInt(s, 10);
+            return undefined;
+        }
+
+        // Stories Cuez should have: above the line, not floated, not segments.
+        function cuezLiveIds() {
+            const order = state.meta.order || [];
+            const markerIdx = order.indexOf('marker-line');
+            return (markerIdx > -1 ? order.slice(0, markerIdx) : order).filter(id => {
+                const s = state.storiesMap[id];
+                return s && s.type !== 'segment' && !s.isFloated;
+            });
+        }
+        function cuezPendingIds() { return cuezLiveIds().filter(id => !state.storiesMap[id].cuezItemUid); }
+
+        function cuezSendInProgress() {
+            const at = state.meta.cuezSendingAt ? Date.parse(state.meta.cuezSendingAt) : 0;
+            return state.ui.cuezSending || (at && Date.now() - at < CUEZ_SEND_STALE_MS);
+        }
+
+        function cuezTargetLabel() {
+            if (!state.meta.cuezPartUid) return 'Not connected';
+            return `${state.meta.cuezEpisodeTitle || 'Episode'} › ${state.meta.cuezPartTitle || 'Part'}`;
+        }
+
+        function cuezStatus(story) {
+            if (!story.cuezItemUid) return story.cuezPendingUid ? 'pending' : 'none';
+            return (story.cuezSentRev != null && story.rev > story.cuezSentRev) ? 'changed' : 'sent';
+        }
+
+        function renderCuezBadge(id, story, isLive) {
+            const status = cuezStatus(story);
+            if (status === 'none') {
+                return isLive ? `<span class="cuez-badge cuez-none" title="Will go with the next send">Not sent</span>` : '';
+            }
+            if (status === 'pending') {
+                return `<button data-action="cuez-unlink" data-id="${id}" class="cuez-badge cuez-changed" title="This story isn't confirmed as fully in Cuez: the send didn't confirm, or the item arrived with a block or script missing. The next send checks Cuez first: a complete item is marked as sent, an incomplete one is repaired in place, and a missing one is sent again under the same identity, so it can't make a second copy. Click to clear this and treat it as not sent (check Cuez first).">
+                    <i class="fa-solid fa-hourglass-half"></i>Unconfirmed</button>`;
+            }
+            const when = story.cuezSentAt ? new Date(story.cuezSentAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+            // Cuez renumbers when items are added above, so this is "as of the last send".
+            const num = story.cuezItemNumber ? escapeHTML(story.cuezItemNumber) : '';
+            const asItem = num ? ` as item ${num} (number as of the last send)` : '';
+            if (status === 'changed') {
+                return `<button data-action="cuez-unlink" data-id="${id}" class="cuez-badge cuez-changed" title="Edited since it was sent at ${when}${asItem}. Cuez still has the earlier version. Click to mark as not sent.">
+                    <i class="fa-solid fa-triangle-exclamation"></i>${num ? `Item ${num} · changed` : 'Changed'}</button>`;
+            }
+            return `<button data-action="cuez-unlink" data-id="${id}" class="cuez-badge cuez-sent" title="Sent at ${when}${asItem}. Click to mark as not sent.">
+                <i class="fa-solid fa-check"></i>${num ? `Item ${num}` : 'In Cuez'}</button>`;
+        }
+
+        function checkColour(cs) {
+            return !cs ? 'text-slate-300' : cs === 'needs-checking' ? 'text-yellow-500' : cs === 'checked-ok' ? 'text-emerald-500' : 'text-red-500';
+        }
+        function checkTitle(cs) {
+            return !cs ? 'Not checked: click to flag for checking' : cs === 'needs-checking' ? 'Needs checking: click to approve'
+                : cs === 'checked-ok' ? 'Checked OK: click to flag an issue' : 'Needs work: click to clear';
+        }
+
+        function renderStatusBadge(label, icon, colorClass) {
+            return `<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${colorClass}"><i class="fa-solid ${icon}"></i> ${label}</span>`;
+        }
+
+        // Local mode only: persist per room, minus locks.
+        let _saveLocalStateTimeout = null;
+        function saveLocalState() {
+            if (!state.localMode) return;
+            clearTimeout(_saveLocalStateTimeout);
+            _saveLocalStateTimeout = setTimeout(() => {
+                const cleaned = {};
+                for (const [id, story] of Object.entries(state.storiesMap)) {
+                    cleaned[id] = { ...story, lockedBySession: null, lockedByName: null, lockedAt: null };
+                }
+                lsSet(LS.local(state.currentBulletinId), JSON.stringify({ storiesMap: cleaned, meta: state.meta }));
+            }, 500);
+        }
+        function loadLocalState() {
+            try {
+                const str = lsGet(LS.local(state.currentBulletinId));
+                if (!str) return false;
+                const saved = JSON.parse(str);
+                if (saved.storiesMap && saved.meta) {
+                    state.storiesMap = saved.storiesMap;
+                    state.meta = { ...INITIAL_META, ...saved.meta };
+                    return true;
+                }
+            } catch (e) {}
+            return false;
+        }
+
+        // ==========================================
+        // 9. RENDER ENGINE
+        // ==========================================
+        // RAF-debounced and section-aware: render('main'), render('modal', 'header'), etc.
+        const _pendingRender = { header: false, main: false, modal: false };
+        let _renderRafId = null;
+
+        function render(...sections) {
+            if (!sections.length) sections = ['header', 'main', 'modal'];
+            sections.forEach(s => { if (s in _pendingRender) _pendingRender[s] = true; });
+            if (_renderRafId) cancelAnimationFrame(_renderRafId);
+            _renderRafId = requestAnimationFrame(() => {
+                _renderRafId = null;
+                const dirty = { ..._pendingRender };
+                _pendingRender.header = _pendingRender.main = _pendingRender.modal = false;
+                _renderNow(dirty);
+            });
+        }
+
+        // Which dialog should be showing. Used so a redraw is only held back while
+        // you're typing in the SAME dialog, never when it should close or change.
+        function modalKey() {
+            if (state.ui.isShortcutsModalOpen) return 'shortcuts';
+            if (state.ui.pendingConflict) return 'conflict';
+            if (state.ui.editingStoryId) return 'edit:' + state.ui.editingStoryId;
+            if (state.ui.join && !state.ui.needsJoin) return 'join';
+            if (state.ui.isSettingsModalOpen) return 'settings:' + state.ui.settingsTab;
+            return '';
+        }
+        let _renderedModalKey = '';
+
+        function _renderNow(dirty) {
+            const mainContainer = document.getElementById('main-container');
+            const modalContainer = document.getElementById('modal-container');
+            const savedScroll = mainContainer ? mainContainer.scrollTop : 0;
+            const activeEl = document.activeElement;
+            // Conference inputs (data-preserve) keep their text, focus and cursor
+            // across redraws, so new pitches appear while you're typing the next.
+            const preserving = !!activeEl && activeEl.hasAttribute && activeEl.hasAttribute('data-preserve');
+            const userIsTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') && !preserving;
+            const typingInModal = userIsTyping && modalContainer.contains(activeEl);
+
+            if (dirty.header) document.getElementById('header-container').innerHTML = renderHeader();
+
+            if (dirty.main && !state.ui.draggedStoryId && !state.ui.inlineEditingId && !(userIsTyping && !typingInModal)) {
+                const kept = [...mainContainer.querySelectorAll('[data-preserve]')].map(el => [el.id, el.value]);
+                const focusId = preserving ? activeEl.id : null;
+                const sel = preserving && typeof activeEl.selectionStart === 'number' ? [activeEl.selectionStart, activeEl.selectionEnd] : null;
+                mainContainer.innerHTML = renderMain();
+                kept.forEach(([id, value]) => { const el = id && document.getElementById(id); if (el) el.value = value; });
+                if (focusId) {
+                    const el = document.getElementById(focusId);
+                    if (el) { el.focus(); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch {} }
+                }
+            } else if (dirty.main) {
+                _pendingRender.main = true; // try again once typing/dragging ends
+            }
+
+            if (dirty.modal) {
+                const key = modalKey();
+                if (!(typingInModal && key === _renderedModalKey)) {
+                    if (typingInModal) activeEl.blur(); // the dialog is closing or changing
+                    modalContainer.innerHTML = renderModals();
+                    _renderedModalKey = key;
+                }
+                // Same dialog, still typing: skip the redraw so unsaved text isn't wiped.
+            }
+
+            if (dirty.main) {
+                const mc = document.getElementById('main-container');
+                if (state.ui.pendingScrollToStoryId) {
+                    const row = document.querySelector(`[data-story-id="${state.ui.pendingScrollToStoryId}"]`);
+                    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    state.ui.pendingScrollToStoryId = null;
+                } else if (!state.ui.draggedStoryId && mc) {
+                    mc.scrollTop = savedScroll;
+                }
+            }
+
+            saveLocalState();
+
+            if (dirty.modal) {
+                const s = state.ui.editingStoryId && !state.ui.pendingConflict ? state.storiesMap[state.ui.editingStoryId] : null;
+                if (s && lockState(s) === 'other') startTakeoverCountdown(s.lockedAt);
+                else if (takeoverCountdownInterval) { clearInterval(takeoverCountdownInterval); takeoverCountdownInterval = null; }
+            }
+        }
+
+        // Locks expire by time, not by event: redraw when any story's lock state
+        // changes so a stale lock frees its row without needing a refresh.
+        let _lockSignature = '';
+        setInterval(() => {
+            const sig = Object.values(state.storiesMap).map(s => lockState(s)[0]).join('');
+            if (sig !== _lockSignature) { _lockSignature = sig; render('main'); }
+        }, 5000);
+
+        // Re-render main once the user stops typing, if an update was held back.
+        document.addEventListener('focusout', () => {
+            setTimeout(() => { if (_pendingRender.main) render('main'); }, 0);
+        });
+
+        let takeoverCountdownInterval = null;
+        function startTakeoverCountdown(lockedAt) {
+            if (takeoverCountdownInterval) return;
+            takeoverCountdownInterval = setInterval(() => {
+                const btn = document.getElementById('takeover-btn');
+                if (!btn) { clearInterval(takeoverCountdownInterval); takeoverCountdownInterval = null; return; }
+                const lockAge = Date.now() - lockedAt;
+                if (lockAge >= STALE_LOCK_MS) {
+                    btn.disabled = false;
+                    btn.textContent = 'Take over';
+                    btn.className = 'text-xs bg-amber-600 hover:bg-amber-700 text-white border border-amber-700 px-3 py-1.5 rounded shadow-sm font-bold transition-colors';
+                    clearInterval(takeoverCountdownInterval);
+                    takeoverCountdownInterval = null;
+                } else {
+                    btn.textContent = `Wait ${Math.ceil((STALE_LOCK_MS - lockAge) / 1000)}s…`;
+                }
+            }, 500);
+        }
+
+        // ==========================================
+        // 10. VIEWS
+        // ==========================================
+        function renderHeader() {
+            let connectionBadge;
+            if (state.connectionState === 'connecting') connectionBadge = renderStatusBadge('Connecting', 'fa-circle-notch fa-spin', 'bg-blue-100 text-blue-800 border border-blue-200');
+            else if (state.connectionState === 'connected') connectionBadge = renderStatusBadge('Synced', 'fa-cloud-arrow-down', 'bg-emerald-100 text-emerald-800 border border-emerald-200');
+            else if (state.connectionState === 'error') connectionBadge = renderStatusBadge('Sync error', 'fa-triangle-exclamation', 'bg-red-100 text-red-800 border border-red-200');
+            else connectionBadge = renderStatusBadge('Local mode', 'fa-hard-drive', 'bg-amber-100 text-amber-800 border border-amber-200');
+
+            return `
+                <div class="bg-white border-b border-slate-200 px-3 py-2 md:px-6 md:py-3 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <h1 class="text-xl font-bold tracking-tight text-slate-800 whitespace-nowrap"><i class="fa-solid fa-newspaper text-blue-500 mr-2"></i><span class="hidden sm:inline">Moira:<span class="text-blue-600">Desk</span></span></h1>
+                        <button data-action="set-my-name" title="Shown to others when you're editing a story"
+                            class="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-3 py-1 rounded-full text-xs font-bold hover:bg-blue-100 transition-colors truncate">
+                            <i class="fa-solid fa-user text-[10px] opacity-60"></i>${state.myName ? escapeHTML(state.myName) : '<span class="font-normal italic">Set your name</span>'}
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        ${renderRoomControl()}
+                        ${state.currentBulletinId ? `<button data-action="open-settings-modal" class="text-slate-400 hover:text-slate-600 transition-colors" title="Settings"><i class="fa-solid fa-gear text-lg"></i></button>` : ''}
+                        ${connectionBadge}
+                    </div>
+                </div>`;
+        }
+
+        // Newsroom switcher (joined rooms) plus "Join another".
+        function renderRoomControl() {
+            if (state.localMode) {
+                return `<span class="hidden md:inline text-xs font-bold text-slate-500 uppercase tracking-widest">${escapeHTML(state.roomDisplayName)}</span>`;
+            }
+            if (!state.rooms.length) return '';
+            const select = state.rooms.length > 1
+                ? `<select id="room-select" class="bg-white border border-slate-300 rounded px-2 py-1 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 max-w-[12rem]">
+                    ${state.rooms.map(r => `<option value="${escapeHTML(r.id)}" ${r.id === state.currentBulletinId ? 'selected' : ''}>${escapeHTML(r.name)}</option>`).join('')}
+                   </select>`
+                : `<span class="px-2 text-sm font-bold text-slate-800 truncate max-w-[12rem]">${escapeHTML(state.roomDisplayName)}</span>`;
+            return `<div class="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 gap-1">
+                <span class="hidden md:inline text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2">Newsroom</span>
+                ${select}
+                <button data-action="open-join" title="Join another newsroom with its code" class="bg-white hover:bg-slate-50 border border-slate-300 text-slate-600 px-2 py-1 rounded text-sm"><i class="fa-solid fa-key"></i><span class="hidden lg:inline ml-1.5">Join</span></button>
+            </div>`;
+        }
+
+        // The code form, used full-screen on first visit and in a dialog after.
+        function renderJoinForm() {
+            const j = state.ui.join || {};
+            return `
+                <div class="space-y-4">
+                    ${!state.myName ? `<div>
+                        <label class="text-sm font-semibold block mb-1" for="join-name">Your name</label>
+                        <input type="text" id="join-name" maxlength="40" autocomplete="name" class="w-full border rounded-lg px-4 py-2.5 outline-none focus:border-blue-500" placeholder="Shown when you're editing a story">
+                    </div>` : ''}
+                    <div>
+                        <label class="text-sm font-semibold block mb-1" for="join-code">Newsroom code</label>
+                        <input type="text" id="join-code" maxlength="40" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                            class="w-full border rounded-lg px-4 py-3 outline-none focus:border-blue-500 font-mono text-xl tracking-widest uppercase" placeholder="ABCD-1234">
+                    </div>
+                    ${j.error ? `<div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">${escapeHTML(j.error)}</div>` : ''}
+                    <button data-action="join-submit" ${j.busy ? 'disabled' : ''} class="btn-primary w-full !py-3">
+                        ${j.busy ? '<i class="fa-solid fa-circle-notch fa-spin"></i>' : 'Join newsroom'}
+                    </button>
+                </div>`;
+        }
+
+        function renderJoinScreen() {
+            return `<div class="min-h-full flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-8">
+                    <div class="w-14 h-14 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fa-solid fa-key text-2xl"></i></div>
+                    <h2 class="text-2xl font-bold text-slate-800 text-center mb-1">Join your newsroom</h2>
+                    <p class="text-sm text-slate-500 text-center mb-6">Enter the code from your tutor or editor. You only need to do this once on this browser.</p>
+                    ${renderJoinForm()}
+                </div>
+            </div>`;
+        }
+
+        function renderJoinModal() {
+            return `<div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                    <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-2xl">
+                        <h3 class="text-xl font-bold text-slate-800"><i class="fa-solid fa-key mr-2 text-blue-500"></i>Join another newsroom</h3>
+                        <button data-action="close-join" class="text-slate-400 hover:text-slate-600 text-2xl"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-6">${renderJoinForm()}</div>
+                </div>
+            </div>`;
+        }
+
+        function renderTargetControl(totalDuration) {
+            const target = state.meta.targetDuration;
+            let inner;
+            if (target == null) {
+                inner = `<button type="button" data-action="edit-target" title="Set a target duration for this rundown"
+                    class="text-xs font-medium px-2.5 py-1.5 rounded-lg border border-dashed bg-white text-slate-400 border-slate-300 hover:border-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fa-solid fa-bullseye mr-1.5"></i>Set target</button>`;
+            } else {
+                const delta = totalDuration - target;
+                const absLabel = formatDuration(Math.abs(delta));
+                let chipClasses, chipText;
+                if (Math.abs(delta) <= 5) { chipClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200'; chipText = 'On time'; }
+                else if (delta < 0) { chipClasses = 'bg-amber-50 text-amber-700 border-amber-200'; chipText = '−' + absLabel + ' under'; }
+                else { chipClasses = 'bg-red-50 text-red-700 border-red-200'; chipText = '+' + absLabel + ' over'; }
+                inner = `
+                    <button type="button" data-action="edit-target" title="Click to change target"
+                        class="text-xs font-medium px-1.5 py-1 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors">Target ${formatDuration(target)}</button>
+                    <span class="text-[11px] font-bold px-2 py-1 rounded-full border ${chipClasses}">${chipText}</span>`;
+            }
+            return `<span id="target-control" class="flex items-center gap-1">${inner}</span>`;
+        }
+
+        function renderCuezControls() {
+            if (state.localMode) {
+                return `<span class="text-xs text-slate-400 border border-dashed border-slate-300 rounded-lg px-2.5 py-1.5" title="Add your Supabase details to index.html to send to Cuez"><i class="fa-solid fa-tower-broadcast mr-1.5"></i>Cuez needs Supabase</span>`;
+            }
+            if (!state.meta.cuezPartUid) {
+                return `<span class="text-xs text-slate-500 border border-dashed border-slate-300 rounded-lg px-3 py-2" title="Your tutor sets which Cuez episode and part this newsroom sends to"><i class="fa-solid fa-tower-broadcast mr-1.5"></i>No Cuez target yet: ask your tutor</span>`;
+            }
+            const pending = cuezPendingIds().length;
+            const sending = cuezSendInProgress();
+            const notMine = hasProducer() && !isProducer();
+            const disabled = sending || !pending || notMine;
+            const label = sending ? '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Sending…'
+                : !pending ? '<i class="fa-solid fa-check mr-2"></i>All in Cuez'
+                : notMine ? `<i class="fa-solid fa-crown mr-2"></i>Producer sends`
+                : `<i class="fa-solid fa-paper-plane mr-2"></i>Send ${pending} to Cuez`;
+            return `
+                <div class="flex items-stretch rounded-lg shadow-sm overflow-hidden border ${disabled ? 'border-slate-300' : 'border-emerald-700'}">
+                    <span class="bg-white text-slate-600 px-3 text-xs font-medium max-w-[14rem] truncate flex items-center" title="Sends to ${escapeHTML(cuezTargetLabel())}. Set by your tutor.">
+                        <i class="fa-solid fa-tower-broadcast mr-1.5 text-blue-500"></i>${escapeHTML(cuezTargetLabel())}
+                    </span>
+                    <button data-action="send-to-cuez" ${disabled ? 'disabled' : ''} ${notMine && pending ? `title="Only the producer (${escapeHTML(state.meta.producerName || '')}) can send to Cuez"` : ''}
+                        class="${disabled ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'} px-4 py-2.5 font-medium transition-colors whitespace-nowrap">${label}</button>
+                </div>`;
+        }
+
+        function renderMain() {
+            if (state.ui.needsJoin) return renderJoinScreen();
+            if (!state.localMode && !state.currentBulletinId) {
+                return state.connectionState === 'error' ? '' : `<div class="flex h-full items-center justify-center text-slate-400"><i class="fa-solid fa-circle-notch fa-spin mr-3"></i>Connecting…</div>`;
+            }
+            return renderViewBar() + (state.ui.view === 'conference' ? renderConference() : renderNewsroom());
+        }
+
+        // Conference / Running order switch, plus who the producer is.
+        function renderViewBar() {
+            const pitches = currentPitches();
+            const open = pitches.filter(p => p.status === 'pitched').length;
+            const stories = (state.meta.order || []).filter(id => id !== 'marker-line' && state.storiesMap[id]?.type !== 'segment').length;
+            const tab = (view, icon, label, count) => {
+                const on = state.ui.view === view;
+                return `<button data-action="show-view" data-val="${view}" class="px-4 py-2 rounded-lg text-sm font-bold transition-colors ${on ? 'bg-white text-slate-800 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-800'}">
+                    <i class="fa-solid ${icon} mr-2 ${on ? 'text-blue-500' : ''}"></i>${label}${count ? `<span class="ml-2 text-[11px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">${count}</span>` : ''}</button>`;
+            };
+            let producer = '';
+            if (!state.localMode) {
+                if (isProducer()) {
+                    producer = `<span class="flex items-center gap-2"><span class="text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded-full"><i class="fa-solid fa-crown mr-1.5"></i>You're producer</span>
+                        <button data-action="release-producer" class="text-xs text-slate-500 hover:text-slate-800 underline">Step down</button></span>`;
+                } else if (hasProducer()) {
+                    producer = `<span class="text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-full" title="The producer picks the stories and sends the bulletin to Cuez"><i class="fa-solid fa-crown mr-1.5 text-amber-500"></i>Producer: ${escapeHTML(state.meta.producerName || 'someone')}</span>`;
+                } else {
+                    producer = `<span class="flex items-center gap-2"><span class="text-xs text-slate-500">No producer yet</span>
+                        <button data-action="claim-producer" ${state.ui.pitchBusy ? 'disabled' : ''} class="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-full shadow-sm transition-colors" title="For whoever drew the queen"><i class="fa-solid fa-crown mr-1.5"></i>I'm the producer</button></span>`;
+                }
+            }
+            return `<div class="${state.ui.view === 'conference' ? 'max-w-5xl' : 'max-w-7xl'} mx-auto px-4 md:px-6 pt-4 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    ${tab('conference', 'fa-comments', 'Conference', open)}
+                    ${tab('rundown', 'fa-bars-staggered', 'Running order', stories)}
+                </div>
+                ${producer}
+            </div>`;
+        }
+
+        function renderPitchCard(p, n) {
+            const mine = canEditPitch(p);
+            const producer = isProducer();
+            const busy = state.ui.pitchBusy ? 'disabled' : '';
+            if (state.ui.editingPitchId === p.id && mine) {
+                const formats = state.meta.formats || DEFAULT_FORMATS;
+                return `<div class="bg-white border-2 border-blue-300 rounded-xl p-3 space-y-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-6 gap-2">
+                        <input id="pitch-edit-slug-${p.id}" data-preserve data-pitch-enter="save" data-id="${p.id}" value="${escapeHTML(p.slug)}" maxlength="80" class="sm:col-span-2 border rounded-lg px-3 py-2 font-bold uppercase outline-none focus:border-blue-500" placeholder="Slug">
+                        <input id="pitch-edit-angle-${p.id}" data-preserve data-pitch-enter="save" data-id="${p.id}" value="${escapeHTML(p.angle)}" maxlength="500" spellcheck="true" lang="en-GB" class="sm:col-span-4 border rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="The angle, in a line">
+                        <input id="pitch-edit-by-${p.id}" data-preserve data-pitch-enter="save" data-id="${p.id}" value="${escapeHTML(p.pitchedBy)}" maxlength="60" class="sm:col-span-4 border rounded-lg px-3 py-2 outline-none focus:border-blue-500" placeholder="Pitched by">
+                        <div class="sm:col-span-2 flex gap-2 justify-end">
+                            <button data-action="cancel-pitch-edit" class="px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-sm">Cancel</button>
+                            <button data-action="save-pitch-edit" data-id="${p.id}" ${busy} class="btn-primary !py-2 text-sm">Save</button>
+                        </div>
+                    </div>
+                </div>`;
+            }
+            const story = p.storyId ? state.storiesMap[p.storyId] : null;
+            let actions = '';
+            if (p.status === 'pitched') {
+                actions = (producer ? `<button data-action="pick-pitch" data-id="${p.id}" ${busy} class="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg transition-colors" title="Add to the running order"><i class="fa-solid fa-check mr-1"></i>Pick</button>
+                    <button data-action="spike-pitch" data-id="${p.id}" ${busy} class="text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-lg transition-colors"><i class="fa-solid fa-ban mr-1"></i>Spike</button>` : '')
+                    + (mine ? `<button data-action="edit-pitch" data-id="${p.id}" class="p-1.5 text-slate-400 hover:text-blue-600" title="Edit pitch"><i class="fa-solid fa-pen text-xs"></i></button>
+                    <button data-action="delete-pitch" data-id="${p.id}" class="p-1.5 text-slate-400 hover:text-red-600" title="Remove pitch"><i class="fa-solid fa-trash text-xs"></i></button>` : '');
+            } else if (p.status === 'picked') {
+                const fmts = [...new Set([...(state.meta.formats || DEFAULT_FORMATS), story?.format].filter(Boolean))];
+                actions = (story && producer ? `<label class="flex items-center gap-1.5 text-xs text-slate-500 mr-1" title="How will we cover it? Sets the format in the running order">Format
+                        <select class="picked-format border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold text-slate-700 bg-white outline-none focus:border-blue-500" data-id="${p.storyId}" ${busy}>
+                            ${fmts.map(f => `<option value="${escapeHTML(f)}" ${f === story.format ? 'selected' : ''}>${escapeHTML(f)}</option>`).join('')}
+                        </select></label>` : '')
+                    + (story ? `<button data-action="open-picked" data-id="${p.storyId}" class="text-xs font-bold text-blue-600 hover:text-blue-800 px-2 py-1.5">In running order <i class="fa-solid fa-arrow-right ml-1"></i></button>`
+                        : `<span class="text-xs text-slate-400 italic px-2">Dropped from the running order</span>`)
+                    + (producer ? `<button data-action="unpick-pitch" data-id="${p.id}" ${busy} class="text-xs font-bold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg transition-colors" title="Take it back out of the running order (only while nobody has written it)"><i class="fa-solid fa-xmark mr-1"></i>Drop</button>` : '');
+            } else {
+                actions = producer ? `<button data-action="spike-pitch" data-id="${p.id}" ${busy} class="text-xs text-slate-500 hover:text-slate-800 underline px-1">Why?</button>
+                    <button data-action="unspike-pitch" data-id="${p.id}" ${busy} class="text-xs text-slate-500 hover:text-slate-800 underline px-1">Back in</button>` : '';
+            }
+            const tone = p.status === 'picked' ? 'border-emerald-200 bg-emerald-50/40' : p.status === 'spiked' ? 'border-slate-200 bg-slate-50 opacity-75' : 'border-slate-200 bg-white';
+            return `<div class="border ${tone} rounded-xl p-3 flex gap-3 items-start" data-pitch-id="${p.id}">
+                <div class="text-slate-400 font-mono text-sm w-6 text-right pt-0.5 shrink-0">${n}</div>
+                <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start gap-2">
+                <div class="flex-1 min-w-0">
+                    <div class="font-bold uppercase tracking-wide text-slate-800 ${p.status === 'spiked' ? 'line-through decoration-slate-400' : ''}">${escapeHTML(p.slug)}
+                        ${story && !producer && story.format ? `<span class="ml-2 align-middle bg-slate-100 border px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-slate-600">${escapeHTML(story.format)}</span>` : ''}</div>
+                    ${p.angle ? `<div class="text-sm text-slate-600 mt-0.5">${escapeHTML(p.angle)}</div>` : ''}
+                    <div class="text-xs text-slate-400 mt-1">${p.pitchedBy ? `Pitched by ${escapeHTML(p.pitchedBy)}` : 'Pitched'}${p.status === 'spiked' && p.spikeReason ? ` · <span class="text-slate-600">Spiked: ${escapeHTML(p.spikeReason)}</span>` : p.status === 'spiked' ? ' · Spiked' : ''}</div>
+                    ${p.epNote ? `<div class="mt-2 text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-2.5 py-1.5"><i class="fa-solid fa-chalkboard-user mr-1.5 text-amber-500"></i><b>EP:</b> ${escapeHTML(p.epNote)}</div>` : ''}
+                </div>
+                <div class="flex items-center gap-1 flex-wrap sm:justify-end shrink-0">${actions}</div>
+                </div>
+            </div>`;
+        }
+
+        function renderConference() {
+            if (state.localMode) {
+                return `<div class="max-w-3xl mx-auto p-6"><div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">
+                    <i class="fa-solid fa-comments text-3xl text-slate-300 mb-3"></i><p>News conference needs a Supabase connection, so the whole group can pitch together.</p></div></div>`;
+            }
+            const pitches = currentPitches();
+            const pitched = pitches.filter(p => p.status === 'pitched');
+            const picked = pitches.filter(p => p.status === 'picked').sort((a, b) => String(a.decidedAt).localeCompare(String(b.decidedAt)));
+            const spiked = pitches.filter(p => p.status === 'spiked');
+            const formats = state.meta.formats || DEFAULT_FORMATS;
+            const started = state.meta.conferenceStartedAt ? new Date(state.meta.conferenceStartedAt) : null;
+            const who = isProducer() ? 'You pick the stories: Pick adds one to the running order, Spike drops it (with a reason, if you give one).'
+                : hasProducer() ? `Anyone can pitch. ${escapeHTML(state.meta.producerName || 'The producer')} picks the stories.`
+                : 'Anyone can pitch. Whoever drew the queen should claim producer: they pick the stories.';
+            const section = (title, list, empty, offset = 0) => `
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">${title} <span class="text-slate-400">${list.length}</span></h3>
+                    <div class="space-y-2">${list.length ? list.map((p, i) => renderPitchCard(p, i + 1 + offset)).join('') : `<div class="text-sm text-slate-400 italic border border-dashed border-slate-200 rounded-xl px-4 py-3">${empty}</div>`}</div>
+                </div>`;
+            return `<div class="max-w-5xl mx-auto p-4 md:p-6 pb-24 space-y-6">
+                <div>
+                    <h2 class="text-3xl font-bold text-slate-800"><i class="fa-solid fa-comments mr-3 text-slate-400"></i>News conference</h2>
+                    <p class="text-sm text-slate-500 mt-1">${started ? `Started ${started.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} at ${started.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. ` : ''}${who}</p>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                        <input id="pitch-new-slug" data-preserve data-pitch-enter="add" maxlength="80" autocomplete="off" class="sm:col-span-3 border rounded-lg px-3 py-2.5 font-bold uppercase outline-none focus:border-blue-500" placeholder="Slug">
+                        <input id="pitch-new-angle" data-preserve data-pitch-enter="add" maxlength="500" autocomplete="off" spellcheck="true" lang="en-GB" class="sm:col-span-6 border rounded-lg px-3 py-2.5 outline-none focus:border-blue-500" placeholder="The angle, in a line">
+                        <input id="pitch-new-by" data-preserve data-pitch-enter="add" maxlength="60" autocomplete="off" value="${isProducer() ? '' : escapeHTML(state.myName)}" class="sm:col-span-2 border rounded-lg px-3 py-2.5 outline-none focus:border-blue-500" placeholder="Pitched by">
+                        <button data-action="add-pitch" ${state.ui.pitchBusy ? 'disabled' : ''} class="sm:col-span-1 btn-primary !py-2.5"><i class="fa-solid fa-plus"></i><span class="sm:hidden ml-2">Add pitch</span></button>
+                    </div>
+                </div>
+                ${section('Pitched', pitched, 'No pitches yet. Add the first one above.')}
+                ${section('Picked for the bulletin', picked, isProducer() ? 'Nothing picked yet.' : 'The producer hasn\'t picked anything yet.')}
+                ${spiked.length ? section('Spiked', spiked, '') : ''}
+                ${picked.length ? `<div class="text-right"><button data-action="show-view" data-val="rundown" class="text-sm font-bold text-blue-600 hover:text-blue-800">Go to the running order <i class="fa-solid fa-arrow-right ml-1"></i></button></div>` : ''}
+            </div>`;
+        }
+
+        function renderNewsroom() {
+            let totalDuration = 0;
+            let isBelowLine = false;
+            const order = state.meta.order || [];
+            const live = new Set(cuezLiveIds());
+
+            const rows = order.map((id, idx) => {
+                if (id === 'marker-line') {
+                    isBelowLine = true;
+                    return `<tr class="bg-red-50 border-y-4 border-red-200 shadow-inner" data-story-id="${id}" draggable="true">
+                        <td class="px-4 py-3 text-center text-red-400 cursor-grab active:cursor-grabbing w-10 bg-red-100 hover:text-red-500 transition-colors"><i class="fa-solid fa-grip-lines"></i></td>
+                        <td colspan="9" class="px-4 py-3"><span class="text-sm font-black tracking-widest uppercase text-red-900"><i class="fa-solid fa-arrow-down text-red-500 mr-2"></i> End of programme</span>
+                        <span class="ml-3 text-xs font-normal text-red-400 normal-case tracking-normal">Stories below the line aren't sent to Cuez</span></td>
+                    </tr>`;
+                }
+                const story = state.storiesMap[id];
+                if (!story) return '';
+
+                if (story.type === 'segment') {
+                    if (!isBelowLine) totalDuration += story.duration || 0;
+                    return `<tr class="segment-row" data-story-id="${id}" draggable="true">
+                        <td colspan="10">
+                            <div class="segment-divider">
+                                <div class="segment-label"><i class="fa-solid fa-scissors mr-2 opacity-40"></i>${escapeHTML(story.slug)}</div>
+                                ${story.duration > 0 ? `<span class="segment-dur">${formatDuration(story.duration)}</span>` : ''}
+                                <div class="segment-line"></div>
+                                <div class="flex items-center gap-1 px-2">
+                                    <button data-action="edit-story" data-id="${id}" class="p-1.5 text-indigo-300 hover:text-indigo-700 transition-colors" title="Edit segment"><i class="fa-solid fa-pen text-xs"></i></button>
+                                    <button data-action="delete-story" data-id="${id}" class="p-1.5 text-indigo-300 hover:text-red-500 transition-colors" title="Delete segment"><i class="fa-solid fa-trash text-xs"></i></button>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+                }
+
+                if (!isBelowLine && !story.isFloated) totalDuration += story.duration || 0;
+                const locked = isLockedByOther(story);
+                const blocked = lockState(story) === 'other';
+
+                let rowClasses = 'border-b border-slate-200 transition-colors ';
+                rowClasses += isBelowLine ? 'bg-slate-100 opacity-80 ' : 'bg-white hover:bg-slate-50 ';
+                if (story.isFloated && !isBelowLine) rowClasses += 'opacity-50 ';
+
+                return `<tr class="${rowClasses}" data-story-id="${id}" draggable="true">
+                    <td class="px-3 py-1.5 text-center w-10 ${locked ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 cursor-grab active:cursor-grabbing hover:text-blue-500'}" title="${locked ? `Being edited by ${escapeHTML(story.lockedByName)}` : 'Drag to reorder'}">
+                        <i class="row-drag-icon fa-solid fa-grip-vertical"></i>
+                        ${!locked ? `<div class="row-reorder-btns">
+                            <button data-action="move-story-up" data-id="${id}" class="text-slate-400 hover:text-blue-500 text-xs leading-none py-0.5 px-1" ${idx === 0 ? 'disabled' : ''}>▲</button>
+                            <button data-action="move-story-down" data-id="${id}" class="text-slate-400 hover:text-blue-500 text-xs leading-none py-0.5 px-1" ${idx === order.length - 1 ? 'disabled' : ''}>▼</button>
+                        </div>` : ''}
+                    </td>
+                    <td class="px-3 py-1.5 font-semibold w-1/4">
+                        <span data-action="inline-edit-slug" data-id="${id}" class="inline-block cursor-text hover:bg-slate-100/50 px-1 -mx-1 rounded transition-colors" title="Click to edit slug">${escapeHTML(story.slug)}</span>
+                        ${blocked ? `<span class="ml-2 text-[10px] font-bold text-red-600 whitespace-nowrap"><i class="fa-solid fa-lock mr-1"></i>${escapeHTML(story.lockedByName)}</span>`
+                            : locked ? `<span class="ml-2 text-[10px] font-bold text-blue-600 whitespace-nowrap" title="Open in another of your tabs"><i class="fa-solid fa-lock mr-1"></i>You, other tab</span>` : ''}
+                        ${story.isFloated ? `<span class="ml-2 text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded uppercase tracking-wide">Floated</span>` : ''}
+                        ${story.brief ? `<i class="fa-solid fa-lightbulb ml-2 text-violet-400 text-xs" title="${escapeHTML(`Pitch: ${story.brief}${story.pitchedBy ? ` (${story.pitchedBy})` : ''}`)}"></i>` : ''}
+                    </td>
+                    <td class="px-3 py-1.5 text-sm w-24"><span class="bg-slate-100 border px-2 py-0.5 rounded text-xs font-mono font-bold">${escapeHTML(story.format)}</span></td>
+                    <td class="px-3 py-1.5 w-32"><div class="text-xs font-bold text-blue-700">${escapeHTML(story.reporter)}</div><div class="text-xs text-slate-600">${escapeHTML(story.presenter)}</div></td>
+                    <td class="px-3 py-1.5 text-sm w-20 font-mono">${story.isFloated ? `<span class="line-through text-slate-400">${formatDuration(story.duration)}</span>` : formatDuration(story.duration)}</td>
+                    <td class="px-3 py-1.5 text-sm italic truncate max-w-xs">${escapeHTML(story.script || 'No script…')}</td>
+                    <td class="px-3 py-1.5 text-center w-16"><button data-action="toggle-complete" data-id="${id}" class="text-lg ${checkColour(story.completed)} transition-colors" title="${checkTitle(story.completed)}"><i class="fa-solid fa-circle"></i></button></td>
+                    <td class="px-3 py-1.5 text-center w-16">
+                        <button data-action="toggle-float" data-id="${id}" class="text-lg ${story.isFloated ? 'text-amber-500' : 'text-slate-300'} transition-colors" title="${story.isFloated ? 'Un-float story' : 'Float story (keeps it out of TRT and Cuez)'}"><i class="fa-solid fa-circle-pause"></i></button>
+                    </td>
+                    <td class="px-3 py-1.5 text-center w-28">${renderCuezBadge(id, story, live.has(id))}</td>
+                    <td class="px-3 py-1.5 text-right w-20 whitespace-nowrap">
+                        <button data-action="edit-story" data-id="${id}" class="p-1.5 ${blocked ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-blue-600'} transition-colors"
+                            ${blocked ? `disabled title="Being edited by ${escapeHTML(story.lockedByName)}"` : 'title="Edit story"'}><i class="fa-solid fa-pen text-xs"></i></button>
+                        <button data-action="delete-story" data-id="${id}" class="p-1.5 text-slate-400 hover:text-red-600" title="Delete story"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            return `<div class="max-w-7xl mx-auto p-4 md:p-6 pb-24">
+                <div class="flex flex-wrap gap-3 items-center justify-between mb-4">
+                    <h2 class="text-3xl font-bold text-slate-800"><i class="fa-solid fa-bars-staggered mr-3 text-slate-400"></i>Rundown</h2>
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <div class="text-sm font-medium text-slate-500">Total TRT: <span class="text-slate-800 font-mono text-lg bg-slate-200 px-2 py-1 rounded ml-1">${formatDuration(totalDuration)}</span></div>
+                        ${renderTargetControl(totalDuration)}
+                        <button data-action="add-story" title="Add story (N)" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm"><i class="fa-solid fa-plus mr-2"></i>Add Story</button>
+                        <button data-action="add-segment" title="Add a segment divider (B)" class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm"><i class="fa-solid fa-scissors mr-2"></i>Add Segment</button>
+                        ${renderCuezControls()}
+                    </div>
+                </div>
+                ${state.ui.trash.length ? `
+                <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-xl mb-4 text-sm flex-wrap">
+                    <i class="fa-solid fa-trash-arrow-up text-amber-500"></i>
+                    <span class="font-semibold">${state.ui.trash.length} deleted this session</span>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        ${state.ui.trash.map(t => `<button data-action="rescue-story" data-id="${t.id}" class="bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-800 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors"><i class="fa-solid fa-rotate-left mr-1"></i>${escapeHTML(t.story.slug)}</button>`).join('')}
+                    </div>
+                    <button data-action="clear-trash" class="ml-auto text-amber-400 hover:text-amber-700 text-xs font-bold px-2 py-1 rounded transition-colors">Clear</button>
+                </div>` : ''}
+                <div class="hidden lg:block">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
+                                    <th class="px-4 py-3 w-10 text-center"><i class="fa-solid fa-arrows-up-down"></i></th>
+                                    <th class="px-4 py-3">Slug</th>
+                                    <th class="px-4 py-3">Fmt</th>
+                                    <th class="px-4 py-3">Staff</th>
+                                    <th class="px-4 py-3">Dur</th>
+                                    <th class="px-4 py-3">Preview</th>
+                                    <th class="px-4 py-3 text-center">Checked</th>
+                                    <th class="px-4 py-3 text-center">Float</th>
+                                    <th class="px-4 py-3 text-center">Cuez</th>
+                                    <th class="px-4 py-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                                <tr data-story-id="end-of-list" class="h-16 bg-transparent"><td colspan="10"></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="lg:hidden flex flex-col gap-3">${renderRundownMobileCards(order, live)}</div>
+            </div>`;
+        }
+
+        function renderRundownMobileCards(order, live) {
+            let isBelowLine = false;
+            return order.map((id, idx) => {
+                if (id === 'marker-line') {
+                    isBelowLine = true;
+                    return `<div class="bg-red-600 text-white text-xs font-black uppercase tracking-widest px-4 py-2 rounded-xl flex items-center gap-2"><i class="fa-solid fa-arrow-down"></i> End of programme</div>`;
+                }
+                const story = state.storiesMap[id];
+                if (!story) return '';
+                if (story.type === 'segment') {
+                    return `<div class="bg-indigo-900 text-white text-xs font-black uppercase tracking-widest px-4 py-2 rounded-xl flex items-center justify-between">
+                        <span><i class="fa-solid fa-scissors mr-2 opacity-40"></i>${escapeHTML(story.slug)}</span>
+                        <span class="flex items-center gap-3">
+                            ${story.duration > 0 ? `<span class="font-mono text-indigo-300">${formatDuration(story.duration)}</span>` : ''}
+                            <button data-action="edit-story" data-id="${id}" class="text-indigo-300"><i class="fa-solid fa-pen"></i></button>
+                        </span>
+                    </div>`;
+                }
+                const locked = isLockedByOther(story);
+                let wrapperClass = 'bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm';
+                if (isBelowLine) wrapperClass += ' opacity-60';
+                if (story.isFloated && !isBelowLine) wrapperClass += ' opacity-50';
+
+                return `<div class="${wrapperClass}" data-story-id="${id}">
+                    <div class="flex items-center justify-between px-4 py-3 gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="font-semibold truncate">${escapeHTML(story.slug)}</span>
+                            ${locked ? `<i class="fa-solid fa-lock text-red-500 text-xs" title="Being edited by ${escapeHTML(story.lockedByName)}"></i>` : ''}
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${renderCuezBadge(id, story, live.has(id))}
+                            <span class="bg-slate-100 border px-2 py-0.5 rounded text-xs font-mono font-bold">${escapeHTML(story.format || '')}</span>
+                            <span class="font-mono text-sm text-slate-600">${formatDuration(story.duration)}</span>
+                        </div>
+                    </div>
+                    ${(story.reporter || story.presenter) ? `<div class="text-xs text-slate-500 px-4 pb-2 flex gap-3">
+                        ${story.reporter ? `<span class="font-bold text-blue-700">${escapeHTML(story.reporter)}</span>` : ''}
+                        ${story.presenter ? `<span>${escapeHTML(story.presenter)}</span>` : ''}
+                    </div>` : ''}
+                    <div class="flex gap-2 px-4 pb-3 flex-wrap">
+                        <button data-action="edit-story" data-id="${id}" ${lockState(story) === 'other' ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
+                        <button data-action="toggle-complete" data-id="${id}" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs transition-colors ${checkColour(story.completed)}"><i class="fa-solid fa-circle mr-1"></i>Check</button>
+                        <button data-action="toggle-float" data-id="${id}" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs transition-colors ${story.isFloated ? 'text-amber-500' : 'text-slate-600'}"><i class="fa-solid fa-circle-pause mr-1"></i>Float</button>
+                        <button data-action="move-story-up" data-id="${id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs" ${idx === 0 ? 'disabled' : ''}>▲</button>
+                        <button data-action="move-story-down" data-id="${id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs" ${idx === order.length - 1 ? 'disabled' : ''}>▼</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // ── Modals ─────────────────────────────────────────────────────────
+        function renderModals() {
+            if (state.ui.isShortcutsModalOpen) return renderShortcutsModal();
+            if (state.ui.pendingConflict) return renderConflictModal();
+            if (state.ui.editingStoryId) return renderEditModal();
+            if (state.ui.join && !state.ui.needsJoin) return renderJoinModal();
+            if (state.ui.isSettingsModalOpen) return renderSettingsModal();
+            return '';
+        }
+
+        function renderShortcutsModal() {
+            const rows = [['N', 'Add story'], ['B', 'Add segment'], ['?', 'Show this list']];
+            return `<div data-action="close-shortcuts-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[90]">
+                <div data-action="noop" class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm">
+                    <div class="px-5 py-4 border-b border-slate-700 flex justify-between items-center">
+                        <h3 class="text-sm font-black text-white uppercase tracking-widest"><i class="fa-solid fa-keyboard mr-2 text-blue-400"></i>Shortcuts</h3>
+                        <button data-action="close-shortcuts-modal" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-5 space-y-2.5">
+                        ${rows.map(([key, label]) => `<div class="flex items-center justify-between gap-4 text-sm">
+                            <span class="text-slate-300">${escapeHTML(label)}</span>
+                            <kbd class="bg-slate-800 border border-slate-600 text-slate-200 font-mono text-xs px-2 py-1 rounded">${escapeHTML(key)}</kbd>
+                        </div>`).join('')}
+                        <div class="pt-3 mt-1 border-t border-slate-700 text-xs text-slate-500">Ignored while typing or while a dialog is open.</div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function renderLockBanner(story) {
+            if (lockState(story) === 'elsewhere') {
+                return `<div class="bg-blue-50 border-b border-blue-200 px-6 py-3 flex items-center justify-between gap-3">
+                    <span class="text-blue-800 text-sm">You have this story open in another tab, or in a page you reloaded.</span>
+                    <button data-action="take-over-edit" id="takeover-btn" class="text-xs bg-blue-600 hover:bg-blue-700 text-white border border-blue-700 px-3 py-1.5 rounded shadow-sm font-bold transition-colors">Edit here</button>
+                </div>`;
+            }
+            const lockAge = story.lockedAt ? Date.now() - story.lockedAt : STALE_LOCK_MS;
+            const isStale = lockAge >= STALE_LOCK_MS;
+            const waitSecs = isStale ? 0 : Math.ceil((STALE_LOCK_MS - lockAge) / 1000);
+            return `<div class="bg-amber-100 border-b border-amber-200 px-6 py-3 flex items-center justify-between gap-3">
+                <span class="text-amber-800 text-sm">Being edited by <strong>${escapeHTML(story.lockedByName)}</strong>.</span>
+                <button data-action="take-over-edit" id="takeover-btn" ${!isStale ? 'disabled' : ''}
+                    class="text-xs ${isStale ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-700' : 'bg-white text-slate-400 border-slate-300 cursor-not-allowed'} border px-3 py-1.5 rounded shadow-sm font-bold transition-colors">
+                    ${isStale ? 'Take over' : `Wait ${waitSecs}s…`}
+                </button>
+            </div>`;
+        }
+
+        function renderEditModal() {
+            const story = state.storiesMap[state.ui.editingStoryId];
+            if (!story) return '';
+            const locked = isLockedByOther(story);
+            const dis = locked ? 'disabled' : '';
+
+            if (story.type === 'segment') {
+                return `<div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+                        <div class="px-6 py-4 border-b border-indigo-100 flex justify-between items-center bg-indigo-50">
+                            <h3 class="text-lg font-bold text-indigo-900"><i class="fa-solid fa-scissors mr-2 text-indigo-400"></i>Edit Segment</h3>
+                            <button data-action="cancel-edit" class="text-indigo-300 hover:text-indigo-600 text-2xl"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        ${locked ? renderLockBanner(story) : ''}
+                        <div class="p-6 space-y-4">
+                            <input type="hidden" id="edit-rev" value="${story.rev}">
+                            <div>
+                                <label class="text-sm font-semibold block mb-1">Label</label>
+                                <input type="text" id="edit-slug" value="${escapeHTML(story.slug)}" class="w-full border rounded-lg px-4 py-2.5 outline-none focus:border-blue-500 font-bold uppercase tracking-widest" ${dis} placeholder="e.g. SPORT, WEATHER">
+                            </div>
+                            <div>
+                                <label class="text-sm font-semibold block mb-1">Duration <span class="font-normal text-slate-400">(optional, counts toward TRT)</span></label>
+                                <input type="text" id="edit-duration" value="${story.duration > 0 ? formatDuration(story.duration) : ''}" class="w-full border rounded-lg px-4 py-2 font-mono outline-none focus:border-blue-500" ${dis} placeholder="e.g. 3:00">
+                            </div>
+                            <p class="text-xs text-slate-400">Segments organise the desk's running order. They aren't sent to Cuez.</p>
+                        </div>
+                        <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+                            <button data-action="cancel-edit" class="px-5 py-2.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors">${locked ? 'Close' : 'Cancel'}</button>
+                            <span id="edit-save-error" class="text-sm text-red-600 self-center" style="display:none"></span>
+                            ${!locked ? `<button data-action="save-edit" data-label="Save" class="btn-primary">Save</button>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            const formats = state.meta.formats || DEFAULT_FORMATS;
+            const formatOptions = [...new Set([...formats, story.format].filter(Boolean))]
+                .map(f => `<option value="${escapeHTML(f)}" ${story.format === f ? 'selected' : ''}>${escapeHTML(f)}</option>`).join('');
+            const names = [...new Set(Object.values(state.storiesMap).flatMap(s => [s.reporter, s.presenter]).filter(Boolean))];
+            const status = cuezStatus(story);
+            const sentAt = story.cuezSentAt ? new Date(story.cuezSentAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+
+            return `<div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+                <datalist id="staff-names">${names.map(n => `<option value="${escapeHTML(n)}">`).join('')}</datalist>
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-full overflow-hidden">
+                    <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                        <h3 class="text-xl font-bold text-slate-800"><i class="fa-solid fa-pen-to-square mr-2 text-blue-500"></i>Edit Story</h3>
+                        <button data-action="cancel-edit" class="text-slate-400 hover:text-slate-600 text-2xl"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    ${locked ? renderLockBanner(story) : ''}
+                    ${status !== 'none' ? `<div class="bg-emerald-50 border-b border-emerald-200 px-6 py-2.5 text-sm text-emerald-800">
+                        <i class="fa-solid fa-tower-broadcast mr-2"></i>Sent to Cuez at ${sentAt}${story.cuezItemNumber ? ` as item ${escapeHTML(story.cuezItemNumber)}` : ''}. Changes here won't update Cuez${status === 'changed' ? ', and this story has changed since it was sent' : ''}.
+                    </div>` : ''}
+                    ${story.brief || story.pitchedBy ? `<div class="bg-violet-50 border-b border-violet-200 px-6 py-2.5 text-sm text-violet-900">
+                        <i class="fa-solid fa-lightbulb mr-2 text-violet-400"></i><b>Pitch:</b> ${escapeHTML(story.brief || '(no angle given)')}${story.pitchedBy ? ` <span class="text-violet-500">· pitched by ${escapeHTML(story.pitchedBy)}</span>` : ''}
+                    </div>` : ''}
+                    <div class="p-6 overflow-y-auto flex-1 min-h-0 space-y-5">
+                        <input type="hidden" id="edit-rev" value="${story.rev}">
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                            <div class="sm:col-span-3"><label class="text-sm font-semibold block mb-1">Slug</label><input type="text" id="edit-slug" value="${escapeHTML(story.slug)}" spellcheck="true" lang="en-GB" oninput="window._moiraUpdateScriptStats()" class="w-full border rounded-lg px-4 py-2.5 outline-none focus:border-blue-500" ${dis}></div>
+                            <div><label class="text-sm font-semibold block mb-1">Format</label><select id="edit-format" class="w-full border rounded-lg px-4 py-2.5 outline-none focus:border-blue-500" ${dis} onchange="window._moiraUpdateScriptStats()">${formatOptions}</select></div>
+                        </div>
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <div><label class="text-sm font-semibold block mb-1">Reporter</label><input type="text" id="edit-reporter" list="staff-names" maxlength="60" spellcheck="false" value="${escapeHTML(story.reporter)}" class="w-full border rounded-lg px-4 py-2 outline-none focus:border-blue-500" ${dis}></div>
+                            <div><label class="text-sm font-semibold block mb-1">Presenter</label><input type="text" id="edit-presenter" list="staff-names" maxlength="60" spellcheck="false" value="${escapeHTML(story.presenter)}" class="w-full border rounded-lg px-4 py-2 outline-none focus:border-blue-500" ${dis}></div>
+                            <div><label class="text-sm font-semibold block mb-1">Duration <span class="font-normal text-slate-400 text-xs ml-1">(total)</span></label>
+                                <input type="text" id="edit-duration" value="${formatDuration(story.duration)}" class="w-full border rounded-lg px-4 py-2 font-mono outline-none focus:border-blue-500" ${dis} placeholder="e.g. 02:15"></div>
+                        </div>
+                        <div class="flex flex-col min-h-[14rem] md:h-72">
+                            <label class="text-sm font-semibold block mb-1">Script
+                                ${locked ? '' : `<span class="float-right flex gap-1.5" title="Insert at the cursor">
+                                    <button type="button" data-action="insert-tag" data-val="clip" class="script-tool script-tool-clip">+ Clip</button>
+                                    <button type="button" data-action="insert-tag" data-val="strap" class="script-tool script-tool-strap">+ Strap</button>
+                                    <button type="button" data-action="insert-tag" data-val="direction" class="script-tool script-tool-instructions">+ Direction</button>
+                                </span>`}
+                            </label>
+                            <textarea id="edit-script" spellcheck="true" lang="en-GB" class="w-full flex-1 border rounded-lg p-4 outline-none focus:border-blue-500 resize-none text-lg" ${dis}
+                                oninput="window._moiraUpdateScriptStats()">${escapeHTML(story.script)}</textarea>
+                            <div class="flex items-center justify-between mt-1.5 gap-3 flex-wrap">
+                                <div class="flex flex-col">
+                                    <span id="edit-script-stats" class="text-xs font-mono text-slate-400">${escapeHTML(scriptStatsLabel(story.script, story.format))}</span>
+                                    <div id="edit-cuez-preview" class="cuez-chips">${cuezChipsHtml(story.script, story.format, story.slug)}</div>
+                                </div>
+                                <button type="button" data-action="use-estimate" ${dis} class="text-xs font-bold text-blue-600 hover:text-blue-800 disabled:text-slate-300 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors" title="Copy the estimate into Duration (saves when you click Save)">Use estimate</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center gap-3">
+                        <div>${state.ui.storySnapshots[state.ui.editingStoryId] && !locked ? `<button data-action="revert-story" data-id="${state.ui.editingStoryId}" class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 font-medium transition-colors text-sm"><i class="fa-solid fa-clock-rotate-left"></i>Revert to previous version</button>` : ''}</div>
+                        <div class="flex gap-3 items-center flex-wrap justify-end">
+                            <span id="edit-save-error" class="text-sm text-red-600 max-w-xs" style="display:none"></span>
+                            <button data-action="cancel-edit" class="px-5 py-2.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors">${locked ? 'Close' : 'Cancel'}</button>
+                            ${!locked ? `<button data-action="save-edit" data-label="Save changes" class="btn-primary">Save changes</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function renderSettingsModal() {
+            const currentFormats = (state.meta.formats || DEFAULT_FORMATS).join('\n');
+            const tabBtn = (id, label, icon) => `
+                <button data-action="set-settings-tab" data-val="${id}" class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors flex items-center justify-center gap-2 ${state.ui.settingsTab === id ? 'border-blue-600 text-blue-600 bg-blue-50/50' : 'border-slate-200 text-slate-400 hover:text-slate-600'}">
+                    <i class="fa-solid ${icon}"></i><span class="hidden md:inline">${label}</span>
+                </button>`;
+            const tab = state.ui.settingsTab;
+            const roomList = state.rooms.map(r => escapeHTML(r.name)).join(', ');
+
+            let body;
+            if (tab === 'editorial') {
+                body = `<div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <h4 class="font-bold text-slate-800 mb-1">Story formats for ${escapeHTML(state.roomDisplayName)}</h4>
+                    <p class="text-xs text-slate-500 mb-3">One per line. Stories in ${[...CLIP_FORMATS].join(', ')} get an empty clip block in Cuez when their script has no [CLIP] tag.</p>
+                    <textarea id="settings-formats-input" rows="8" class="w-full border rounded-lg p-4 text-sm font-mono outline-none">${escapeHTML(currentFormats)}</textarea>
+                </div>`;
+            } else if (tab === 'reset') {
+                body = `<div class="bg-red-50 border border-red-200 rounded-xl p-6">
+                    <h4 class="font-bold text-red-800 text-lg mb-3"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Forget this browser</h4>
+                    <p class="text-sm text-red-700 mb-6">Signs this browser out and clears its Moira:Desk settings${roomList ? `, including your access to ${roomList}` : ''}. You'll need the codes again to get back in. Use this on shared computers. Nothing in the newsrooms or Cuez is deleted.</p>
+                    <button data-action="factory-reset" class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors">Forget this browser</button>
+                </div>`;
+            } else {
+                body = `<div class="p-4 space-y-4 text-center">
+                    <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto"><i class="fa-solid fa-newspaper text-3xl"></i></div>
+                    <h4 class="text-2xl font-bold text-slate-800">Moira:Desk</h4>
+                    <p class="text-sm text-slate-500">The editorial desk: write, check and order the bulletin here, then send it to Cuez, which handles production and playout.</p>
+                    <p class="text-sm text-slate-500">A trimmed sibling of <a href="https://github.com/digitaldickinson/moira-rundown" target="_blank" rel="noopener" class="text-blue-600 hover:underline font-bold">Moira:Rundown</a> by Andy Dickinson. Moira is named after <a href="https://en.wikipedia.org/wiki/Moira_Stuart" target="_blank" rel="noopener" class="text-blue-600 hover:underline font-bold">Moira Stuart</a>.</p>
+                </div>`;
+            }
+
+            return `<div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+                    <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-2xl">
+                        <h3 class="text-xl font-bold text-slate-800"><i class="fa-solid fa-gear mr-2 text-slate-500"></i>Settings</h3>
+                        <button data-action="close-settings-modal" class="text-slate-400 hover:text-slate-600 text-2xl"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="flex">
+                        ${tabBtn('editorial', 'Formats', 'fa-pen-nib')}
+                        ${tabBtn('about', 'About', 'fa-info-circle')}
+                        ${tabBtn('reset', 'Forget', 'fa-right-from-bracket')}
+                    </div>
+                    <div class="p-6 overflow-y-auto flex-1 min-h-0">${body}</div>
+                    <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-2xl flex justify-end items-center gap-3">
+                        <button data-action="close-settings-modal" class="px-5 py-2.5 rounded-lg text-slate-600 hover:bg-slate-200">Close</button>
+                        ${tab === 'editorial' ? `<button data-action="save-editorial-settings" class="btn-primary">Apply to newsroom</button>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function renderConflictModal() {
+            const { serverData, localData } = state.ui.pendingConflict;
+            const diffs = [];
+            const row = (label, a, b) => `<tr><td class="pr-4 text-slate-500 py-1 text-xs">${label}</td><td class="text-xs text-red-700 font-mono">${escapeHTML(a)}</td><td class="text-xs text-blue-700 font-mono">${escapeHTML(b)}</td></tr>`;
+            if (serverData.slug !== localData.slug) diffs.push(row('Slug', serverData.slug, localData.slug));
+            if (serverData.format !== localData.format) diffs.push(row('Format', serverData.format, localData.format));
+            if ((serverData.duration || 0) !== (localData.duration || 0)) diffs.push(row('Duration', formatDuration(serverData.duration), formatDuration(localData.duration)));
+            if ((serverData.script || '').trim() !== (localData.script || '').trim()) diffs.push(row('Script', 'Changed', 'Changed'));
+            const diffTable = diffs.length
+                ? `<table class="w-full mt-2 mb-1"><thead><tr><th class="text-left text-[10px] uppercase tracking-wide text-slate-400 pr-4">Field</th><th class="text-left text-[10px] uppercase tracking-wide text-red-500">Saved (rev ${serverData.rev || '?'})</th><th class="text-left text-[10px] uppercase tracking-wide text-blue-500">Your edit</th></tr></thead><tbody>${diffs.join('')}</tbody></table>`
+                : `<p class="text-xs text-slate-500 mt-1 mb-1">Check both versions before deciding.</p>`;
+
+            return `<div class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 z-[80]">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+                    <h3 class="text-lg font-bold text-slate-800">⚠️ Edit conflict: ${escapeHTML(serverData.slug)}</h3>
+                    <p class="text-sm text-slate-500 mt-0.5 mb-4">Someone else saved this story while you were editing it.</p>
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 mb-5">${diffTable}</div>
+                    <div class="flex gap-3">
+                        <button data-action="resolve-conflict" data-val="overwrite" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg font-bold text-sm transition-colors"><i class="fa-solid fa-upload mr-1"></i> Use my version</button>
+                        <button data-action="resolve-conflict" data-val="discard" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-3 rounded-lg font-bold text-sm transition-colors"><i class="fa-solid fa-download mr-1"></i> Keep saved version</button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // ==========================================
+        // 11. EVENTS
+        // ==========================================
+        function bindGlobalEvents() {
+            document.addEventListener('keydown', async e => {
+                if (e.target && ['join-code', 'join-name'].includes(e.target.id) && e.key === 'Enter') {
+                    e.preventDefault();
+                    const code = document.getElementById('join-code')?.value || '';
+                    const name = document.getElementById('join-name')?.value.trim() || '';
+                    e.target.blur();
+                    joinWithCode(code, name);
+                    return;
+                }
+
+                if (e.key === 'Enter' && e.target?.dataset?.pitchEnter) {
+                    e.preventDefault();
+                    if (e.target.dataset.pitchEnter === 'add') addPitch();
+                    else savePitchEdit(e.target.dataset.id);
+                    return;
+                }
+                if (e.key === 'Escape' && e.target?.dataset?.pitchEnter === 'save') {
+                    state.ui.editingPitchId = null; render('main'); return;
+                }
+
+                if (state.ui.isShortcutsModalOpen) {
+                    if (e.key === 'Escape') { e.preventDefault(); state.ui.isShortcutsModalOpen = false; render('modal'); }
+                    return;
+                }
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+                const typingTarget = document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+                const anyModalOpen = !!(state.ui.editingStoryId || state.ui.isSettingsModalOpen || state.ui.pendingConflict || state.ui.join || state.ui.needsJoin || !state.currentBulletinId);
+                if (typingTarget || anyModalOpen) return;
+
+                if (e.key === '?') { e.preventDefault(); state.ui.isShortcutsModalOpen = true; render('modal'); return; }
+                const lower = e.key.toLowerCase();
+                if (state.ui.view !== 'rundown') return; // N and B add to the running order, so only there
+                if (lower === 'n') { e.preventDefault(); addStory(); }
+                else if (lower === 'b') { e.preventDefault(); addSegment(); }
+            });
+
+            const handleSettings = async ({ action, val }) => {
+                if (action === 'open-settings-modal')  { state.ui.isSettingsModalOpen = true; state.ui.settingsTab = 'editorial'; render('modal'); return true; }
+                if (action === 'close-settings-modal') { state.ui.isSettingsModalOpen = false; render('modal'); return true; }
+                if (action === 'set-settings-tab')     { state.ui.settingsTab = val; render('modal'); return true; }
+                if (action === 'factory-reset') {
+                    if (!confirm('Forget this browser? You will need newsroom codes to get back in.')) return true;
+                    if (state.ui.editingStoryId) { stopLockRefresh(); await unlockStory(state.ui.editingStoryId); }
+                    try { if (supabase) await supabase.auth.signOut(); } catch {}
+                    try {
+                        Object.keys(localStorage).filter(k => k.startsWith('moiradesk_')).forEach(k => localStorage.removeItem(k));
+                    } catch {}
+                    location.reload();
+                    return true;
+                }
+                if (action === 'save-editorial-settings') {
+                    const formats = document.getElementById('settings-formats-input').value.split('\n').map(f => f.trim()).filter(Boolean);
+                    if (formats.length) updateFormats(formats);
+                    return true;
+                }
+                if (action === 'set-my-name') {
+                    const name = (prompt('Your name, so others can see who is editing a story:', state.myName) || '').trim().slice(0, 40);
+                    if (name) { state.myName = name; lsSet(LS.name, name); render('header'); }
+                    return true;
+                }
+                return false;
+            };
+
+            const handleRundown = async ({ action, id }) => {
+                if (action === 'add-story')       { addStory(); return true; }
+                if (action === 'add-segment')     { addSegment(); return true; }
+                if (action === 'toggle-float')    { toggleFloat(id); return true; }
+                if (action === 'delete-story')    { deleteStory(id); return true; }
+                if (action === 'rescue-story')    { rescueStory(id); return true; }
+                if (action === 'revert-story')    { revertStory(id); return true; }
+                if (action === 'clear-trash')     { state.ui.trash = []; render('main'); return true; }
+                if (action === 'toggle-complete') { toggleStoryComplete(id); return true; }
+                if (action === 'open-join')       { state.ui.join = { error: null, busy: false }; render('modal'); setTimeout(() => document.getElementById('join-name')?.focus() || document.getElementById('join-code')?.focus(), 50); return true; }
+                if (action === 'close-join')      { state.ui.join = null; render('modal'); return true; }
+                if (action === 'join-submit') {
+                    const code = document.getElementById('join-code')?.value || '';
+                    const name = document.getElementById('join-name')?.value.trim() || '';
+                    document.activeElement?.blur?.();
+                    joinWithCode(code, name);
+                    return true;
+                }
+                if (action === 'move-story-up') {
+                    const idx = state.meta.order.indexOf(id);
+                    if (idx > 0) await reorderStory(id, state.meta.order[idx - 1]);
+                    return true;
+                }
+                if (action === 'move-story-down') {
+                    const idx = state.meta.order.indexOf(id);
+                    if (idx > -1 && idx < state.meta.order.length - 1) await reorderStory(id, state.meta.order[idx + 2]);
+                    return true;
+                }
+                return false;
+            };
+
+            const handleConference = async ({ action, val, id }) => {
+                if (action === 'show-view')         { showView(val); return true; }
+                if (action === 'claim-producer')    { claimProducer(); return true; }
+                if (action === 'release-producer')  { releaseProducer(); return true; }
+                if (action === 'add-pitch')         { addPitch(); return true; }
+                if (action === 'edit-pitch')        { state.ui.editingPitchId = id; render('main'); setTimeout(() => document.getElementById(`pitch-edit-slug-${id}`)?.focus(), 30); return true; }
+                if (action === 'cancel-pitch-edit') { state.ui.editingPitchId = null; render('main'); return true; }
+                if (action === 'save-pitch-edit')   { savePitchEdit(id); return true; }
+                if (action === 'delete-pitch')      { deletePitch(id); return true; }
+                if (action === 'pick-pitch')        { conferenceAction('pick_pitch', { p_pitch_id: id }); return true; }
+                if (action === 'unpick-pitch')      { unpickPitch(id); return true; }
+                if (action === 'spike-pitch')       { spikePitch(id); return true; }
+                if (action === 'unspike-pitch')     { conferenceAction('unspike_pitch', { p_pitch_id: id }); return true; }
+                if (action === 'open-picked')       { state.ui.pendingScrollToStoryId = id; showView('rundown'); return true; }
+                return false;
+            };
+
+            const handleCuez = async ({ action, val, id }) => {
+                if (action === 'send-to-cuez') { sendToCuez(); return true; }
+                if (action === 'cuez-unlink')  { unlinkFromCuez(id); return true; }
+                return false;
+            };
+
+            const handleEdit = async ({ action, id, val }) => {
+                if (action === 'edit-story') {
+                    if (!canMutate()) return true;
+                    if (!ensureMyName()) return true;
+                    state.ui.editingStoryId = id;
+                    lockStory(id);
+                    startLockRefresh(id);
+                    render('modal');
+                    return true;
+                }
+                if (action === 'cancel-edit') {
+                    const editingId = state.ui.editingStoryId;
+                    state.ui.editingStoryId = null;
+                    stopLockRefresh();
+                    if (editingId) unlockStory(editingId);
+                    render('main', 'modal');
+                    return true;
+                }
+                if (action === 'take-over-edit') {
+                    const storyId = state.ui.editingStoryId;
+                    if (!storyId) return true;
+                    const userName = getMyName();
+                    const now = Date.now();
+                    const s = state.storiesMap[storyId];
+                    if (s) { s.lockedBySession = state.sessionId; s.lockedByName = userName; s.lockedAt = now; }
+                    startLockRefresh(storyId);
+                    render('modal');
+                    try { await DB.takeLock(storyId, state.sessionId, userName); }
+                    catch (e) { showError('Could not take over: ' + DB.errorMessage(e)); }
+                    return true;
+                }
+                if (action === 'save-edit') {
+                    const editingId = state.ui.editingStoryId;
+                    const editing = state.storiesMap[editingId];
+                    if (!editing) return true;
+                    const rev = parseInt(document.getElementById('edit-rev').value, 10);
+                    const duration = parseDurationInput(document.getElementById('edit-duration').value);
+                    if (editing.type === 'segment') {
+                        saveStory(editingId, { slug: document.getElementById('edit-slug').value.toUpperCase(), duration, rev });
+                    } else {
+                        saveStory(editingId, {
+                            slug:      document.getElementById('edit-slug').value,
+                            format:    document.getElementById('edit-format').value,
+                            reporter:  document.getElementById('edit-reporter').value.trim(),
+                            presenter: document.getElementById('edit-presenter').value.trim(),
+                            duration,
+                            script:    document.getElementById('edit-script').value,
+                            rev,
+                        });
+                    }
+                    return true;
+                }
+                if (action === 'insert-tag') { insertScriptTag(val); return true; }
+                if (action === 'use-estimate') {
+                    const ta = document.getElementById('edit-script');
+                    const fmt = document.getElementById('edit-format');
+                    const durEl = document.getElementById('edit-duration');
+                    if (ta && durEl) durEl.value = formatDuration(scriptTiming(ta.value, fmt?.value).estSeconds);
+                    return true;
+                }
+                if (action === 'resolve-conflict') {
+                    const { storyId, serverData, localData } = state.ui.pendingConflict;
+                    state.ui.pendingConflict = null;
+                    if (val === 'overwrite') {
+                        const conflict = { storyId, serverData, localData };
+                        const r = await saveStory(storyId, { ...localData, rev: serverData.rev });
+                        if (r === 'error') { state.ui.pendingConflict = conflict; render('modal'); showError('Not saved. Your version is still here: choose again to retry.'); }
+                    } else {
+                        // The rejected save was applied optimistically; put the saved version back.
+                        state.storiesMap[storyId] = { ...serverData };
+                        state.ui.editingStoryId = null;
+                        stopLockRefresh();
+                        unlockStory(storyId);
+                        render('main', 'modal');
+                    }
+                    return true;
+                }
+                if (action === 'inline-edit-slug') {
+                    const story = state.storiesMap[id];
+                    if (!canMutate() || !story || isLockedByOther(story)) return true;
+                    if (!ensureMyName()) return true;
+                    state.ui.inlineEditingId = id;
+                    await lockStory(id);
+                    const liveSpan = document.querySelector(`[data-action="inline-edit-slug"][data-id="${id}"]`);
+                    if (!liveSpan) { state.ui.inlineEditingId = null; render('main'); return true; }
+                    const originalSlug = story.slug ?? '';
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = originalSlug;
+                    input.className = 'w-full border-2 border-blue-500 rounded px-1 text-slate-800 font-semibold outline-none bg-white shadow-sm ring-2 ring-blue-100';
+                    input.spellcheck = true;
+                    input.lang = 'en-GB';
+                    let committed = false, escapedOut = false;
+                    const finish = async (save) => {
+                        if (committed) return;
+                        committed = true;
+                        state.ui.inlineEditingId = null;
+                        const newSlug = input.value.trim();
+                        if (save && !escapedOut && newSlug && newSlug !== originalSlug) {
+                            const s = state.storiesMap[id];
+                            const prevRev = s?.rev;
+                            if (s) { s.slug = newSlug; s.rev = (s.rev || 0) + 1; s.lockedBySession = null; s.lockedByName = null; s.lockedAt = null; }
+                            render('main');
+                            try { await DB.saveSlug(id, newSlug, state.sessionId); }
+                            catch (e) {
+                                // Put the old slug back: the row must show what's actually saved.
+                                if (s) { s.slug = originalSlug; s.rev = prevRev; s.lockedBySession = state.sessionId; }
+                                showError(`Slug not saved: ${DB.errorMessage(e)}. "${newSlug}" was not kept.`);
+                                await unlockStory(id); render('main');
+                            }
+                        } else {
+                            await unlockStory(id);
+                            render('main');
+                        }
+                    };
+                    input.addEventListener('keydown', ev => {
+                        if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); input.blur(); }
+                        else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); escapedOut = true; input.blur(); finish(false); }
+                    });
+                    input.addEventListener('blur', () => { if (!escapedOut) finish(true); });
+                    liveSpan.replaceWith(input);
+                    input.focus();
+                    input.select();
+                    return true;
+                }
+                if (action === 'edit-target') {
+                    if (!canMutate()) return true;
+                    const container = document.getElementById('target-control');
+                    if (!container) return true;
+                    const current = state.meta.targetDuration;
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = current != null ? formatDuration(current) : '';
+                    input.placeholder = 'M:SS or secs';
+                    input.className = 'w-24 border-2 border-blue-500 rounded px-2 py-1 text-xs font-mono outline-none bg-white shadow-sm ring-2 ring-blue-100';
+                    const saveBtn = document.createElement('button');
+                    saveBtn.type = 'button'; saveBtn.textContent = 'Save';
+                    saveBtn.className = 'text-[11px] font-bold text-blue-600 hover:text-blue-800 px-1.5';
+                    const clearBtn = document.createElement('button');
+                    clearBtn.type = 'button'; clearBtn.textContent = 'Clear';
+                    clearBtn.className = 'text-[11px] font-bold text-slate-400 hover:text-slate-600 px-1.5';
+                    let committed = false;
+                    const shake = () => { input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake'); };
+                    const attemptSave = () => {
+                        if (committed) return true;
+                        const parsed = parseTargetDurationInput(input.value);
+                        if (parsed === undefined) { shake(); return false; }
+                        committed = true;
+                        updateTargetDuration(input.value.trim() ? parsed : null);
+                        return true;
+                    };
+                    const attemptClear = () => { if (committed) return true; committed = true; updateTargetDuration(null); return true; };
+                    const cancel = () => { if (committed) return; committed = true; render('main'); };
+                    input.addEventListener('keydown', ev => {
+                        if (ev.key === 'Enter') { ev.preventDefault(); if (attemptSave()) input.blur(); }
+                        else if (ev.key === 'Escape') { ev.preventDefault(); cancel(); input.blur(); }
+                    });
+                    input.addEventListener('blur', () => cancel());
+                    // Validate on mousedown, before focus moves and blur cancels.
+                    saveBtn.addEventListener('mousedown', ev => { if (!attemptSave()) ev.preventDefault(); });
+                    clearBtn.addEventListener('mousedown', () => attemptClear());
+                    container.innerHTML = '';
+                    container.append(input, saveBtn, clearBtn);
+                    input.focus();
+                    input.select();
+                    return true;
+                }
+                return false;
+            };
+
+            document.body.addEventListener('click', async e => {
+                const btn = e.target.closest('[data-action]');
+                if (!btn || btn.disabled) return;
+                const ctx = { action: btn.getAttribute('data-action'), id: btn.getAttribute('data-id'), val: btn.getAttribute('data-val') };
+                if (ctx.action === 'noop') return;
+                if (!['inline-edit-slug', 'edit-target'].includes(ctx.action)) {
+                    // Safari doesn't move focus to a clicked button, and render()
+                    // skips redrawing while an input has focus. Keep what was typed
+                    // in the Cuez episode box, then release focus.
+                    const ae = document.activeElement;
+                    if (ae && ae !== btn && ['INPUT', 'TEXTAREA'].includes(ae.tagName) && !ae.hasAttribute('data-preserve') && ctx.action !== 'use-estimate' && ctx.action !== 'join-submit' && ctx.action !== 'insert-tag') ae.blur();
+                }
+                if (ctx.action === 'close-shortcuts-modal') { state.ui.isShortcutsModalOpen = false; render('modal'); return; }
+                if (await handleSettings(ctx)) return;
+                if (await handleConference(ctx)) return;
+                if (await handleCuez(ctx)) return;
+                if (await handleRundown(ctx)) return;
+                await handleEdit(ctx);
+            });
+
+            document.body.addEventListener('change', e => {
+                if (e.target.id === 'room-select' && e.target.value !== state.currentBulletinId) openRoom(e.target.value);
+                if (e.target.classList?.contains('picked-format')) setPickedFormat(e.target.dataset.id, e.target.value);
+            });
+
+            // Drag and drop (polyfilled for touch screens).
+            if (typeof MobileDragDrop !== 'undefined') MobileDragDrop.polyfill({ holdToDrag: 400 });
+
+            document.body.addEventListener('dragstart', e => {
+                const row = e.target.closest('[data-story-id]');
+                if (!row) return;
+                const dragId = row.getAttribute('data-story-id');
+                if (isLockedByOther(state.storiesMap[dragId])) { e.preventDefault(); return; }
+                state.ui.draggedStoryId = dragId;
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => row.classList.add('opacity-30'), 0);
+            });
+            document.body.addEventListener('dragend', e => {
+                const row = e.target.closest('[data-story-id]');
+                if (row) row.classList.remove('opacity-30');
+                state.ui.draggedStoryId = null;
+                render('main');
+            });
+            document.body.addEventListener('dragover', e => {
+                if (!state.ui.draggedStoryId) return;
+                e.preventDefault();
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                const row = e.target.closest('[data-story-id]');
+                if (row && row.getAttribute('data-story-id') !== state.ui.draggedStoryId) row.classList.add('drag-over');
+            });
+            document.body.addEventListener('dragleave', e => { const row = e.target.closest('[data-story-id]'); if (row) row.classList.remove('drag-over'); });
+            document.body.addEventListener('drop', e => {
+                if (!state.ui.draggedStoryId) return;
+                e.preventDefault();
+                const dropTarget = e.target.closest('[data-story-id]');
+                if (!dropTarget) return;
+                dropTarget.classList.remove('drag-over');
+                const targetId = dropTarget.getAttribute('data-story-id');
+                const draggedId = state.ui.draggedStoryId;
+                state.ui.draggedStoryId = null;
+                if (draggedId !== targetId) reorderStory(draggedId, targetId === 'end-of-list' ? null : targetId);
+            });
+        }
+
+        window.addEventListener('beforeunload', () => {
+            if (unsubAll) { unsubAll(); unsubAll = null; }
+            stopLockRefresh();
+            if (state.ui.editingStoryId) unlockStory(state.ui.editingStoryId);
+        });
+
+        boot();
+    </script>
+</body>
+</html>
