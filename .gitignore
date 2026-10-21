@@ -1,0 +1,19 @@
+# Local administration and diagnostic utilities are not published.
+/admin.html
+/cuez-test.html
+/cuez-capture.js
+
+# Credentials, environment files and local tooling state.
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+.aws/
+.codex/
+.agents/
+node_modules/
+_site/
+.DS_Store
