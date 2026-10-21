@@ -51,11 +51,15 @@ Once a producer has claimed the role, they send the bulletin to Cuez. The desk s
 
 ## For tutors and executive producers
 
-The tutor view supports several newsroom groups at once. You can manage access, start a new conference and help groups hand over the producer role.
+[Open the tutor desk](https://digitaldickinson.github.io/Moira-Desk/tutor.html) and sign in with your staff email and password. You’ll see only the newsrooms your administrator has assigned to you. Select one or more groups to supervise together.
+
+If a student needs the newsroom code, choose **Show join code**. This displays a separate student join code enabled by your administrator; it does not reveal or change the main code.
 
 The **EP wall** displays selected groups’ pitches side by side for discussion or projection. Add notes to guide their choices while leaving the editorial decisions with each group’s producer.
 
 You can also generate a shareable report containing the pitches, decisions, EP notes and running order, with scripts included if wanted. Use it for a debrief or to keep a record of the session. Generate the report before starting a new conference, as earlier pitches leave the current board and report.
+
+Your administrator manages staff access, starts fresh conferences, resets producer roles and chooses Cuez destinations. Ask them if a newsroom or join code is missing. On a shared computer, sign out of the tutor desk when you finish.
 
 ## Finishing on a shared computer
 

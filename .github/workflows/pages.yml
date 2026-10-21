@@ -29,6 +29,7 @@ jobs:
         run: |
           mkdir -p _site
           cp index.html _site/index.html
+          cp tutor.html _site/tutor.html
           touch _site/.nojekyll
       - name: Configure Pages
         uses: actions/configure-pages@v5

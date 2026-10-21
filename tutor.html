@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Moira:Desk Tutor</title>
+<!-- The only external script: pinned, with an integrity check, so a changed file is refused. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
+        integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o"
+        crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #f1f3f6; --panel: #fff; --ink: #1b1f27; --muted: #667085; --line: #dfe3ea;
+    --accent: #2457d6; --accent-ink: #fff; --ok: #18794e; --ok-bg: #e7f6ee; --warn: #9a5b00; --warn-bg: #fff4e0;
+    --err: #b42318; --err-bg: #fdecea; --chip: #eef1f6; --code-bg: #10141c; --code-ink: #f5f7fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151b; --panel: #1b2029; --ink: #e8ebf1; --muted: #97a1b2; --line: #2c3340;
+      --accent: #7aa2ff; --accent-ink: #0d1220; --ok: #5fd39a; --ok-bg: #12301f; --warn: #f0b45a; --warn-bg: #352610;
+      --err: #ff8f84; --err-bg: #3a1714; --chip: #252b36; --code-bg: #0a0d12; --code-ink: #f5f7fb;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 18px; }
+  header h1 span { color: var(--accent); }
+  header .spacer { flex: 1; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 16px; }
+  .card { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 0 0 4px; }
+  input[type=text], input[type=email], input[type=password] { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .row > .grow { flex: 1 1 200px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 6px; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+  button:hover { filter: brightness(0.97); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.danger { color: var(--err); }
+  button.small { padding: 4px 8px; font-size: 13px; }
+  a.btn { display: inline-block; font: inherit; border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 6px; padding: 7px 12px; text-decoration: none; white-space: nowrap; }
+  a.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button:disabled { opacity: .5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td .sub { color: var(--muted); font-size: 12px; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .msg { border-radius: 6px; padding: 8px 10px; font-size: 14px; margin-top: 10px; }
+  .msg.err { background: var(--err-bg); color: var(--err); }
+  .msg.ok { background: var(--ok-bg); color: var(--ok); }
+  .msg.warn { background: var(--warn-bg); color: var(--warn); }
+  .muted { color: var(--muted); }
+  .login { max-width: 380px; margin: 10vh auto; }
+  .login .card { display: grid; gap: 12px; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; background: var(--panel); color: var(--ink); width: min(560px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(10, 14, 20, .55); }
+  dialog .head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+  dialog .head h3 { margin: 0; font-size: 17px; }
+  dialog .body { padding: 18px; display: grid; gap: 12px; }
+  dialog .foot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+  .code-big { background: var(--code-bg); color: var(--code-ink); font: 700 clamp(32px, 8vw, 56px)/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-align: center; padding: 22px 10px; border-radius: 10px; }
+  .fullscreen-code { position: fixed; inset: 0; background: var(--code-bg); color: var(--code-ink); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3vh; z-index: 100; cursor: pointer; text-align: center; padding: 20px; }
+  .fullscreen-code .name { font-size: 4vw; font-weight: 700; opacity: .8; }
+  .fullscreen-code .code { font: 700 13vw/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; }
+  .fullscreen-code .hint { font-size: 1.6vw; opacity: .6; }
+  .part { width: 100%; text-align: left; display: block; padding: 10px 12px; }
+  .part.selected { outline: 2px solid var(--accent); background: var(--panel); }
+  .part .items { color: var(--muted); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--ink); }
+  .check input { margin-top: 3px; }
+  .table-wrap { overflow-x: auto; }
+  td.sel, th.sel { width: 28px; padding-right: 0; }
+  .crown { color: #c58a00; }
+
+  /* EP wall: projected, so big type and high contrast */
+  .wall { position: fixed; inset: 0; z-index: 90; background: var(--bg); display: flex; flex-direction: column; font-size: calc(16px * var(--zoom, 1)); }
+  .wall-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; font-size: 15px; }
+  .wall-bar h1 { margin: 0; font-size: 18px; }
+  .wall-bar .spacer { flex: 1; }
+  .wall-cols { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(280px, 1fr); gap: 12px; padding: 12px; overflow-x: auto; }
+  .wall-col { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; min-height: 0; }
+  .wall-col header { display: block; padding: .7em .9em; border-bottom: 1px solid var(--line); background: transparent; }
+  .wall-col header .name { font-weight: 800; font-size: 1.25em; }
+  .wall-col header .meta { color: var(--muted); font-size: .8em; margin-top: 2px; }
+  .wall-col .list { overflow-y: auto; padding: .6em; display: grid; gap: .5em; align-content: start; }
+  .wall-pitch { border: 1px solid var(--line); border-radius: 10px; padding: .55em .7em; background: var(--panel); }
+  .wall-pitch .slug { font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+  .wall-pitch .angle { margin-top: 2px; }
+  .wall-pitch .by { color: var(--muted); font-size: .78em; margin-top: 3px; }
+  .wall-pitch.picked { border-color: var(--ok); background: var(--ok-bg); }
+  .wall-pitch.picked .slug::before { content: "✓ "; color: var(--ok); }
+  .wall-pitch.spiked { opacity: .55; }
+  .wall-pitch.spiked .slug { text-decoration: line-through; }
+  .wall-pitch .note { margin-top: .4em; font-size: .85em; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: .3em .5em; }
+  .wall-pitch .note-btn { float: right; font-size: 12px; padding: 2px 8px; margin-left: 6px; }
+  .wall .empty { color: var(--muted); font-style: italic; padding: .5em; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<dialog id="dlg"></dialog>
+
+<script>
+const SUPABASE_URL = 'https://ushtoubwyopjdlogapew.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaHRvdWJ3eW9wamRsb2dhcGV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTY3MzUsImV4cCI6MjEwODA3MjczNX0.qyukiNYqfnaOrnqGiL9mAGgmSmvBFKHe5YlzD59BFOA';
+const TURNSTILE_SITE_KEY = '';
+
+// This page uses only public browser configuration. All access is checked by
+// the database against the signed-in staff account and newsroom assignments.
+const configured = /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(SUPABASE_URL) && !/YOUR-/.test(SUPABASE_ANON_KEY);
+const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { storage: window.sessionStorage, storageKey: 'moiradesk-tutor-auth', persistSession: true, autoRefreshToken: true },
+}) : null;
+const state = { user: null, rooms: [], loading: false, loginBusy: false, loginEmail: '', loginError: null,
+  message: null, selected: new Set(), reportScripts: false };
+const app = document.getElementById('app'), dlg = document.getElementById('dlg');
+let sessionEpoch = 0;
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const room = (id) => state.rooms.find(r => r.newsroom_id === id);
+function flash(text, tone = 'ok') { state.message = { text, tone }; render(); }
+async function rpc(name, args) {
+  const epoch = sessionEpoch;
+  const { data, error } = await sb.rpc(name, args);
+  if (epoch !== sessionEpoch) throw new Error('Your session has changed. Sign in again to continue.');
+  if (error) throw error;
+  return data;
+}
+function render() {
+  if (!configured) {
+    app.innerHTML = '<div class="login"><div class="card"><h1>Moira:Desk Tutor</h1><p>The tutor desk is not ready yet. Please contact your administrator.</p></div></div>';
+    return;
+  }
+  if (!state.user) { app.innerHTML = renderLogin(); return; }
+  app.innerHTML = `<header><h1>Moira:<span>Desk</span> Tutor</h1><span class="spacer"></span>
+    <span class="muted">${esc(state.user.email)}</span><button data-action="refresh">Refresh</button><button data-action="sign-out">Sign out</button></header>
+    <main>${state.message ? `<div class="msg ${state.message.tone}" role="status">${esc(state.message.text)}</div>` : ''}
+      <section class="card"><h2>Your newsrooms</h2>
+        <p>Select one or more newsrooms to discuss their pitches on the EP wall or generate a report. Use <strong>Show join code</strong> when a student needs to join.</p>
+        ${state.loading ? '<p class="muted">Loading…</p>' : renderTable()}</section>
+      ${renderConferenceCard()}
+      <p class="muted">Missing a newsroom or a join code? Ask your administrator to assign it to you. <a href="mailto:a.dickinson@mmu.ac.uk?subject=Moira%3ADesk%20feedback">Help and feedback</a></p>
+    </main>`;
+}
+function renderLogin() {
+  return `<div class="login"><form class="card" data-form="login"><h1 style="font-size:22px;margin:0">Moira:Desk Tutor</h1>
+    <p style="margin:0">Sign in with the staff account provided by your administrator.</p>
+    <div><label for="email">Staff email</label><input type="email" id="email" autocomplete="username" value="${esc(state.loginEmail)}" required></div>
+    <div><label for="password">Password</label><input type="password" id="password" autocomplete="current-password" required></div>
+    ${state.loginError ? `<div class="msg err" role="alert">${esc(state.loginError)}</div>` : ''}
+    <button class="primary" type="submit" ${state.loginBusy ? 'disabled' : ''}>${state.loginBusy ? 'Signing in…' : 'Sign in'}</button>
+    <a href="./">Open the student desk</a></form></div>`;
+}
+function renderTable() {
+  if (!state.rooms.length) return '<p class="muted">No newsrooms are assigned to you yet. Ask your administrator to add them.</p>';
+  const all = state.rooms.every(r => state.selected.has(r.newsroom_id));
+  return `<div class="table-wrap"><table><thead><tr><th class="sel"><input type="checkbox" id="sel-all" ${all ? 'checked' : ''} aria-label="Select all newsrooms"></th>
+    <th>Newsroom</th><th>Conference</th><th>Stories</th><th>Student access</th></tr></thead><tbody>${state.rooms.map(r => `<tr>
+      <td class="sel"><input type="checkbox" class="sel-room" data-id="${esc(r.newsroom_id)}" ${state.selected.has(r.newsroom_id) ? 'checked' : ''} aria-label="Select ${esc(r.name)}"></td>
+      <td><strong>${esc(r.name)}</strong><div class="sub">${r.members} members</div></td>
+      <td>${r.producer_name ? `Producer: ${esc(r.producer_name)}` : 'No producer yet'}<div class="sub">${r.pitches} pitches · ${r.picked} picked</div></td>
+      <td>${r.stories}</td><td>${r.tutor_code_available ? `<button class="small" data-action="show-code" data-id="${esc(r.newsroom_id)}">Show join code</button>` : '<span class="muted">Ask administrator for a code</span>'}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+function renderConferenceCard() {
+  const n = tickedIds().length, disabled = n ? '' : 'disabled';
+  return `<section class="card"><h2>Conference and reports</h2><div class="row" style="align-items:center">
+    <span class="muted">${n} newsroom${n === 1 ? '' : 's'} selected</span><button class="primary" data-action="wall" ${disabled}>Open EP wall</button>
+    <button data-action="report" ${disabled}>Generate report</button>
+    <label class="check" style="margin:0"><input type="checkbox" id="report-scripts" ${state.reportScripts ? 'checked' : ''}> Include scripts in the report</label></div>
+    <p class="muted">The EP wall updates live and lets you leave notes on pitches. Reports capture the current conference and running order for sharing or a debrief.</p></section>`;
+}
+function openDialog(title, body, foot) {
+  dlg.innerHTML = `<div class="head"><h3>${esc(title)}</h3><button class="small" data-action="close-dialog" aria-label="Close">✕</button></div><div class="body">${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}`;
+  if (!dlg.open) dlg.showModal();
+}
+function closeDialog() { if (dlg.open) dlg.close(); dlg.innerHTML = ''; }
+async function showJoinCode(id) {
+  const name = room(id)?.name;
+  if (!name) return;
+  const code = await rpc('get_tutor_join_code', { p_newsroom_id: id });
+  if (!code) { flash('No tutor join code is available for this newsroom. Ask your administrator.', 'warn'); return; }
+  openDialog(`Join ${name}`, `<div class="code-big" id="code-text">${esc(code)}</div>
+    <p>Students can use this code on the <a href="./" target="_blank" rel="noopener">student desk</a>. Share it only with this newsroom’s group.</p>`,
+    '<button data-action="copy-code">Copy code</button><button class="primary" data-action="close-dialog">Done</button>');
+}
+
+let wall = null;
+
+function tickedIds() { return state.rooms.map((r) => r.newsroom_id).filter((id) => state.selected.has(id)); }
+
+async function openWall() {
+  const ids = tickedIds();
+  if (!ids.length) return;
+  let zoom = 1;
+  try { zoom = Number(sessionStorage.getItem('moiradesk-tutor-wall-zoom')) || 1; } catch {}
+  const el = document.createElement('div');
+  el.className = 'wall';
+  document.body.appendChild(el);
+  const w = wall = { ids, data: null, sig: '', el, zoom, error: null, updated: null };
+  el.style.setProperty('--zoom', zoom);
+  renderWall();
+  el.requestFullscreen?.().catch(() => {});
+  w.timer = setInterval(pollWall, 3000);
+  await pollWall();
+}
+
+function closeWall() {
+  if (!wall) return;
+  clearInterval(wall.timer);
+  wall.el.remove();
+  wall = null;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  loadRooms();
+}
+
+// The wall can be closed (or reopened) while a request is in flight, so the
+// answer is only applied to the wall that asked for it.
+// Requests can also overlap (a note saved mid-poll), so only the latest
+// request's answer is used.
+async function pollWall() {
+  const w = wall;
+  if (!w) return;
+  const seq = w.seq = (w.seq || 0) + 1;
+  let data = null, error = null;
+  try { data = await rpc('tutor_conference', { p_newsroom_ids: w.ids, p_scripts: false }); }
+  catch (e) { error = e.message; }
+  if (wall !== w || seq !== w.seq) return;
+  if (error) { w.error = error; w.data = []; w.sig = ''; }
+  else {
+    w.error = null; w.updated = new Date();
+    const sig = JSON.stringify(data);
+    if (sig !== w.sig) { w.sig = sig; w.data = data; }
+  }
+  renderWall();
+}
+
+function renderWall() {
+  if (!wall) return;
+  const scroll = {};
+  wall.el.querySelectorAll('.list[data-id]').forEach((l) => { scroll[l.dataset.id] = l.scrollTop; });
+  const cols = (wall.data || []).map((n) => {
+    const order = { pitched: 0, picked: 1, spiked: 2 };
+    const pitches = [...n.pitches].sort((a, b) => (order[a.status] - order[b.status]));
+    const fmtOf = Object.fromEntries(n.stories.map((s) => [s.id, s.format]));
+    const counts = ['pitched', 'picked', 'spiked'].map((k) => `${n.pitches.filter((p) => p.status === k).length} ${k}`).join(' · ');
+    return `<section class="wall-col">
+      <header><div class="name">${esc(n.name)}</div>
+        <div class="meta">${n.producer_name ? `<span class="crown">♛</span> ${esc(n.producer_name)}` : 'No producer yet'} · ${counts}</div></header>
+      <div class="list" data-id="${esc(n.id)}">
+        ${pitches.length ? pitches.map((p) => `<div class="wall-pitch ${p.status}">
+          <button class="note-btn" data-action="wall-note" data-id="${esc(p.id)}" title="Add or change your note for this group">${p.ep_note ? 'Edit note' : 'Note'}</button>
+          <div class="slug">${esc(p.slug)}${p.status === 'picked' && fmtOf[p.story_id] ? ` <span class="pill">${esc(fmtOf[p.story_id])}</span>` : ''}</div>
+          ${p.angle ? `<div class="angle">${esc(p.angle)}</div>` : ''}
+          <div class="by">${p.pitched_by ? esc(p.pitched_by) : ''}${p.status === 'spiked' && p.spike_reason ? ` · spiked: ${esc(p.spike_reason)}` : ''}</div>
+          ${p.ep_note ? `<div class="note">EP: ${esc(p.ep_note)}</div>` : ''}
+        </div>`).join('') : '<div class="empty">No pitches yet</div>'}
+      </div>
+    </section>`;
+  }).join('');
+  wall.el.innerHTML = `<div class="wall-bar">
+      <h1>Conference</h1>
+      <span class="muted">${wall.error ? `<span style="color:var(--err)">Can't refresh: ${esc(wall.error)}</span>` : wall.updated ? `Live · updated ${wall.updated.toLocaleTimeString('en-GB')}` : 'Loading…'}</span>
+      <span class="spacer"></span>
+      <button data-action="wall-zoom" data-val="-1" title="Smaller text">A−</button>
+      <button data-action="wall-zoom" data-val="1" title="Larger text">A+</button>
+      <button class="primary" data-action="wall-close">Close (Esc)</button>
+    </div>
+    <div class="wall-cols">${wall.data ? cols : '<div class="empty">Loading…</div>'}</div>`;
+  wall.el.querySelectorAll('.list[data-id]').forEach((l) => { if (scroll[l.dataset.id]) l.scrollTop = scroll[l.dataset.id]; });
+}
+
+async function wallNote(pitchId) {
+  const p = (wall?.data || []).flatMap((n) => n.pitches).find((x) => x.id === pitchId);
+  if (!p) return;
+  const note = prompt(`Your note on "${p.slug}" (shown to the group; leave empty to remove):`, p.ep_note || '');
+  if (note === null) return;
+  await rpc('tutor_set_pitch_note', { p_pitch_id: pitchId, p_note: note });
+  await pollWall();
+}
+
+// ── Report ─────────────────────────────────────────────────────────────
+// A single self-contained web page: no login, no database, prints cleanly.
+
+const CHECKED = { 'needs-checking': 'Needs checking', 'checked-ok': 'Checked OK', 'checked-needs-work': 'Needs work' };
+const dur = (s) => { s = Math.max(0, Number(s) || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const fullWhen = (t) => t ? new Date(t).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+const shortTime = (t) => t ? new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+
+function reportSection(n, withScripts) {
+  const byId = Object.fromEntries(n.stories.map((s) => [s.id, s]));
+  const order = Array.isArray(n.order) ? n.order : [];
+  // Running order, as the desk shows it.
+  let below = false, num = 0, trt = 0;
+  const roRows = order.map((id) => {
+    if (id === 'marker-line') { below = true; return `<tr class="eop"><td colspan="7">End of programme</td></tr>`; }
+    const s = byId[id]; if (!s) return '';
+    if (s.type === 'segment') {
+      if (!below) trt += s.duration || 0;
+      return `<tr class="seg"><td colspan="7">${esc(s.slug)}${s.duration ? ` · ${dur(s.duration)}` : ''}</td></tr>`;
+    }
+    if (!below && !s.is_floated) trt += s.duration || 0;
+    const cuez = s.cuez_item_uid ? (s.rev > (s.cuez_sent_rev ?? 0) ? `Item ${esc(s.cuez_item_number || '?')}, changed since` : `Item ${esc(s.cuez_item_number || '?')}`)
+      : s.cuez_pending_uid ? 'Unconfirmed' : 'Not sent';
+    const tags = [s.is_floated ? 'floated' : '', below ? 'below the line' : ''].filter(Boolean).join(', ');
+    return `<tr class="${below || s.is_floated ? 'dim' : ''}">
+      <td class="num">${below ? '' : ++num}</td>
+      <td><strong>${esc(s.slug)}</strong>${tags ? ` <span class="tag">${tags}</span>` : ''}${s.brief ? `<div class="sub">Pitch: ${esc(s.brief)}${s.pitched_by ? ` (${esc(s.pitched_by)})` : ''}</div>` : ''}</td>
+      <td>${esc(s.format)}</td>
+      <td>${esc(s.reporter)}${s.reporter && s.presenter ? '<br>' : ''}<span class="sub">${esc(s.presenter)}</span></td>
+      <td class="num">${dur(s.duration)}</td>
+      <td>${CHECKED[s.completed] || '—'}</td>
+      <td>${cuez}</td></tr>`;
+  }).join('');
+  const target = n.target_duration != null ? ` against a target of ${dur(n.target_duration)} (${trt - n.target_duration >= 0 ? '+' : '−'}${dur(Math.abs(trt - n.target_duration))})` : '';
+
+  const outcome = (p) => {
+    if (p.status === 'picked') {
+      const s = byId[p.story_id];
+      return s ? `<span class="ok">Picked</span> <span class="sub">${shortTime(p.decided_at)}</span>` : `<span class="ok">Picked</span>, later dropped from the running order`;
+    }
+    if (p.status === 'spiked') return `<span class="no">Spiked</span>${p.spike_reason ? `: ${esc(p.spike_reason)}` : ''} <span class="sub">${shortTime(p.decided_at)}</span>`;
+    return '<span class="sub">Not decided</span>';
+  };
+  const pitched = n.pitches.length, picked = n.pitches.filter((p) => p.status === 'picked').length, spiked = n.pitches.filter((p) => p.status === 'spiked').length;
+  const confRows = n.pitches.map((p, i) => `<tr>
+      <td class="num">${i + 1}</td>
+      <td><strong>${esc(p.slug)}</strong>${p.status === 'picked' && byId[p.story_id]?.format ? ` <span class="tag">${esc(byId[p.story_id].format)}</span>` : ''}${p.angle ? `<div>${esc(p.angle)}</div>` : ''}</td>
+      <td>${esc(p.pitched_by)}</td>
+      <td>${outcome(p)}</td>
+      <td>${p.ep_note ? esc(p.ep_note) : ''}</td></tr>`).join('');
+
+  const scripts = withScripts ? order.map((id) => byId[id]).filter((s) => s && s.type !== 'segment' && s.script)
+    .map((s) => `<div class="script"><h4>${esc(s.slug)}</h4><pre>${esc(s.script)}</pre></div>`).join('') : '';
+
+  return `<section class="newsroom" id="nr-${esc(n.id)}">
+    <h2>${esc(n.name)}</h2>
+    <p class="meta">${n.conference_started_at ? `Conference ${fullWhen(n.conference_started_at)}` : 'No conference held'}
+      · Producer: ${n.producer_name ? esc(n.producer_name) : 'none claimed'}
+      ${n.cuez_part_title ? ` · Cuez: ${esc(n.cuez_episode_title || '')} › ${esc(n.cuez_part_title)}` : ''}</p>
+    <h3>News conference <span class="sub">${pitched} pitched · ${picked} picked · ${spiked} spiked</span></h3>
+    ${pitched ? `<table><thead><tr><th class="num">#</th><th>Pitch</th><th>Pitched by</th><th>Outcome</th><th>EP note</th></tr></thead><tbody>${confRows}</tbody></table>` : '<p class="sub">No pitches recorded.</p>'}
+    <h3>Running order <span class="sub">TRT ${dur(trt)}${target}</span></h3>
+    ${roRows ? `<table><thead><tr><th class="num">#</th><th>Slug</th><th>Format</th><th>Reporter / presenter</th><th class="num">Dur</th><th>Checked</th><th>Cuez</th></tr></thead><tbody>${roRows}</tbody></table>` : '<p class="sub">No stories.</p>'}
+    ${scripts ? `<h3>Scripts</h3>${scripts}` : ''}
+  </section>`;
+}
+
+function buildReport(data, withScripts) {
+  const generated = new Date();
+  const title = data.length === 1 ? `${data[0].name}: conference and running order` : 'Conference and running orders';
+  const contents = data.length > 1 ? `<nav><strong>Newsrooms</strong><ol>${data.map((n) =>
+    `<li><a href="#nr-${esc(n.id)}">${esc(n.name)}</a> <span class="sub">${n.pitches.length} pitched · ${n.pitches.filter((p) => p.status === 'picked').length} picked${n.producer_name ? ` · producer ${esc(n.producer_name)}` : ''}</span></li>`).join('')}</ol></nav>` : '';
+  return `<!DOCTYPE html>
+<html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)}</title>
+<style>
+  :root { --ink:#1b1f27; --muted:#667085; --line:#dfe3ea; --head:#f4f6f9; --ok:#18794e; --no:#9a3412; --eop:#b42318; --seg:#4338ca; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: var(--ink); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .page { max-width: 980px; margin: 0 auto; padding: 28px 16px 60px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 22px; margin: 0 0 4px; padding-top: 8px; }
+  h3 { font-size: 15px; margin: 22px 0 8px; text-transform: uppercase; letter-spacing: .06em; }
+  h3 .sub { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+  h4 { margin: 14px 0 4px; font-size: 14px; }
+  .meta, .sub { color: var(--muted); font-size: 13px; }
+  nav { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 18px 0 8px; }
+  nav ol { margin: 6px 0 0; padding-left: 20px; }
+  .newsroom { border-top: 2px solid var(--ink); margin-top: 32px; padding-top: 8px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--head); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.num, th.num { text-align: right; width: 1%; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 4px; white-space: nowrap; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .no { color: var(--no); font-weight: 600; }
+  tr.eop td { background: var(--eop); color: #fff; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; }
+  tr.seg td { color: var(--seg); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; background: #eef0ff; }
+  tr.dim td { color: var(--muted); }
+  .script pre { white-space: pre-wrap; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--head); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 0; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 640px) { table { font-size: 13px; } td, th { padding: 6px 5px; } }
+  @media print {
+    .page { max-width: none; padding: 0; }
+    .newsroom { break-before: page; border-top: 0; margin-top: 0; }
+    .newsroom:first-of-type { break-before: auto; }
+    nav { break-after: page; }
+    tr, .script { break-inside: avoid; }
+    tr.eop td, tr.seg td, th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style></head>
+<body><div class="page">
+  <h1>${esc(title)}</h1>
+  <p class="meta">Snapshot generated ${fullWhen(generated)}. Running orders may have changed since.</p>
+  ${contents}
+  ${data.map((n) => reportSection(n, withScripts)).join('').replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, '</table></div>')}
+  <footer>Generated by Moira:Desk</footer>
+</div></body></html>`;
+}
+
+let lastReport = null;
+async function generateReport() {
+  const ids = tickedIds();
+  if (!ids.length) return;
+  const withScripts = !!document.getElementById('report-scripts')?.checked;
+  const data = await rpc('tutor_conference', { p_newsroom_ids: ids, p_scripts: withScripts });
+  const html = buildReport(data, withScripts);
+  const d = new Date(), pad = (x) => String(x).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`; // local time
+  const who = data.length === 1 ? data[0].name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : 'conference';
+  if (lastReport) URL.revokeObjectURL(lastReport.url);
+  lastReport = { url: URL.createObjectURL(new Blob([html], { type: 'text/html' })), name: `moira-desk-${who}-${stamp}.html` };
+  const totals = data.map((n) => `<li><strong>${esc(n.name)}</strong>: ${n.pitches.length} pitched, ${n.pitches.filter((p) => p.status === 'picked').length} picked, ${n.stories.filter((s) => s.type !== 'segment').length} stories</li>`).join('');
+  openDialog('Report ready', `<ul style="margin:0;padding-left:20px">${totals}</ul>
+    <p class="muted" style="margin:0">One self-contained web page${withScripts ? ', with scripts' : ''}: share it by email, Moodle or Teams, or print it to PDF. It's a snapshot of right now.</p>`,
+    `<button data-action="open-report">Open in a new tab</button>
+     <a class="btn primary" href="${lastReport.url}" download="${esc(lastReport.name)}">Download</a>`);
+}
+
+
+// Clear sensitive views and invalidate pending requests whenever the session ends.
+function clearSession() {
+  sessionEpoch++;
+  if (wall) { clearInterval(wall.timer); wall.el.remove(); wall = null; }
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  closeDialog();
+  if (lastReport) URL.revokeObjectURL(lastReport.url);
+  lastReport = null;
+  state.user = null; state.rooms = []; state.selected.clear(); state.message = null; state.loading = false;
+  render();
+}
+async function loadRooms() {
+  if (!state.user) return;
+  const epoch = sessionEpoch;
+  state.loading = true; render();
+  try {
+    const rooms = await rpc('tutor_newsrooms') || [];
+    if (epoch !== sessionEpoch) return;
+    state.rooms = rooms;
+    state.selected = new Set([...state.selected].filter(id => room(id)));
+  } catch (e) {
+    if (epoch !== sessionEpoch) return;
+    state.rooms = []; state.selected.clear(); state.message = { text: e.message, tone: 'err' };
+  }
+  state.loading = false; render();
+}
+async function afterSignIn(user) {
+  const epoch = sessionEpoch;
+  try {
+    const [admin, tutor] = await Promise.all([rpc('is_admin'), rpc('is_tutor')]);
+    if (epoch !== sessionEpoch) return;
+    if (!admin && !tutor) throw new Error('This account has no tutor access. Ask your administrator to enable it.');
+    state.user = user; state.loginError = null;
+    await loadRooms();
+  } catch (e) {
+    if (epoch !== sessionEpoch) return;
+    state.loginError = e.message;
+    await sb.auth.signOut({ scope: 'local' });
+    clearSession();
+  }
+}
+
+function getCaptchaToken() {
+  if (!TURNSTILE_SITE_KEY) return Promise.resolve(undefined);
+  if (location.protocol === 'file:') {
+    return Promise.reject(new Error('The human check needs this page served from localhost, not opened as a file. See the README.'));
+  }
+  return new Promise((resolve, reject) => {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999';
+    document.body.appendChild(box);
+    const done = (fn, v) => { box.remove(); fn(v); };
+    const draw = () => window.turnstile.render(box, {
+      sitekey: TURNSTILE_SITE_KEY, appearance: 'interaction-only',
+      callback: t => done(resolve, t),
+      'error-callback': () => done(reject, new Error('The human check failed. Check this hostname is allowed for the Turnstile widget.')),
+      'timeout-callback': () => done(reject, new Error('The human check timed out. Try again.')),
+    });
+    if (window.turnstile) return draw();
+    const sc = document.createElement('script');
+    sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    sc.async = true; sc.onload = draw;
+    sc.onerror = () => done(reject, new Error('Could not load the human check (Cloudflare Turnstile).'));
+    document.head.appendChild(sc);
+  });
+}
+
+document.addEventListener('submit', async e => {
+  if (!e.target.matches('[data-form="login"]')) return;
+  e.preventDefault();
+  if (state.loginBusy) return;
+  state.loginEmail = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  state.loginBusy = true; state.loginError = null; render();
+  try {
+    const captchaToken = await getCaptchaToken();
+    const { data, error } = await sb.auth.signInWithPassword({ email: state.loginEmail, password,
+      ...(captchaToken ? { options: { captchaToken } } : {}) });
+    if (error) throw error;
+    await afterSignIn(data.user);
+  } catch (e) { state.loginError = e.message; }
+  finally { state.loginBusy = false; render(); }
+});
+document.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn || btn.disabled || !state.user) return;
+  const action = btn.dataset.action, id = btn.dataset.id;
+  btn.disabled = true;
+  try {
+    if (action === 'close-dialog') closeDialog();
+    else if (action === 'refresh') { closeDialog(); state.message = null; await loadRooms(); }
+    else if (action === 'sign-out') {
+      const { error } = await sb.auth.signOut({ scope: 'local' });
+      if (error) throw error;
+      clearSession();
+    }
+    else if (action === 'wall') { if (!wall) await openWall(); }
+    else if (action === 'wall-close') closeWall();
+    else if (action === 'wall-note') await wallNote(id);
+    else if (action === 'wall-zoom' && wall) {
+      wall.zoom = Math.min(2.2, Math.max(0.7, Math.round((wall.zoom + Number(btn.dataset.val) * 0.15) * 100) / 100));
+      wall.el.style.setProperty('--zoom', wall.zoom);
+      try { sessionStorage.setItem('moiradesk-tutor-wall-zoom', String(wall.zoom)); } catch {}
+    }
+    else if (action === 'report') await generateReport();
+    else if (action === 'open-report' && lastReport) window.open(lastReport.url, '_blank', 'noopener');
+    else if (action === 'show-code') await showJoinCode(id);
+    else if (action === 'copy-code') { await navigator.clipboard.writeText(document.getElementById('code-text').textContent); btn.textContent = 'Copied'; }
+  } catch (e) {
+    if (wall) { wall.error = e.message; renderWall(); }
+    else if (dlg.open) { closeDialog(); flash(e.message, 'err'); }
+    else flash(e.message, 'err');
+  } finally { btn.disabled = false; }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && wall && !dlg.open) closeWall();
+});
+dlg.addEventListener('close', () => { dlg.innerHTML = ''; });
+document.addEventListener('change', e => {
+  if (e.target.classList?.contains('sel-room')) {
+    e.target.checked ? state.selected.add(e.target.dataset.id) : state.selected.delete(e.target.dataset.id);
+    render();
+  } else if (e.target.id === 'sel-all') {
+    state.selected = e.target.checked ? new Set(state.rooms.map(r => r.newsroom_id)) : new Set(); render();
+  } else if (e.target.id === 'report-scripts') state.reportScripts = e.target.checked;
+});
+if (sb) sb.auth.onAuthStateChange((event, session) => { if (event === 'SIGNED_OUT') clearSession(); });
+(async () => {
+  if (!configured) { render(); return; }
+  try {
+    const { data: { session }, error } = await sb.auth.getSession();
+    if (error) throw error;
+    if (session?.user) await afterSignIn(session.user);
+    else render();
+  } catch (e) { state.loginError = e.message; render(); }
+})();
+
+</script>
+</body>
+</html>
