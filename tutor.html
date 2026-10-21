@@ -79,6 +79,13 @@
   td.sel, th.sel { width: 28px; padding-right: 0; }
   .crown { color: #c58a00; }
 
+  .wall-view { display: contents; }
+  .wall-note-dialog { font-size: 15px; width: min(600px, calc(100vw - 32px)); }
+  .wall-note-dialog .note-story { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+  .wall-note-dialog textarea { width: 100%; min-height: 150px; resize: vertical; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; line-height: 1.5; }
+  .wall-note-dialog textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .wall-note-dialog .note-help { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; }
+
   /* EP wall: projected, so big type and high contrast */
   .wall { position: fixed; inset: 0; z-index: 90; background: var(--bg); display: flex; flex-direction: column; font-size: calc(16px * var(--zoom, 1)); }
   .wall-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; font-size: 15px; }
@@ -202,6 +209,7 @@ async function openWall() {
   try { zoom = Number(sessionStorage.getItem('moiradesk-tutor-wall-zoom')) || 1; } catch {}
   const el = document.createElement('div');
   el.className = 'wall';
+  el.innerHTML = '<div class="wall-view"></div>';
   document.body.appendChild(el);
   const w = wall = { ids, data: null, sig: '', el, zoom, error: null, updated: null };
   el.style.setProperty('--zoom', zoom);
@@ -264,7 +272,7 @@ function renderWall() {
       </div>
     </section>`;
   }).join('');
-  wall.el.innerHTML = `<div class="wall-bar">
+  wall.el.querySelector('.wall-view').innerHTML = `<div class="wall-bar">
       <h1>Conference</h1>
       <span class="muted">${wall.error ? `<span style="color:var(--err)">Can't refresh: ${esc(wall.error)}</span>` : wall.updated ? `Live · updated ${wall.updated.toLocaleTimeString('en-GB')}` : 'Loading…'}</span>
       <span class="spacer"></span>
@@ -276,13 +284,65 @@ function renderWall() {
   wall.el.querySelectorAll('.list[data-id]').forEach((l) => { if (scroll[l.dataset.id]) l.scrollTop = scroll[l.dataset.id]; });
 }
 
-async function wallNote(pitchId) {
-  const p = (wall?.data || []).flatMap((n) => n.pitches).find((x) => x.id === pitchId);
-  if (!p) return;
-  const note = prompt(`Your note on "${p.slug}" (shown to the group; leave empty to remove):`, p.ep_note || '');
-  if (note === null) return;
-  await rpc('tutor_set_pitch_note', { p_pitch_id: pitchId, p_note: note });
-  await pollWall();
+function wallNote(pitchId) {
+  const w = wall;
+  const p = (w?.data || []).flatMap(n => n.pitches).find(x => x.id === pitchId);
+  if (!p || w.noteDialog) return;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'wall-note-dialog';
+  dialog.setAttribute('aria-labelledby', 'wall-note-title');
+  dialog.innerHTML = `<form>
+    <div class="head"><h3 id="wall-note-title">${p.ep_note ? 'Edit EP note' : 'Add EP note'}</h3><button type="button" class="small" data-note-cancel aria-label="Close note">✕</button></div>
+    <div class="body">
+      <p class="note-story">${esc(p.slug)}</p>
+      <label for="wall-note-text">Your note to the newsroom</label>
+      <textarea id="wall-note-text" maxlength="500" aria-describedby="wall-note-help" autofocus>${esc(p.ep_note || '')}</textarea>
+      <div class="note-help"><span id="wall-note-help">Visible to the group. Leave blank to remove the note.</span><span data-note-count></span></div>
+      <div class="msg err" data-note-error role="alert" hidden></div>
+    </div>
+    <div class="foot"><button type="button" data-note-cancel>Cancel</button><button type="submit" class="primary">Save note</button></div>
+  </form>`;
+  // Keep the dialog inside the fullscreen element and outside the live content
+  // that polling replaces, so fullscreen, focus and drafts all survive refreshes.
+  w.noteDialog = dialog;
+  w.el.appendChild(dialog);
+  const input = dialog.querySelector('textarea');
+  const save = dialog.querySelector('[type="submit"]');
+  const error = dialog.querySelector('[data-note-error]');
+  let saving = false;
+  const count = () => { dialog.querySelector('[data-note-count]').textContent = `${input.value.length}/500`; };
+  const close = () => {
+    if (saving) return;
+    dialog.close(); dialog.remove();
+    if (w.noteDialog === dialog) w.noteDialog = null;
+    if (wall === w) [...w.el.querySelectorAll('[data-action="wall-note"]')].find(b => b.dataset.id === pitchId)?.focus();
+  };
+  dialog.querySelectorAll('[data-note-cancel]').forEach(b => b.addEventListener('click', close));
+  dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
+  dialog.addEventListener('keydown', e => { e.stopPropagation(); });
+  input.addEventListener('input', count);
+  dialog.querySelector('form').addEventListener('submit', async e => {
+    e.preventDefault(); e.stopPropagation();
+    if (saving || wall !== w) return;
+    saving = true; error.hidden = true;
+    dialog.querySelectorAll('button').forEach(b => { b.disabled = true; });
+    input.readOnly = true; save.textContent = 'Saving…';
+    try {
+      await rpc('tutor_set_pitch_note', { p_pitch_id: pitchId, p_note: input.value });
+      if (wall !== w || w.noteDialog !== dialog) return;
+      saving = false; close();
+      await pollWall();
+    } catch (e) {
+      if (wall !== w || w.noteDialog !== dialog) return;
+      error.textContent = e.message || 'Could not save your note. Please try again.';
+      error.hidden = false;
+    } finally {
+      saving = false;
+      dialog.querySelectorAll('button').forEach(b => { b.disabled = false; });
+      input.readOnly = false; save.textContent = 'Save note';
+    }
+  });
+  count(); dialog.showModal(); input.focus();
 }
 
 // ── Report ─────────────────────────────────────────────────────────────

@@ -29,13 +29,17 @@ const root = path.resolve(__dirname, '..');
           mock.calls.push({ name, args });
           if (name === 'is_admin') return { data: mock.admin };
           if (name === 'is_tutor') return { data: !mock.denied };
-          if (name === 'tutor_newsrooms' || name === 'admin_newsrooms') return { data: rooms };
+          if (name === 'tutor_newsrooms') return { data: rooms.map(r => ({ ...r, tutor_code_available: mock.admin ? !!mock.code : true })) };
+          if (name === 'admin_newsrooms') return { data: rooms.map(r => ({ ...r })) };
           if (name === 'get_tutor_join_code') {
             if (mock.hold) return new Promise(resolve => { mock.resolveCode = () => resolve({ data: 'DEMO1234' }); });
             return { data: mock.admin ? mock.code : 'DEMO1234' };
           }
-          if (name === 'tutor_conference') return mock.revoked ? { error: { message: 'Newsroom unavailable.' } } : { data: snapshot };
-          if (name === 'tutor_set_pitch_note') { pitch.ep_note = args.p_note; return { data: null }; }
+          if (name === 'tutor_conference' || name === 'admin_conference') return mock.revoked ? { error: { message: 'Newsroom unavailable.' } } : { data: snapshot };
+          if (name === 'tutor_set_pitch_note' || name === 'set_pitch_note') {
+            if (mock.noteError) return { error: { message: 'Could not save note. Try again.' } };
+            pitch.ep_note = args.p_note; return { data: null };
+          }
           if (name === 'admin_tutors') return { data: mock.tutors };
           if (name === 'set_tutor_access') {
             mock.tutors = [{ user_id: 'staff', email: args.p_email, newsroom_ids: args.p_newsroom_ids }]; return { data: null };
@@ -44,8 +48,7 @@ const root = path.resolve(__dirname, '..');
           throw new Error(`Unexpected RPC: ${name}`);
         },
       }) };
-      // Avoid OS fullscreen transitions in the test browser.
-      Element.prototype.requestFullscreen = async () => {};
+      // Use the browser's real Fullscreen API to check the note dialog.
     }, { admin });
     await page.route('**/*', route => {
       if (route.request().url() === `http://moira.test/${file}`) {
@@ -74,9 +77,31 @@ const root = path.resolve(__dirname, '..');
     await page.getByRole('button', { name: 'Open EP wall' }).click();
     await page.locator('.wall-pitch').waitFor();
     assert.equal(await page.locator('.wall img').count(), 0, 'pitch HTML escaped');
-    page.once('dialog', dialog => dialog.accept('Check the figures'));
     await page.getByRole('button', { name: 'Note', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Add EP note' }).waitFor();
+    assert.equal(await page.evaluate(() => document.fullscreenElement?.classList.contains('wall')), true);
+    await page.getByLabel('Your note to the newsroom').fill('Check the figures');
+    await page.evaluate(() => pollWall());
+    assert.equal(await page.getByLabel('Your note to the newsroom').inputValue(), 'Check the figures', 'live refresh preserves draft');
+    assert.equal(await page.getByLabel('Your note to the newsroom').evaluate(el => el === document.activeElement), true);
+    await page.evaluate(() => { mock.noteError = true; });
+    await page.getByRole('button', { name: 'Save note', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'Could not save note' }).waitFor();
+    assert.equal(await page.getByLabel('Your note to the newsroom').inputValue(), 'Check the figures');
+    await page.evaluate(() => { mock.noteError = false; });
+    await page.getByRole('button', { name: 'Save note', exact: true }).click();
     await page.getByText('EP: Check the figures', { exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => document.fullscreenElement?.classList.contains('wall')), true, 'saving keeps fullscreen');
+    await page.getByRole('button', { name: 'Edit note', exact: true }).click();
+    await page.getByLabel('Your note to the newsroom').fill('Cancelled edit');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByText('EP: Check the figures', { exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => document.fullscreenElement?.classList.contains('wall')), true, 'cancelling keeps fullscreen');
+    await page.getByRole('button', { name: 'Edit note', exact: true }).click();
+    await page.getByLabel('Your note to the newsroom').fill('');
+    await page.getByRole('button', { name: 'Save note', exact: true }).click();
+    await page.getByRole('button', { name: 'Note', exact: true }).waitFor();
+    assert.equal(await page.locator('.wall-pitch .note').count(), 0, 'blank note removes existing note');
     await page.evaluate(async () => { mock.revoked = true; await pollWall(); });
     assert.equal(await page.locator('.wall-pitch').count(), 0, 'revoked room cleared');
     await page.getByRole('button', { name: 'Close (Esc)' }).click();
@@ -119,19 +144,49 @@ const root = path.resolve(__dirname, '..');
     if (fs.existsSync(path.join(root, 'admin.html'))) {
     const admin = await pageFor('admin.html', true);
     await admin.getByRole('button', { name: 'Sign in', exact: true }).click();
+    const rowCode = admin.locator('#app [data-action="tutor-code"]');
+    await rowCode.waitFor();
+    assert.equal(await rowCode.getAttribute('title'), 'Tutor code: disabled');
     await admin.getByRole('button', { name: 'Assign a tutor', exact: true }).click();
     await admin.locator('#tutor-email').fill('colleague@example.test');
     await admin.locator('[name="tutor-room"][value="room-a"]').check();
     await admin.getByRole('button', { name: 'Save access', exact: true }).click();
     await admin.getByText('colleague@example.test', { exact: true }).waitFor();
     assert.deepEqual(await admin.evaluate(() => mock.calls.find(c => c.name === 'set_tutor_access').args), { p_email: 'colleague@example.test', p_newsroom_ids: ['room-a'] });
-    await admin.getByRole('button', { name: 'Tutor code', exact: true }).click();
-    await admin.getByRole('button', { name: 'Enable tutor code', exact: true }).click();
+    await admin.getByRole('heading', { name: 'Join codes for colleague@example.test', exact: true }).waitFor();
+    await admin.getByRole('button', { name: 'Newsroom A — set up or view code', exact: true }).click();
+    const toggle = admin.getByRole('switch', { name: 'Tutor code', exact: true });
+    assert.equal(await toggle.getAttribute('aria-checked'), 'false');
+    await toggle.click();
     await admin.getByText('DEMO5678', { exact: true }).waitFor();
-    admin.once('dialog', dialog => dialog.accept());
-    await admin.getByRole('button', { name: 'Disable', exact: true }).click();
+    assert.equal(await toggle.getAttribute('aria-checked'), 'true');
+    assert.ok((await rowCode.getAttribute('class')).includes('tutor-code-enabled'));
+    await admin.getByRole('button', { name: 'Done', exact: true }).click();
+    await admin.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await admin.getByRole('button', { name: 'Assign a tutor', exact: true }).waitFor();
+    assert.ok((await rowCode.getAttribute('class')).includes('tutor-code-enabled'), 'enabled colour restored from database on refresh');
+    await admin.getByRole('button', { name: 'Join codes', exact: true }).click();
+    await admin.getByRole('button', { name: 'Newsroom A — set up or view code', exact: true }).click();
+    await admin.getByText('DEMO5678', { exact: true }).waitFor();
+    assert.equal(await admin.evaluate(() => mock.calls.filter(c => c.name === 'set_tutor_join_code').length), 1, 'viewing an existing code does not rotate it');
+    await toggle.click();
     await admin.getByText('No tutor join code is enabled for this newsroom.', { exact: true }).waitFor();
-    console.log('PASS: admin assignment and code enable/disable');
+    assert.equal(await toggle.getAttribute('aria-checked'), 'false');
+    assert.equal(await rowCode.getAttribute('title'), 'Tutor code: disabled');
+    assert.equal((await rowCode.getAttribute('class')).includes('tutor-code-enabled'), false);
+    await admin.getByRole('button', { name: 'Done', exact: true }).click();
+    await admin.getByRole('checkbox', { name: 'Select Newsroom A', exact: true }).check();
+    await admin.locator('[data-action="wall"]').click();
+    await admin.getByRole('button', { name: 'Note', exact: true }).click();
+    await admin.getByLabel('Your note to the newsroom').fill('Admin feedback');
+    await admin.evaluate(() => pollWall());
+    assert.equal(await admin.getByLabel('Your note to the newsroom').inputValue(), 'Admin feedback');
+    assert.equal(await admin.evaluate(() => document.fullscreenElement?.classList.contains('wall')), true);
+    await admin.screenshot({ path: '/private/tmp/moira-note-modal.png' });
+    await admin.getByRole('button', { name: 'Save note', exact: true }).click();
+    await admin.getByText('EP: Admin feedback', { exact: true }).waitFor();
+    assert.equal(await admin.evaluate(() => document.fullscreenElement?.classList.contains('wall')), true);
+    console.log('PASS: admin assignment opens code setup, Join codes reopens existing code without rotation, and code enable/disable');
     } else console.log('SKIP: local-only admin.html is not present');
     assert.deepEqual(errors, [], 'No browser JavaScript errors');
   } finally { await browser.close(); }
