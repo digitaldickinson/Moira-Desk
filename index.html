@@ -1764,6 +1764,9 @@
                     </div>
                     <div class="flex items-center gap-3">
                         ${renderRoomControl()}
+                        ${state.currentBulletinId ? `<a href="prompt.html?room=${encodeURIComponent(state.currentBulletinId)}" target="_blank" rel="noopener" data-testid="open-prompter"
+                            class="flex items-center gap-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 px-2.5 py-1 rounded-full text-xs font-bold transition-colors whitespace-nowrap"
+                            title="Open the prompter in a new tab" aria-label="Open the prompter in a new tab"><i class="fa-solid fa-scroll"></i><span class="hidden sm:inline">Prompter</span></a>` : ''}
                         ${state.currentBulletinId ? `<button data-action="open-settings-modal" class="text-slate-400 hover:text-slate-600 transition-colors" title="Settings"><i class="fa-solid fa-gear text-lg"></i></button>` : ''}
                         ${connectionBadge}
                     </div>

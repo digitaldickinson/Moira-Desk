@@ -32,6 +32,11 @@ assert.equal(/\b(?:prompt|confirm|alert)\s*\(/.test(source), false, 'No browser 
       ? route.fulfill({ contentType: 'text/html', body: html }) : route.abort());
     await page.goto('http://localhost:4173/');
     await page.waitForFunction(() => !!window.testDesk);
+    const prompterLink = page.getByTestId('open-prompter');
+    await prompterLink.waitFor();
+    assert.equal(await prompterLink.getAttribute('href'), 'prompt.html?room=bulletin-local');
+    assert.equal(await prompterLink.getAttribute('target'), '_blank');
+    assert.equal(await prompterLink.getAttribute('rel'), 'noopener');
 
     // Name entry: required validation, Escape/cancel and actual saved value.
     await page.evaluate(() => { testDesk.result = undefined; testDesk.askName().then(v => { testDesk.result = v; }); });

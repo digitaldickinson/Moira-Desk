@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Moira:Desk Prompter</title>
+<style>
+  /* A prompter is a dark room: one fixed dark theme, high contrast. */
+  :root {
+    --bg: #000; --panel: rgba(0,0,0,.82); --ink: #fff; --muted: #94a3b8; --line: #1e293b;
+    --head: #1e293b; --active: #2563eb; --clip: #f59e0b; --clip-ink: #111; --cue: #e2e8f0; --cue-ink: #0f172a;
+    --seg: #818cf8; --warn: #fbbf24; --err: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  button, select { font: inherit; }
+  a { color: #93c5fd; }
+
+  #stage { position: fixed; inset: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  #stage::-webkit-scrollbar { display: none; }
+  #content { padding: 40vh 0 70vh; }
+  .column { width: min(85%, 1100px); margin: 0 auto; }
+  @media (max-width: 640px) { .column { width: calc(100% - 32px); } }
+
+  .story { margin-bottom: 4rem; }
+  .story-head { display: flex; align-items: baseline; gap: .8em; flex-wrap: wrap; padding: .6rem 1rem; border-radius: .6rem; background: var(--head); margin-bottom: 1.2rem; transition: background .4s; }
+  .story.active .story-head { background: var(--active); }
+  .story-head .fmt { text-transform: uppercase; font-weight: 900; letter-spacing: .12em; opacity: .65; font-size: 1rem; }
+  .story-head .slug { font-weight: 900; letter-spacing: .1em; font-size: 1.4rem; text-transform: uppercase; }
+  .story-head .dur { margin-left: auto; font-family: ui-monospace, Menlo, monospace; opacity: .7; font-size: .9rem; }
+  .script { line-height: 1.6; font-weight: 500; letter-spacing: .01em; opacity: .3; transition: opacity .4s; overflow-wrap: anywhere; }
+  .story.active .script { opacity: 1; }
+  .script strong { font-weight: 900; }
+  .empty-script { color: var(--muted); font-style: italic; }
+  .pill { display: block; width: fit-content; max-width: 100%; margin: .5em 0; padding: .35em .7em; border-radius: .5rem; font-size: .62em; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; line-height: 1.3; }
+  .pill.clip { background: var(--clip); color: var(--clip-ink); }
+  .pill.clip .lw { display: block; text-transform: none; letter-spacing: 0; font-weight: 700; margin-top: .2em; }
+  .pill.cue { background: var(--cue); color: var(--cue-ink); }
+  .segment { display: flex; align-items: center; gap: 1rem; margin-bottom: 4rem; color: var(--seg); font-weight: 900; letter-spacing: .14em; text-transform: uppercase; opacity: .7; }
+  .segment::before, .segment::after { content: ""; flex: 1; height: 1px; background: var(--seg); opacity: .4; }
+
+  #progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,.1); z-index: 30; }
+  #progress div { height: 100%; width: 0; background: var(--active); }
+  #reading-line { position: fixed; left: 0; right: 0; top: 36%; height: 3px; background: rgba(59,130,246,.45); box-shadow: 0 0 0 9999px rgba(0,0,0,.18); pointer-events: none; z-index: 20; transition: opacity .3s; }
+  #reading-line.off { opacity: 0; }
+
+  .chrome { transition: opacity .4s; }
+  .chrome.hidden { opacity: 0; pointer-events: none; }
+  #topbar { position: fixed; top: 3px; left: 0; right: 0; z-index: 40; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; padding: .5rem 1rem; background: linear-gradient(var(--panel), transparent); font-size: 14px; }
+  #topbar .spacer { flex: 1; }
+  #controls { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1.2rem;
+    padding: .7rem 1rem calc(.7rem + env(safe-area-inset-bottom)); background: var(--panel); backdrop-filter: blur(6px); border-top: 1px solid var(--line); font-size: 14px; }
+  .group { display: flex; align-items: center; gap: .5rem; }
+  .label { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
+  .value { font-family: ui-monospace, Menlo, monospace; font-weight: 700; min-width: 2.6em; text-align: center; }
+  .btn { min-width: 44px; min-height: 44px; padding: 0 .9rem; border-radius: .5rem; border: 0; background: #1e293b; color: #fff; font-weight: 800; cursor: pointer; }
+  .btn:hover { background: #334155; }
+  .btn.on { background: var(--active); }
+  .btn.play { background: #fff; color: #000; min-width: 8.5em; }
+  .btn.play.paused { background: #334155; color: #fff; }
+  .btn:disabled { opacity: .35; cursor: default; }
+  select.story-select, select.room-select { background: #1e293b; color: #fff; border: 1px solid #334155; border-radius: .5rem; min-height: 44px; padding: 0 .5rem; max-width: 12rem; font-weight: 700; }
+  #remaining.warn { color: var(--warn); }
+  #remaining.urgent { color: var(--err); }
+
+  #updated { position: fixed; top: 3.6rem; left: 50%; transform: translateX(-50%); z-index: 45; background: var(--warn); color: #111; font-weight: 800; font-size: 13px; padding: .4rem .9rem; border-radius: 999px; }
+  #updated[hidden] { display: none; }
+
+  .card { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .card > div { max-width: 460px; background: #0f172a; border: 1px solid var(--line); border-radius: 14px; padding: 28px; text-align: center; line-height: 1.5; }
+  .card h1 { font-size: 22px; margin: 0 0 8px; }
+  .card p { color: #cbd5e1; margin: 0 0 16px; }
+  .card a.btn { display: inline-flex; align-items: center; text-decoration: none; background: var(--active); }
+
+  #help { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #help[hidden] { display: none; }
+  #help > div { background: #0f172a; border: 1px solid var(--line); border-radius: 14px; padding: 22px 26px; max-width: 520px; width: 100%; font-size: 15px; }
+  #help h2 { margin: 0 0 12px; font-size: 18px; }
+  #help table { width: 100%; border-collapse: collapse; }
+  #help td { padding: 5px 0; border-bottom: 1px solid var(--line); }
+  #help td:first-child { font-family: ui-monospace, Menlo, monospace; font-weight: 700; width: 9em; color: #93c5fd; }
+  @media (max-width: 640px) { .hide-small { display: none; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+// Moira:Desk prompter. Read-only: it shows a newsroom's running order as an
+// autocue. It lives next to index.html, so it shares the desk's browser
+// session and reads the newsroom the browser has already joined, through the
+// same members-only rules. It never writes to the database.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+
+// ── Same project as index.html ───────────────────────────────────────────
+const SUPABASE_URL = 'https://ushtoubwyopjdlogapew.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaHRvdWJ3eW9wamRsb2dhcGV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTY3MzUsImV4cCI6MjEwODA3MjczNX0.qyukiNYqfnaOrnqGiL9mAGgmSmvBFKHe5YlzD59BFOA';
+// ─────────────────────────────────────────────────────────────────────────
+const IS_CONFIGURED = /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(SUPABASE_URL) && !/YOUR-/.test(SUPABASE_ANON_KEY);
+
+const LS = { bulletin: 'moiradesk_bulletin_id', local: (id) => `moiradesk_local_room_${id}`, prefs: 'moiradesk_prompt_prefs' };
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+// ── Script tags: keep in step with parseTag in index.html and the function ──
+const TAG_RE = /\[([^\]\n]+)\]/g;
+const PLACEHOLDERS = new Set(['clip title', 'last words', 'name', 'job title', 'direction']);
+const realValue = (v) => (PLACEHOLDERS.has(v.trim().toLowerCase()) ? '' : v.trim());
+function parseTag(inner) {
+  const t = inner.trim();
+  let m = t.match(/^CLIP\b(?::(\d+):(\d{2}))?\s*([\s\S]*)$/i);
+  if (m) {
+    let title = '', sound = null, lastWords = null;
+    for (const part of m[3].split('|').map(x => x.trim()).filter(Boolean)) {
+      if (/^(SOT|OFF)$/i.test(part)) sound = part.toUpperCase();
+      else if (/^LW\b/i.test(part)) lastWords = realValue(part.replace(/^LW\b\s*:?\s*/i, '')) || null;
+      else if (!title) title = realValue(part);
+    }
+    const seconds = m[1] !== undefined ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
+    return { kind: 'clip', title, duration: m[1] !== undefined ? `${parseInt(m[1], 10)}:${m[2]}` : '', seconds, sound, lastWords };
+  }
+  m = t.match(/^STRAP\b\s*:?\s*([\s\S]*)$/i);
+  if (m) {
+    const [name = '', ...rest] = m[1].split('|').map(x => realValue(x));
+    return { kind: 'strap', name, role: rest.filter(Boolean).join(' | ') };
+  }
+  return { kind: 'instructions', text: realValue(t) };
+}
+// ─────────────────────────────────────────────────────────────────────────
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+const mmss = (s) => { s = Math.max(0, Math.round(Number(s) || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+// Prompter text: plain lines read aloud, *word* for emphasis. Clips become an
+// amber cue with duration, sound and last words; directions a pale cue; straps
+// (lower thirds) are for the gallery, not the presenter, so they're left out.
+function textHtml(chunk) {
+  return esc(chunk).replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+}
+function scriptHtml(script) {
+  const text = String(script ?? '').replace(/\r\n?/g, '\n');
+  if (!text.trim()) return '<span class="empty-script">[ No script yet ]</span>';
+  let out = '', last = 0;
+  for (const m of text.matchAll(TAG_RE)) {
+    out += textHtml(text.slice(last, m.index));
+    last = m.index + m[0].length;
+    const tag = parseTag(m[1]);
+    if (tag.kind === 'clip') {
+      const bits = ['Clip', tag.duration, tag.title, tag.sound].filter(Boolean).map(esc).join(' · ');
+      out += `<span class="pill clip">▶ ${bits}${tag.lastWords ? `<span class="lw">LW: ${esc(tag.lastWords)}</span>` : ''}</span>`;
+    } else if (tag.kind === 'instructions' && tag.text) {
+      out += `<span class="pill cue">${esc(tag.text)}</span>`;
+    }
+    // straps and empty placeholders: nothing
+  }
+  out += textHtml(text.slice(last));
+  // Tags sit on their own lines in the script; don't leave gaps around the cues.
+  return out.replace(/(<br>\s*)+(<span class="pill)/g, '$2').replace(/(<\/span>)(\s*<br>)+/g, '$1').replace(/^(\s*<br>)+|(<br>\s*)+$/g, '');
+}
+function clipSeconds(script) {
+  let s = 0;
+  for (const m of String(script ?? '').matchAll(TAG_RE)) { const t = parseTag(m[1]); if (t.kind === 'clip') s += t.seconds; }
+  return s;
+}
+
+// ── State ────────────────────────────────────────────────────────────────
+const defaults = { speed: 40, fontScale: 1, mirrorX: false, mirrorY: false, readingLine: true };
+let prefs = { ...defaults };
+try {
+  const saved = JSON.parse(lsGet(LS.prefs) || '{}');
+  const number = (v, fallback, min, max) => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
+  prefs.speed = number(saved?.speed, defaults.speed, 0, 200);
+  prefs.fontScale = number(saved?.fontScale, defaults.fontScale, 0.4, 2.5);
+  for (const key of ['mirrorX', 'mirrorY', 'readingLine']) if (typeof saved?.[key] === 'boolean') prefs[key] = saved[key];
+} catch {}
+const savePrefs = () => lsSet(LS.prefs, JSON.stringify(prefs));
+
+const state = {
+  phase: 'loading',          // loading | signin | error | ready
+  message: '',
+  rooms: [],                 // [{ id, name }]
+  roomId: null,
+  roomName: '',
+  order: [],
+  stories: {},               // id -> { slug, script, format, duration, isFloated, type }
+  playing: false,
+  currentId: null,           // this browser's selected story; never shared
+  pending: null,             // { order, stories } arriving while scrolling
+  showHelp: false,
+};
+let supabase = null, unsub = null, local = false;
+let requestEpoch = 0;
+
+// What gets prompted: above END OF PROGRAMME, not floated. Segments show as dividers.
+function promptIds() {
+  const i = state.order.indexOf('marker-line');
+  return (i > -1 ? state.order.slice(0, i) : state.order).filter(id => state.stories[id] && !state.stories[id].isFloated);
+}
+const readableIds = () => promptIds().filter(id => state.stories[id].type !== 'segment');
+
+// ── Loading ──────────────────────────────────────────────────────────────
+const fromRow = (r) => ({ slug: r.slug || '', script: r.script || '', format: r.format || '', duration: r.duration || 0, isFloated: !!r.is_floated, type: r.type || null });
+
+async function boot() {
+  const wanted = new URLSearchParams(location.search).get('room') || lsGet(LS.bulletin);
+  if (!IS_CONFIGURED || wanted === 'bulletin-local') return bootLocal();
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const epoch = requestEpoch;
+  supabase.auth.onAuthStateChange((event, session) => { if (!session) showSignin(); });
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (epoch !== requestEpoch) return;
+  if (sessionError) return showError(sessionError.message);
+  // Never sign in from here: that would make a new, empty identity. The desk
+  // is where a browser joins a newsroom.
+  if (!session?.user) return showSignin();
+  const { data, error } = await supabase.rpc('my_newsrooms');
+  if (epoch !== requestEpoch) return;
+  if (error) return showError(error.message);
+  state.rooms = (data || []).map(r => ({ id: r.newsroom_id, name: r.newsroom_name }));
+  if (!state.rooms.length) return showSignin();
+  const room = state.rooms.find(r => r.id === wanted) || state.rooms[0];
+  await openRoom(room.id);
+}
+
+function bootLocal() {
+  local = true;
+  try {
+    const saved = JSON.parse(lsGet(LS.local('bulletin-local')) || 'null');
+    if (!saved?.meta) return showError('There is no Local Mode newsroom in this browser yet. Open the desk first.');
+    state.rooms = [{ id: 'bulletin-local', name: 'Local newsroom' }];
+    state.roomId = 'bulletin-local'; state.roomName = 'Local newsroom';
+    state.order = saved.meta.order || [];
+    state.stories = Object.fromEntries(Object.entries(saved.storiesMap || {}).map(([id, s]) => [id, {
+      slug: s.slug || '', script: s.script || '', format: s.format || '', duration: s.duration || 0, isFloated: !!s.isFloated, type: s.type || null }]));
+    state.phase = 'ready'; render(); jumpTo(readableIds()[0], false);
+    // The desk saves Local Mode to this browser's storage: follow it live.
+    window.addEventListener('storage', e => { if (e.key === null || (e.key === LS.local('bulletin-local') && !e.newValue)) { showSignin(); return; } if (e.key === LS.local('bulletin-local')) { try { const s = JSON.parse(e.newValue); incoming(s.meta.order || [], Object.fromEntries(Object.entries(s.storiesMap || {}).map(([id, x]) => [id, { slug: x.slug || '', script: x.script || '', format: x.format || '', duration: x.duration || 0, isFloated: !!x.isFloated, type: x.type || null }]))); } catch {} } });
+  } catch (e) { showError(e.message); }
+}
+
+async function openRoom(id) {
+  const epoch = ++requestEpoch;
+  if (unsub) { unsub(); unsub = null; }
+  const room = state.rooms.find(r => r.id === id);
+  if (!room) return showSignin();
+  state.roomId = id; state.roomName = room.name; state.currentId = null; state.pending = null; state.playing = false;
+  state.order = []; state.stories = {}; state.phase = 'loading'; state.showHelp = false;
+  if (!document.fullscreenElement) sleep();
+  render();
+  history.replaceState(null, '', `?room=${encodeURIComponent(id)}`);
+  try {
+    const [b, s] = await Promise.all([
+      supabase.from('bulletins').select('order_ids').eq('id', id).maybeSingle(),
+      supabase.from('stories').select('id, slug, script, format, duration, is_floated, type').eq('bulletin_id', id),
+    ]);
+    if (epoch !== requestEpoch) return;
+    if (b.error || s.error) return showError((b.error || s.error).message);
+    if (!b.data) return showSignin();
+    state.order = b.data.order_ids || [];
+    state.stories = Object.fromEntries((s.data || []).map(r => [r.id, fromRow(r)]));
+    state.phase = 'ready'; render(); jumpTo(readableIds()[0], false);
+    subscribe(id, epoch);
+  } catch (e) { if (epoch === requestEpoch) showError(e.message || String(e)); }
+}
+
+// Live updates: applied straight away while paused (keeping your place), but
+// held while the prompter is scrolling so the text never jumps mid-read.
+function subscribe(id, epoch) {
+  const ch = supabase.channel(`prompt-${id}-${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'stories', filter: `bulletin_id=eq.${id}` }, p => {
+      if (state.roomId !== id || epoch !== requestEpoch || state.phase !== 'ready') return;
+      const next = { ...(state.pending?.stories || state.stories) };
+      if (p.eventType === 'DELETE') delete next[p.old.id];
+      else {
+        const row = fromRow(p.new);
+        if (JSON.stringify(next[p.new.id]) === JSON.stringify(row)) return; // Ignore editor-lock heartbeats.
+        next[p.new.id] = row;
+      }
+      incoming(state.pending?.order || state.order, next);
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'bulletins', filter: `id=eq.${id}` }, p => {
+      if (state.roomId !== id || epoch !== requestEpoch || state.phase !== 'ready') return;
+      if (p.eventType === 'DELETE') return showSignin();
+      const order = p.new.order_ids || [];
+      if (JSON.stringify(order) !== JSON.stringify(state.pending?.order || state.order)) incoming(order, state.pending?.stories || state.stories);
+    })
+    .subscribe();
+  unsub = () => supabase.removeChannel(ch);
+}
+
+function incoming(order, stories) {
+  if (state.phase !== 'ready') return;
+  if (state.playing) {
+    state.pending = { order, stories };
+    const el = document.getElementById('updated'); if (el) el.hidden = false;
+    return;
+  }
+  applyUpdate(order, stories);
+}
+function applyUpdate(order, stories) {
+  const anchor = anchorPoint();
+  state.order = order; state.stories = stories; state.pending = null;
+  if (!readableIds().includes(state.currentId)) state.currentId = readableIds()[0] || null;
+  render();
+  restoreAnchor(anchor);
+}
+function applyPending() { if (state.pending) applyUpdate(state.pending.order, state.pending.stories); }
+
+// Layout coordinates stay stable when the viewport is mirrored for glass.
+function storyTop(el, stage) {
+  let top = 0;
+  for (let node = el; node && node !== stage; node = node.offsetParent) top += node.offsetTop;
+  return top;
+}
+
+// Keep the reader's place across a redraw: remember which story is at the
+// reading line and how far into it, then put it back there.
+function anchorPoint() {
+  const stage = document.getElementById('stage'); if (!stage) return null;
+  const line = stage.clientHeight * 0.36;
+  let best = null;
+  for (const el of stage.querySelectorAll('[data-story]')) {
+    const top = storyTop(el, stage) - stage.scrollTop;
+    if (top <= line) best = { id: el.dataset.story, offset: line - top };
+  }
+  return best;
+}
+function restoreAnchor(a) {
+  const stage = document.getElementById('stage'); if (!stage || !a) return;
+  const el = stage.querySelector(`[data-story="${CSS.escape(a.id)}"]`);
+  if (!el) return;
+  stage.scrollTop = storyTop(el, stage) - (stage.clientHeight * 0.36 - a.offset);
+}
+
+function clearRoom() {
+  requestEpoch++;
+  if (unsub) { unsub(); unsub = null; }
+  state.playing = false; state.pending = null; state.currentId = null;
+  state.roomId = null; state.roomName = ''; state.order = []; state.stories = {}; state.showHelp = false;
+  sleep();
+}
+function showSignin() { clearRoom(); state.rooms = []; state.phase = 'signin'; render(); }
+function showError(msg) { clearRoom(); state.phase = 'error'; state.message = msg; render(); }
+
+// ── Rendering ────────────────────────────────────────────────────────────
+const app = document.getElementById('app');
+function render() {
+  if (state.phase === 'loading') { app.innerHTML = '<div class="card"><div><p>Loading the running order…</p></div></div>'; return; }
+  if (state.phase === 'signin') {
+    app.innerHTML = `<div class="card"><div><h1>Open your newsroom first</h1>
+      <p>The prompter uses the newsroom this browser has joined on Moira:Desk. Open the desk, join with your newsroom code, then come back.</p>
+      <a class="btn" href="./">Open Moira:Desk</a></div></div>`;
+    return;
+  }
+  if (state.phase === 'error') {
+    app.innerHTML = `<div class="card"><div><h1>The prompter couldn't load</h1><p>${esc(state.message)}</p><a class="btn" href="./">Back to the desk</a></div></div>`;
+    return;
+  }
+  const stageScroll = document.getElementById('stage')?.scrollTop ?? 0;
+  const ids = promptIds();
+  const readable = readableIds();
+  if (!readable.includes(state.currentId)) state.currentId = readable[0] || null;
+  const fontPx = Math.round(48 * prefs.fontScale);
+  const transform = `scale(${prefs.mirrorX ? -1 : 1}, ${prefs.mirrorY ? -1 : 1})`;
+  const stories = ids.map(id => {
+    const s = state.stories[id];
+    if (s.type === 'segment') return `<div class="segment" data-segment="${esc(id)}">${esc(s.slug)}</div>`;
+    const clips = clipSeconds(s.script);
+    return `<section class="story ${id === state.currentId ? 'active' : ''}" data-story="${esc(id)}">
+      <div class="story-head"><span class="fmt">${esc(s.format)}</span><span class="slug">${esc(s.slug)}</span>
+        <span class="dur">${mmss(s.duration)}${clips ? ` · ${mmss(clips)} clip` : ''}</span></div>
+      <div class="script" style="font-size:${fontPx}px">${scriptHtml(s.script)}</div>
+    </section>`;
+  }).join('');
+  const idx = readable.indexOf(state.currentId);
+  app.innerHTML = `
+    <div id="stage" style="transform:${transform}"><div id="content"><div class="column">
+      ${ids.length ? stories : '<div class="segment">Standing by: nothing above END OF PROGRAMME yet</div>'}
+    </div></div></div>
+    <div id="progress"><div></div></div>
+    <div id="reading-line" style="top:${prefs.mirrorY ? 64 : 36}%" class="${prefs.readingLine ? '' : 'off'}"></div>
+    <div id="updated" ${state.pending ? '' : 'hidden'}>Script updated: changes appear when you pause</div>
+    <div id="topbar" class="chrome">
+      <a href="./" title="Back to the desk">← Desk</a>
+      ${state.rooms.length > 1 ? `<select class="room-select" aria-label="Newsroom">${state.rooms.map(r => `<option value="${esc(r.id)}" ${r.id === state.roomId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>`
+        : `<strong>${esc(state.roomName)}</strong>`}
+      <span class="spacer"></span>
+      <button class="btn ${prefs.mirrorX ? 'on' : ''}" data-act="mirror-x" title="Mirror left–right (M)">⇋</button>
+      <button class="btn ${prefs.mirrorY ? 'on' : ''}" data-act="mirror-y" title="Flip upside down (V)">⇅</button>
+      <button class="btn" data-act="fullscreen" title="Full screen (F)">⛶</button>
+      <button class="btn hide-small" data-act="help" title="Keyboard shortcuts (?)">?</button>
+    </div>
+    <div id="controls" class="chrome">
+      <div class="group">
+        <span class="label hide-small">Size</span>
+        <button class="btn" data-act="font-down" title="Smaller text (−)">A−</button>
+        <span class="value">${fontPx}</span>
+        <button class="btn" data-act="font-up" title="Larger text (+)">A+</button>
+        <button class="btn ${prefs.readingLine ? 'on' : ''}" data-act="line" title="Reading line (R)">☰</button>
+      </div>
+      <div class="group">
+        <select class="story-select" aria-label="Jump to story">${readable.map(id => `<option value="${esc(id)}" ${id === state.currentId ? 'selected' : ''}>${esc(state.stories[id].slug || 'Untitled')}</option>`).join('')}</select>
+        <button class="btn" data-act="prev" title="Previous story (↑)" ${idx <= 0 ? 'disabled' : ''}>◀</button>
+        <button class="btn play ${state.playing ? '' : 'paused'}" data-act="play" title="Scroll / pause (Space)">${state.playing ? '❚❚ Pause' : '▶ Scroll'}</button>
+        <button class="btn" data-act="next" title="Next story (↓)" ${idx < 0 || idx >= readable.length - 1 ? 'disabled' : ''}>▶</button>
+      </div>
+      <div class="group">
+        <span class="label hide-small">Left</span><span class="value" id="remaining">--:--</span>
+        <span class="label hide-small">Speed</span>
+        <button class="btn" data-act="speed-down" title="Slower ([)">−</button>
+        <span class="value" id="speed">${prefs.speed}</span>
+        <button class="btn" data-act="speed-up" title="Faster (])">+</button>
+      </div>
+    </div>
+    <div id="help" ${state.showHelp ? '' : 'hidden'}><div>
+      <h2>Prompter keys</h2>
+      <table>
+        <tr><td>Space</td><td>Scroll / pause</td></tr>
+        <tr><td>J · K · L</td><td>Slower and scroll · pause · faster and scroll</td></tr>
+        <tr><td>[ · ]</td><td>Slower · faster</td></tr>
+        <tr><td>↑ · ↓</td><td>Previous · next story</td></tr>
+        <tr><td>Home</td><td>Back to the start of this story</td></tr>
+        <tr><td>+ · −</td><td>Larger · smaller text</td></tr>
+        <tr><td>R</td><td>Reading line on/off</td></tr>
+        <tr><td>M · V</td><td>Mirror left–right · flip upside down</td></tr>
+        <tr><td>F · Esc</td><td>Full screen on · off</td></tr>
+      </table>
+      <p style="color:#94a3b8;margin:14px 0 0">Your settings stay on this device. Click anywhere to close.</p>
+    </div></div>`;
+  const stage = document.getElementById('stage');
+  stage.scrollTop = stageScroll;
+  stage.addEventListener('scroll', onManualScroll, { passive: true });
+  resetChrome();
+}
+
+// Scroll so a story's heading sits on the reading line.
+function jumpTo(id, smooth = true) {
+  const stage = document.getElementById('stage');
+  const el = id && stage?.querySelector(`[data-story="${CSS.escape(id)}"]`);
+  if (!el) return;
+  setCurrent(id);
+  const target = storyTop(el, stage) - stage.clientHeight * 0.36 + 4;
+  stage.scrollTo({ top: Math.max(0, target), behavior: smooth ? 'smooth' : 'auto' });
+}
+// Mark the current story without a full redraw.
+function setCurrent(id) {
+  if (!id || id === state.currentId) return;
+  state.currentId = id;
+  document.querySelectorAll('.story.active').forEach(el => el.classList.remove('active'));
+  document.querySelector(`[data-story="${CSS.escape(id)}"]`)?.classList.add('active');
+  const sel = document.querySelector('.story-select'); if (sel) sel.value = id;
+  const ids = readableIds(), i = ids.indexOf(id);
+  const prev = document.querySelector('[data-act="prev"]'), next = document.querySelector('[data-act="next"]');
+  if (prev) prev.disabled = i <= 0;
+  if (next) next.disabled = i < 0 || i >= ids.length - 1;
+}
+
+// ── Scrolling, progress and the current story ────────────────────────────
+let lastTs = null, lastChrome = 0, carry = 0;
+function frame(ts) {
+  const stage = document.getElementById('stage');
+  if (stage && state.phase === 'ready') {
+    if (state.playing && lastTs !== null) {
+      // Accumulate fractions: some browsers ignore sub-pixel scrollTop writes.
+      carry += prefs.speed * Math.min((ts - lastTs) / 1000, 0.1);
+      const whole = Math.floor(carry);
+      if (whole) { stage.scrollTop += whole; carry -= whole; }
+    }
+    if (ts - lastChrome > 250) { lastChrome = ts; updateChrome(stage); }
+  }
+  lastTs = ts;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function updateChrome(stage) {
+  const scrollable = Math.max(stage.scrollHeight - stage.clientHeight, 0);
+  const bar = document.querySelector('#progress div');
+  if (bar) bar.style.width = (scrollable ? Math.min(100, stage.scrollTop / scrollable * 100) : 100) + '%';
+  const rem = document.getElementById('remaining');
+  if (rem) {
+    const px = Math.max(scrollable - stage.scrollTop, 0);
+    const secs = prefs.speed > 0 ? px / prefs.speed : null;
+    rem.textContent = px <= 0 ? '0:00' : secs === null ? '--:--' : mmss(secs);
+    rem.className = 'value' + (secs !== null && px > 0 ? (secs < 30 ? ' urgent' : secs < 60 ? ' warn' : '') : '');
+  }
+  // Whichever story's heading has passed the reading line is the current one.
+  const line = stage.clientHeight * 0.36 + 8;
+  let current = null;
+  for (const el of stage.querySelectorAll('[data-story]')) {
+    if (storyTop(el, stage) - stage.scrollTop <= line) current = el.dataset.story; else break;
+  }
+  if (current) setCurrent(current);
+}
+function onManualScroll() { /* progress and current story follow via the frame loop */ }
+
+function setPlaying(on) {
+  state.playing = on;
+  const b = document.querySelector('[data-act="play"]');
+  if (b) { b.classList.toggle('paused', !on); b.textContent = on ? '❚❚ Pause' : '▶ Scroll'; }
+  if (on) wake(); else { applyPending(); if (!document.fullscreenElement) sleep(); }
+  const u = document.getElementById('updated'); if (u) u.hidden = !state.pending;
+}
+function setSpeed(v) { prefs.speed = Math.max(0, Math.min(200, v)); savePrefs(); const s = document.getElementById('speed'); if (s) s.textContent = prefs.speed; }
+
+// Keep the screen awake while prompting.
+let wakeLock = null;
+async function wake() { try { if (!wakeLock && 'wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch {} }
+function sleep() { try { wakeLock?.release(); } catch {} wakeLock = null; }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (state.playing || document.fullscreenElement)) wake(); });
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  else { document.documentElement.requestFullscreen?.().catch(() => {}); wake(); }
+}
+
+// ── Controls fade after a few seconds without activity ───────────────────
+let hideTimer = null, hoverLock = false;
+function resetChrome() {
+  document.querySelectorAll('.chrome').forEach(el => el.classList.remove('hidden'));
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => { if (!hoverLock && state.phase === 'ready') document.querySelectorAll('.chrome').forEach(el => el.classList.add('hidden')); }, 3000);
+}
+['mousemove', 'mousedown', 'touchstart', 'keydown'].forEach(ev => document.addEventListener(ev, resetChrome, { passive: true }));
+document.addEventListener('mouseover', e => { if (e.target.closest?.('.chrome')) { hoverLock = true; clearTimeout(hideTimer); } });
+document.addEventListener('mouseout', e => { if (e.target.closest?.('.chrome') && !e.relatedTarget?.closest?.('.chrome')) { hoverLock = false; resetChrome(); } });
+
+// ── Actions ──────────────────────────────────────────────────────────────
+function act(a) {
+  if (state.phase !== 'ready') return;
+  const ids = readableIds(), i = ids.indexOf(state.currentId);
+  switch (a) {
+    case 'play': setPlaying(!state.playing); break;
+    case 'prev': if (i > 0) jumpTo(ids[i - 1]); break;
+    case 'next': if (i > -1 && i < ids.length - 1) jumpTo(ids[i + 1]); break;
+    case 'home': jumpTo(state.currentId); break;
+    case 'speed-up': setSpeed(prefs.speed + 5); break;
+    case 'speed-down': setSpeed(prefs.speed - 5); break;
+    case 'font-up': { const a2 = anchorPoint(); prefs.fontScale = Math.min(2.5, +(prefs.fontScale + 0.15).toFixed(2)); savePrefs(); render(); restoreAnchor(a2); break; }
+    case 'font-down': { const a2 = anchorPoint(); prefs.fontScale = Math.max(0.4, +(prefs.fontScale - 0.15).toFixed(2)); savePrefs(); render(); restoreAnchor(a2); break; }
+    case 'line': prefs.readingLine = !prefs.readingLine; savePrefs();
+      document.getElementById('reading-line')?.classList.toggle('off', !prefs.readingLine);
+      document.querySelector('[data-act="line"]')?.classList.toggle('on', prefs.readingLine); break;
+    case 'mirror-x': prefs.mirrorX = !prefs.mirrorX; savePrefs(); render(); break;
+    case 'mirror-y': prefs.mirrorY = !prefs.mirrorY; savePrefs(); render(); break;
+    case 'fullscreen': toggleFullscreen(); break;
+    case 'help': state.showHelp = true; document.getElementById('help').hidden = false; break;
+  }
+}
+document.addEventListener('click', e => {
+  if (state.showHelp && e.target.closest('#help')) { state.showHelp = false; document.getElementById('help').hidden = true; return; }
+  const b = e.target.closest('[data-act]');
+  if (b && !b.disabled) act(b.dataset.act);
+});
+document.addEventListener('change', e => {
+  if (e.target.matches('.story-select')) jumpTo(e.target.value);
+  if (e.target.matches('.room-select')) { setPlaying(false); openRoom(e.target.value); }
+});
+document.addEventListener('keydown', e => {
+  if (state.phase !== 'ready' || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.matches?.('select')) return;
+  if (state.showHelp) { state.showHelp = false; document.getElementById('help').hidden = true; e.preventDefault(); return; }
+  const k = e.key, lower = k.toLowerCase();
+  const map = { ' ': 'play', '[': 'speed-down', ']': 'speed-up', '+': 'font-up', '=': 'font-up', '-': 'font-down', '_': 'font-down',
+    arrowup: 'prev', arrowdown: 'next', home: 'home', r: 'line', m: 'mirror-x', v: 'mirror-y', f: 'fullscreen', '?': 'help' };
+  if (lower === 'j') { e.preventDefault(); if (prefs.speed > 5) { setSpeed(prefs.speed - 5); if (!state.playing) setPlaying(true); } else setPlaying(false); return; }
+  if (lower === 'k') { e.preventDefault(); setPlaying(false); return; }
+  if (lower === 'l') { e.preventDefault(); setSpeed(prefs.speed + 5); if (!state.playing) setPlaying(true); return; }
+  const a = map[lower] || map[k];
+  if (a) { e.preventDefault(); act(a); }
+});
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !state.playing) sleep(); });
+
+boot().catch(e => showError(e.message || String(e)));
+</script>
+</body>
+</html>

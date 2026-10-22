@@ -41,6 +41,14 @@ The desk helps you keep track of the work:
 
 Save your changes before leaving a story. If a save fails, the editor keeps your text open and shows an error so you can retry.
 
+## Read from the prompter
+
+Choose **Prompter** at the top of the desk to open your newsroom’s scripts as an autocue in a new tab. It uses the same browser session, so join the newsroom on the desk first.
+
+The prompter follows the running order above **END OF PROGRAMME**, leaving out floated stories. Clip cues and production directions appear alongside the words to read; straps are hidden. Adjust the text size and scrolling speed, jump between stories, or use full screen and mirroring for autocue glass. Press **Space** to scroll or pause.
+
+Script updates wait until you pause, so live edits do not move the text mid-read. The prompter is read-only: its controls do not change the shared running order.
+
 ## Prepare scripts for Cuez
 
 Use **+ Clip**, **+ Strap** and **+ Direction** above the script to add clip details, on-screen names and production instructions. The **In Cuez** preview shows how the script will be broken into production blocks.
