@@ -47,7 +47,7 @@ function harness(options = {}) {
                 return { error: options.authError ? new Error('Sign-out failed') : null };
             } },
         },
-        confirm(message) { calls.push(['confirm', message]); return options.confirm !== false; },
+        async confirmAction(message) { calls.push(['confirm', message]); return options.confirm !== false; },
         stopLockRefresh() { calls.push(['stop']); },
         startLockRefresh(id) { calls.push(['restart', id]); },
         render(...parts) { calls.push(['render', ...parts]); },

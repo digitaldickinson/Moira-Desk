@@ -66,6 +66,26 @@
         .script-tool-strap { color: #1d4ed8; border-color: #93c5fd; }
         .script-tool-instructions { color: #b91c1c; border-color: #fca5a5; }
         .script-tool:hover { filter: brightness(0.95); }
+
+        /* Small action dialogs sit above the editor without replacing its draft. */
+        .desk-dialog { width: min(540px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; margin: auto; padding: 0; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; color: #1e293b; box-shadow: 0 24px 64px #0f172a33; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        .desk-dialog::backdrop { background: #0f172a99; backdrop-filter: blur(3px); }
+        .desk-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #e2e8f0; }
+        .desk-dialog h2 { margin: 0; font-size: 18px; font-weight: 700; }
+        .desk-dialog-body { padding: 20px 24px; display: grid; gap: 14px; }
+        .desk-dialog-message { margin: 0; white-space: pre-line; overflow-wrap: anywhere; color: #475569; }
+        .desk-dialog label { display: block; font-weight: 600; margin-bottom: 6px; }
+        .desk-dialog input, .desk-dialog textarea { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; background: #f8fafc; color: #1e293b; font: inherit; }
+        .desk-dialog textarea { min-height: 120px; resize: vertical; }
+        .desk-dialog input:focus, .desk-dialog textarea:focus { outline: 2px solid #2563eb; outline-offset: 1px; }
+        .desk-dialog-count { text-align: right; color: #64748b; font-size: 12px; margin-top: 4px; }
+        .desk-dialog-error { color: #b91c1c; font-size: 13px; }
+        .desk-dialog-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid #e2e8f0; }
+        .desk-dialog button { border: 0; border-radius: 8px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; background: #f1f5f9; color: #475569; }
+        .desk-dialog button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .desk-dialog .desk-dialog-close { padding: 4px 10px; font-size: 20px; }
+        .desk-dialog .desk-dialog-submit { background: #2563eb; color: #fff; }
+        .desk-dialog .desk-dialog-submit.danger { background: #b91c1c; }
     </style>
 </head>
 <body class="bg-gray-50 h-screen flex flex-col overflow-hidden text-slate-800">
@@ -976,7 +996,7 @@
             const warning = story.cuezItemUid
                 ? `Delete "${story.slug}"?\n\nIt's already in Cuez, and deleting it here won't remove it there.`
                 : `Delete "${story.slug}"?`;
-            if (!confirm(warning)) return;
+            if (!await confirmAction(warning, { title: 'Delete story', confirmLabel: 'Delete story', danger: true })) return;
             const orderIndex = state.meta.order.indexOf(id);
             state.ui.trash.unshift({ id, story: { ...story }, orderIndex, deletedAt: Date.now() });
             delete state.storiesMap[id];
@@ -1003,7 +1023,7 @@
         async function revertStory(id) {
             const snapshot = state.ui.storySnapshots[id];
             if (!snapshot) return;
-            if (!confirm(`Revert "${state.storiesMap[id]?.slug || id}" to its previous version?`)) return;
+            if (!await confirmAction(`Revert "${state.storiesMap[id]?.slug || id}" to its previous version?`, { title: 'Revert story', confirmLabel: 'Revert story' })) return;
             delete state.ui.storySnapshots[id];
             const { slug, script, format, presenter, reporter, duration, type } = snapshot;
             stopLockRefresh();
@@ -1016,7 +1036,7 @@
         async function unlinkFromCuez(id) {
             const story = state.storiesMap[id];
             if (!(story?.cuezItemUid || story?.cuezPendingUid) || !canMutate()) return;
-            if (!confirm(`Mark "${story.slug}" as not sent?\n\nThe item already in Cuez stays there. Sending again adds a second copy, so delete the old one in Cuez first if you're replacing it.`)) return;
+            if (!await confirmAction(`Mark "${story.slug}" as not sent?\n\nThe item already in Cuez stays there. Sending again adds a second copy, so delete the old one in Cuez first if you're replacing it.`, { title: 'Mark as not sent', confirmLabel: 'Mark as not sent' })) return;
             story.cuezItemUid = null; story.cuezSentAt = null; story.cuezSentRev = null; story.cuezItemNumber = null; story.cuezPendingUid = null;
             render('main');
             try { await DB.markNotSent(id); }
@@ -1039,7 +1059,8 @@
             const lines = [`Send ${pending.length} ${pending.length === 1 ? 'story' : 'stories'} to Cuez?`, '', `→ ${cuezTargetLabel()}`];
             if (unchecked) lines.push('', `${unchecked} ${unchecked === 1 ? "isn't" : "aren't"} marked Checked OK.`);
             if (beingEdited) lines.push('', `${beingEdited} ${beingEdited === 1 ? 'is' : 'are'} being edited right now: the last saved version will be sent.`);
-            if (!confirm(lines.join('\n'))) return;
+            if (!await confirmAction(lines.join('\n'), { title: 'Send to Cuez', confirmLabel: 'Send to Cuez' })) return;
+            if (!canMutate() || state.ui.cuezSending || cuezSendInProgress()) return;
 
             state.ui.cuezSending = true;
             render('main');
@@ -1093,7 +1114,7 @@
         }
 
         async function claimProducer() {
-            if (!ensureMyName()) return;
+            if (!await ensureMyName()) return;
             const ok = await conferenceAction('claim_producer', { p_bulletin_id: state.currentBulletinId, p_name: getMyName() });
             if (ok) {
                 Object.assign(state.meta, { producerUser: supabaseUser.id, producerName: getMyName() });
@@ -1103,7 +1124,7 @@
         }
 
         async function releaseProducer() {
-            if (!confirm("Step down as producer? Someone else can then claim the role.")) return;
+            if (!await confirmAction("Step down as producer? Someone else can then claim the role.", { title: 'Step down as producer', confirmLabel: 'Step down' })) return;
             const ok = await conferenceAction('release_producer', { p_bulletin_id: state.currentBulletinId });
             if (ok) { Object.assign(state.meta, { producerUser: null, producerName: null }); render('header', 'main'); }
         }
@@ -1112,7 +1133,7 @@
             const slugEl = document.getElementById('pitch-new-slug');
             const slug = slugEl?.value.trim() || '';
             if (!slug) { slugEl?.focus(); return; }
-            if (!ensureMyName()) return;
+            if (!await ensureMyName()) return;
             const angleEl = document.getElementById('pitch-new-angle');
             const ok = await conferenceAction('add_pitch', {
                 p_bulletin_id: state.currentBulletinId,
@@ -1140,20 +1161,21 @@
 
         async function spikePitch(id) {
             const p = state.pitchesMap[id];
-            const reason = prompt(`Spike "${p?.slug || 'this pitch'}"? Say why if you like (kept for the record):`, p?.spikeReason || '');
+            const reason = await deskDialog({ title: 'Spike pitch', message: `Spike "${p?.slug || 'this pitch'}"? The pitch and your reason will be kept on the record.`,
+                confirmLabel: 'Spike pitch', input: { label: 'Reason (optional)', value: p?.spikeReason || '', multiline: true, maxLength: 300 } });
             if (reason === null) return;
             await conferenceAction('spike_pitch', { p_pitch_id: id, p_reason: reason });
         }
 
         async function unpickPitch(id) {
             const p = state.pitchesMap[id];
-            if (!confirm(`Drop "${p?.slug || 'this story'}" from the running order and put it back with the pitches? This only works while nobody has written it yet.`)) return;
+            if (!await confirmAction(`Drop "${p?.slug || 'this story'}" from the running order and put it back with the pitches? This only works while nobody has written it yet.`, { title: 'Return to pitches', confirmLabel: 'Return to pitches' })) return;
             await conferenceAction('unpick_pitch', { p_pitch_id: id });
         }
 
         async function deletePitch(id) {
             const p = state.pitchesMap[id];
-            if (!confirm(`Remove the pitch "${p?.slug || ''}"? Use Spike instead if you want it kept on the record.`)) return;
+            if (!await confirmAction(`Remove the pitch "${p?.slug || ''}"? Use Spike instead if you want it kept on the record.`, { title: 'Remove pitch', confirmLabel: 'Remove pitch', danger: true })) return;
             await conferenceAction('delete_pitch', { p_pitch_id: id });
         }
 
@@ -1180,7 +1202,15 @@
                 `You'll need the newsroom code to get back in${state.rooms.length ? ` to ${state.rooms.map(r => r.name).join(', ')}` : ''}.`];
             lines.push('', "Any producer roles and editing locks held by this browser will be released, including in other tabs.");
             lines.push('', "Any unsaved work in this browser's tabs will be lost.");
-            if (!confirm(lines.join('\n'))) return;
+            if (state.ui.signOutConfirming) return;
+            state.ui.signOutConfirming = true;
+            let confirmed;
+            try { confirmed = await confirmAction(lines.join('\n'), { title: 'Sign out', confirmLabel: 'Sign out' }); }
+            finally { state.ui.signOutConfirming = false; }
+            if (!confirmed || state.signingOut || !supabaseUser) return;
+            if (state.ui.saving || state.ui.pitchBusy || state.ui.cuezSending || state.ui.join?.busy) {
+                showNotice('Please wait', 'Let the current save or send finish before signing out.', 'warn'); return;
+            }
             state.signingOut = true;
             stopLockRefresh();
             render('header');
@@ -1224,12 +1254,79 @@
         // ==========================================
         // 8. HELPERS
         // ==========================================
+        // Native <dialog> supplies focus trapping and Escape; its content is ours.
+        // Keep it separate from renderModals so background updates cannot erase it.
+        let activeDeskDialog = null;
+        const deferredDialogRender = new Set();
+        function deskDialog({ title, message, confirmLabel = 'Continue', danger = false, input = null }) {
+            if (activeDeskDialog) return Promise.resolve(null);
+            const previousFocus = document.activeElement;
+            const roomId = state.currentBulletinId, userId = supabaseUser?.id;
+            const dialog = document.createElement('dialog');
+            dialog.className = 'desk-dialog';
+            dialog.setAttribute('aria-labelledby', 'desk-dialog-title');
+            dialog.setAttribute('aria-describedby', 'desk-dialog-message');
+            const field = input ? `<div><label for="desk-dialog-input">${escapeHTML(input.label)}</label>
+                ${input.multiline ? '<textarea id="desk-dialog-input"></textarea>' : '<input id="desk-dialog-input" type="text" autocomplete="name">'}
+                <div class="desk-dialog-count"></div><div class="desk-dialog-error" role="alert" hidden></div></div>` : '';
+            dialog.innerHTML = `<form novalidate>
+                <div class="desk-dialog-head"><h2 id="desk-dialog-title">${escapeHTML(title)}</h2><button type="button" class="desk-dialog-close" data-dialog-cancel aria-label="Close">×</button></div>
+                <div class="desk-dialog-body"><p class="desk-dialog-message" id="desk-dialog-message">${escapeHTML(message)}</p>${field}</div>
+                <div class="desk-dialog-foot"><button type="button" data-dialog-cancel>Cancel</button><button type="submit" class="desk-dialog-submit${danger ? ' danger' : ''}">${escapeHTML(confirmLabel)}</button></div>
+            </form>`;
+            activeDeskDialog = dialog;
+            (document.fullscreenElement || document.body).appendChild(dialog);
+            return new Promise(resolve => {
+                let finished = false;
+                const finish = value => {
+                    if (finished) return;
+                    finished = true;
+                    if (roomId !== state.currentBulletinId || userId !== supabaseUser?.id) value = null;
+                    dialog.close(); dialog.remove(); activeDeskDialog = null;
+                    if (previousFocus?.isConnected) previousFocus.focus();
+                    // An unchanged editor underneath may contain unsaved text,
+                    // even when a toolbar button had focus before this dialog.
+                    if (modalKey() === _renderedModalKey) deferredDialogRender.delete('modal');
+                    if (deferredDialogRender.size) { render(...deferredDialogRender); deferredDialogRender.clear(); }
+                    resolve(value);
+                };
+                const field = dialog.querySelector('#desk-dialog-input');
+                if (field) {
+                    field.value = input.value || '';
+                    field.maxLength = input.maxLength || 300;
+                    const count = () => { dialog.querySelector('.desk-dialog-count').textContent = `${field.value.length}/${field.maxLength}`; };
+                    field.addEventListener('input', () => { count(); dialog.querySelector('.desk-dialog-error').hidden = true; });
+                    count();
+                }
+                dialog.querySelectorAll('[data-dialog-cancel]').forEach(b => b.addEventListener('click', () => finish(null)));
+                dialog.addEventListener('cancel', e => { e.preventDefault(); finish(null); });
+                dialog.addEventListener('keydown', e => e.stopPropagation());
+                dialog.querySelector('form').addEventListener('submit', e => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (field && input.required && !field.value.trim()) {
+                        const error = dialog.querySelector('.desk-dialog-error');
+                        error.textContent = 'Please enter your name.'; error.hidden = false; field.focus(); return;
+                    }
+                    finish(field ? field.value : true);
+                });
+                dialog.showModal();
+                (field || dialog.querySelector('[data-dialog-cancel]:not(.desk-dialog-close)')).focus();
+            });
+        }
+        async function confirmAction(message, options = {}) {
+            return (await deskDialog({ title: 'Please confirm', message, ...options })) === true;
+        }
+        function askName(value = '') {
+            return deskDialog({ title: 'Your name', message: 'This helps others see who is editing a story.', confirmLabel: 'Save name',
+                input: { label: 'Name', value, maxLength: 40, required: true } });
+        }
+
         function getMyName() { return state.myName || 'Someone'; }
 
         // Asks once per browser; the name appears on edit locks.
-        function ensureMyName() {
+        async function ensureMyName() {
             if (state.myName) return true;
-            const name = (prompt('Your name, so others can see who is editing a story:') || '').trim().slice(0, 40);
+            const name = (await askName() || '').trim().slice(0, 40);
             if (!name) return false;
             state.myName = name;
             lsSet(LS.name, name);
@@ -1551,6 +1648,10 @@
         let _renderedModalKey = '';
 
         function _renderNow(dirty) {
+            if (activeDeskDialog) {
+                Object.keys(dirty).filter(key => dirty[key]).forEach(key => deferredDialogRender.add(key));
+                return;
+            }
             const mainContainer = document.getElementById('main-container');
             const modalContainer = document.getElementById('modal-container');
             const savedScroll = mainContainer ? mainContainer.scrollTop : 0;
@@ -2353,7 +2454,7 @@
                 if (action === 'set-settings-tab')     { state.ui.settingsTab = val; render('modal'); return true; }
                 if (action === 'sign-out') { signOutBrowser(); return true; }
                 if (action === 'factory-reset') {
-                    if (!confirm('Clear this browser? The Local Mode newsroom saved here will be deleted.')) return true;
+                    if (!await confirmAction('Clear this browser? The Local Mode newsroom saved here will be deleted.', { title: 'Clear this browser', confirmLabel: 'Clear browser', danger: true })) return true;
                     if (state.ui.editingStoryId) { stopLockRefresh(); await unlockStory(state.ui.editingStoryId); }
                     try { if (supabase) await supabase.auth.signOut(); } catch {}
                     try {
@@ -2368,7 +2469,7 @@
                     return true;
                 }
                 if (action === 'set-my-name') {
-                    const name = (prompt('Your name, so others can see who is editing a story:', state.myName) || '').trim().slice(0, 40);
+                    const name = (await askName(state.myName) || '').trim().slice(0, 40);
                     if (name) { state.myName = name; lsSet(LS.name, name); render('header'); }
                     return true;
                 }
@@ -2432,7 +2533,7 @@
             const handleEdit = async ({ action, id, val }) => {
                 if (action === 'edit-story') {
                     if (!canMutate()) return true;
-                    if (!ensureMyName()) return true;
+                    if (!await ensureMyName()) return true;
                     state.ui.editingStoryId = id;
                     lockStory(id);
                     startLockRefresh(id);
@@ -2509,7 +2610,7 @@
                 if (action === 'inline-edit-slug') {
                     const story = state.storiesMap[id];
                     if (!canMutate() || !story || isLockedByOther(story)) return true;
-                    if (!ensureMyName()) return true;
+                    if (!await ensureMyName()) return true;
                     state.ui.inlineEditingId = id;
                     await lockStory(id);
                     const liveSpan = document.querySelector(`[data-action="inline-edit-slug"][data-id="${id}"]`);
