@@ -180,9 +180,29 @@ function renderConferenceCard() {
   return `<section class="card"><h2>Conference and reports</h2><div class="row" style="align-items:center">
     <span class="muted">${n} newsroom${n === 1 ? '' : 's'} selected</span><button class="primary" data-action="wall" ${disabled}>Open EP wall</button>
     <button data-action="report" ${disabled}>Generate report</button>
+      <button data-action="alert" ${disabled}>Send alert</button>
     <label class="check" style="margin:0"><input type="checkbox" id="report-scripts" ${state.reportScripts ? 'checked' : ''}> Include scripts in the report</label></div>
     <p class="muted">The EP wall updates live and lets you leave notes on pitches. Reports capture the current conference and running order for sharing or a debrief.</p></section>`;
 }
+function alertDialog() {
+  const ids = tickedIds();
+  if (!ids.length) return;
+  openDialog('Send EP broadcast alert', `<p style="margin:0">To ${ids.length} selected newsroom${ids.length === 1 ? '' : 's'}:</p>
+    <ul style="margin:0;padding-left:20px;max-height:140px;overflow:auto">${ids.map(id => `<li>${esc(state.rooms.find(r => r.newsroom_id === id)?.name || id)}</li>`).join('')}</ul>
+    <form data-form="alert" id="alert-form">
+      <label for="alert-message">Message</label><input type="text" id="alert-message" maxlength="240" placeholder="e.g. Everyone back to the newsroom in 5 mins" required autocomplete="off">
+    </form>`, '<button data-action="close-dialog">Cancel</button><button class="primary" type="submit" form="alert-form">Send to selected newsrooms</button>');
+  document.getElementById('alert-message').focus();
+}
+async function sendBroadcastAlert() {
+  const p_message = document.getElementById('alert-message').value.trim();
+  if (!p_message) throw new Error('Enter an alert message.');
+  const ids = tickedIds();
+  if (!ids.length) throw new Error('Select at least one newsroom.');
+  await rpc('tutor_send_alert', { p_newsroom_ids: ids, p_message });
+  closeDialog(); flash('Alert sent.');
+}
+
 function openDialog(title, body, foot) {
   dlg.innerHTML = `<div class="head"><h3>${esc(title)}</h3><button class="small" data-action="close-dialog" aria-label="Close">✕</button></div><div class="body">${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}`;
   if (!dlg.open) dlg.showModal();
@@ -560,6 +580,23 @@ function getCaptchaToken() {
 }
 
 document.addEventListener('submit', async e => {
+  if (e.target.matches('[data-form="alert"]')) {
+    e.preventDefault();
+    const form = e.target, submit = e.submitter;
+    if (form.dataset.busy) return;
+    form.dataset.busy = 'true'; if (submit) submit.disabled = true;
+    try { await sendBroadcastAlert(); }
+    catch (error) {
+      if (dlg.open) {
+        dlg.querySelector('.alert-error')?.remove();
+        dlg.querySelector('.body').insertAdjacentHTML('beforeend', `<div class="msg err alert-error" role="alert">${esc(error.message)}</div>`);
+      } else flash(error.message, 'err');
+    } finally {
+      delete form.dataset.busy;
+      if (submit?.isConnected) submit.disabled = false;
+    }
+    return;
+  }
   if (!e.target.matches('[data-form="login"]')) return;
   e.preventDefault();
   if (state.loginBusy) return;
@@ -581,7 +618,8 @@ document.addEventListener('click', async e => {
   const action = btn.dataset.action, id = btn.dataset.id;
   btn.disabled = true;
   try {
-    if (action === 'close-dialog') closeDialog();
+    if (action === 'alert') alertDialog();
+    else if (action === 'close-dialog') closeDialog();
     else if (action === 'refresh') { closeDialog(); state.message = null; await loadRooms(); }
     else if (action === 'sign-out') {
       const { error } = await sb.auth.signOut({ scope: 'local' });

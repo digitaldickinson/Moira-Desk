@@ -32,6 +32,11 @@ const root = path.resolve(__dirname, '..');
         },
         rpc: async (name, args) => {
           mock.calls.push({ name, args });
+          if (name === 'tutor_send_alert') {
+            if (mock.alertError) return { error: { message: 'Alert could not be sent. Try again.' } };
+            if (mock.holdAlert) return new Promise(resolve => { mock.resolveAlert = () => resolve({ data: null }); });
+            return { data: null };
+          }
           if (name === 'is_admin') return { data: mock.admin };
           if (name === 'is_tutor') return { data: !mock.denied };
           if (name === 'tutor_newsrooms') return { data: rooms.map(r => ({ ...r, tutor_code_available: mock.admin ? !!mock.code : true })) };
@@ -68,10 +73,35 @@ const root = path.resolve(__dirname, '..');
     await page.locator('#password').fill('test-only-not-a-real-password');
     return page;
   }
+  async function checkBroadcast(page) {
+    assert.equal(await page.locator('[data-action="alert"]').isDisabled(), true);
+    await page.getByRole('checkbox', { name: 'Select Newsroom A', exact: true }).check();
+    await page.getByRole('button', { name: 'Send alert', exact: true }).click();
+    assert.equal(await page.getByLabel('Message', { exact: true }).getAttribute('maxlength'), '240');
+    await page.getByLabel('Message', { exact: true }).fill('  Everyone back in 5  ');
+    await page.evaluate(() => { mock.alertError = true; });
+    const send = page.getByRole('button', { name: 'Send to selected newsrooms', exact: true });
+    await send.click();
+    await page.getByText('Alert could not be sent. Try again.', { exact: true }).waitFor();
+    assert.equal(await page.getByLabel('Message', { exact: true }).inputValue(), '  Everyone back in 5  ');
+    await page.evaluate(() => { mock.alertError = false; mock.holdAlert = true; });
+    await send.click();
+    await page.waitForFunction(() => !!mock.resolveAlert);
+    assert.equal(await send.isDisabled(), true);
+    const count = await page.evaluate(() => mock.calls.filter(c => c.name === 'tutor_send_alert').length);
+    await page.locator('#alert-form').evaluate(form => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    assert.equal(await page.evaluate(() => mock.calls.filter(c => c.name === 'tutor_send_alert').length), count);
+    await page.evaluate(() => mock.resolveAlert());
+    await page.getByText('Alert sent.', { exact: true }).waitFor();
+    assert.deepEqual(await page.evaluate(() => mock.calls.filter(c => c.name === 'tutor_send_alert').at(-1).args), { p_newsroom_ids: ['room-a'], p_message: 'Everyone back in 5' });
+    await page.getByRole('checkbox', { name: 'Select Newsroom A', exact: true }).uncheck();
+    console.log('PASS: staff broadcast selection, trimmed message, retry preserves draft and duplicate submit prevented');
+  }
   try {
     const page = await pageFor('tutor.html');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByText('Newsroom A', { exact: true }).waitFor();
+    await checkBroadcast(page);
     assert.equal(await page.locator('[data-action="wall"]').isDisabled(), true);
     assert.equal(await page.evaluate(() => mock.calls.some(c => c.name === 'get_tutor_join_code')), false);
     await page.getByRole('button', { name: 'Show join code' }).click();
@@ -149,6 +179,8 @@ const root = path.resolve(__dirname, '..');
     if (fs.existsSync(path.join(root, 'admin.html'))) {
     const admin = await pageFor('admin.html', true);
     await admin.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await admin.getByText('Newsroom A', { exact: true }).waitFor();
+    await checkBroadcast(admin);
     const tokenPill = admin.locator('[data-action="cuez-token-status"]');
     await tokenPill.filter({ hasText: '4 days left' }).waitFor();
     assert.ok((await tokenPill.getAttribute('class')).includes('ok'));

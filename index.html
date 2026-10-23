@@ -219,6 +219,8 @@
             sessionId: `${BROWSER_ID}/${crypto.randomUUID()}`,
             myName: lsGet(LS.name) || '',
             meta: { ...INITIAL_META },
+            lastSeenAlertAt: null,
+            seenAlertAtByRoom: {},
             storiesMap: {},
             pitchesMap: {},                // this newsroom's pitches (current conference shown)
             ui: {
@@ -269,7 +271,7 @@
         }
 
         let _toastContainer = null;
-        function showNotice(title, text, tone = 'ok') {
+        function showNotice(title, text, tone = 'ok', persistent = false) {
             if (!_toastContainer) {
                 _toastContainer = document.createElement('div');
                 _toastContainer.style.cssText = 'position:fixed;top:1rem;right:1rem;left:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;pointer-events:none;max-width:min(24rem,calc(100vw - 2rem));margin-left:auto;';
@@ -281,11 +283,42 @@
             toast.style.cssText = `background:#1e293b;border:1px solid ${colour};border-left:4px solid ${colour};border-radius:0.75rem;padding:0.75rem 1rem;box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;`;
             toast.innerHTML = `
                 <div style="font-size:0.6rem;font-weight:900;color:${colour};text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem;">${escapeHTML(title)}</div>
-                <div style="font-size:0.875rem;font-weight:600;color:#f1f5f9;line-height:1.4;white-space:pre-wrap;">${escapeHTML(text)}</div>`;
+                <div style="font-size:0.875rem;font-weight:600;color:#f1f5f9;line-height:1.4;white-space:pre-wrap;">${escapeHTML(text)}</div>
+                ${persistent ? '<div style="font-size:0.7rem;color:#cbd5e1;margin-top:0.4rem;">Click to dismiss</div>' : ''}`;
             _toastContainer.appendChild(toast);
             const dismiss = () => { toast.classList.add('leaving'); toast.addEventListener('animationend', () => toast.remove(), { once: true }); };
-            const timer = setTimeout(dismiss, tone === 'warn' ? 15000 : 7000);
+            const timer = persistent ? null : setTimeout(dismiss, tone === 'warn' ? 15000 : 7000);
+            if (persistent) {
+                toast.tabIndex = 0;
+                toast.setAttribute('role', 'alert');
+                toast.addEventListener('keydown', e => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dismiss(); }
+                });
+            }
             toast.addEventListener('click', () => { clearTimeout(timer); dismiss(); });
+        }
+
+        async function playAlertChime() {
+            try {
+                const Audio = window.AudioContext || window.webkitAudioContext;
+                if (!Audio) return;
+                const audio = new Audio();
+                // Also close a context whose autoplay/resume is blocked.
+                setTimeout(() => { audio.close().catch(() => {}); }, 1000);
+                if (audio.state === 'suspended') await audio.resume();
+                if (audio.state !== 'running') return;
+                [660, 880].forEach((frequency, i) => {
+                    const start = audio.currentTime + i * 0.18;
+                    const oscillator = audio.createOscillator(), gain = audio.createGain();
+                    oscillator.type = i ? 'triangle' : 'sine';
+                    oscillator.frequency.value = frequency;
+                    gain.gain.setValueAtTime(0, start);
+                    gain.gain.linearRampToValueAtTime(0.12, start + 0.015);
+                    gain.gain.linearRampToValueAtTime(0, start + 0.14);
+                    oscillator.connect(gain); gain.connect(audio.destination);
+                    oscillator.start(start); oscillator.stop(start + 0.15);
+                });
+            } catch {} // The visible alert still works when sound is unavailable.
         }
 
         // ==========================================
@@ -387,6 +420,7 @@
 
             state.roomDisplayName = room.name;
             state.currentBulletinId = room.id;
+            state.lastSeenAlertAt = state.seenAlertAtByRoom[room.id] || null;
             state.storiesMap = {};
             state.pitchesMap = {};
             state.meta = { ...INITIAL_META };
@@ -483,6 +517,16 @@
                     if (!data) { lostAccess(); return; }
                     const conferenceChanged = data.conferenceId !== state.meta.conferenceId;
                     state.meta = { ...INITIAL_META, ...data };
+                    const alertAt = Date.parse(data.epAlertAt);
+                    if (data.epAlertText && data.epAlertAt !== state.lastSeenAlertAt
+                        && Number.isFinite(alertAt)
+                        && (!state.lastSeenAlertAt || alertAt > Date.parse(state.lastSeenAlertAt))
+                        && Date.now() - alertAt < 300000) {
+                        state.lastSeenAlertAt = data.epAlertAt;
+                        state.seenAlertAtByRoom[bulletinId] = data.epAlertAt;
+                        playAlertChime();
+                        showNotice('📢 EP Alert — Click to dismiss', data.epAlertText, 'warn', true);
+                    }
                     if (conferenceChanged) refreshPitches();
                     render('header', 'main');
                 },
@@ -570,6 +614,8 @@
                 producerName: row.producer_name || null,
                 conferenceId: row.conference_id || null,
                 conferenceStartedAt: row.conference_started_at || null,
+                epAlertText: row.ep_alert_text || null,
+                epAlertAt: row.ep_alert_at || null,
             };
         }
         function pitchFromRow(row) {

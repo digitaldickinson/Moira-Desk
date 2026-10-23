@@ -66,6 +66,8 @@ If a student needs the newsroom code, choose **Show join code**. This displays a
 
 The **EP wall** displays selected groups’ pitches side by side for discussion or projection. Add notes to guide their choices while leaving the editorial decisions with each group’s producer.
 
+To call groups back or share a quick update, tick their newsrooms and choose **Send alert**. Messages can be up to 240 characters. Students receive a live alert that stays until dismissed, with a short chime when their browser allows sound. Students joining within five minutes can also see the latest alert.
+
 You can also generate a shareable report containing the pitches, decisions, EP notes and running order, with scripts included if wanted. Use it for a debrief or to keep a record of the session. Generate the report before starting a new conference, as earlier pitches leave the current board and report.
 
 Your administrator manages staff access, starts fresh conferences, resets producer roles and chooses Cuez destinations. Ask them if a newsroom or join code is missing. On a shared computer, sign out of the tutor desk when you finish.
