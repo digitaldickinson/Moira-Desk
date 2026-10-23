@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import vm from 'node:vm';
-import { tokenExpiryStatus } from '../supabase/functions/send-to-cuez/token-status.ts';
+const edgeSource = stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/send-to-cuez/index.ts', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), { mode: 'transform' });
+// Evaluate the actual single-file function with a stub server; no live calls.
+const tokenExpiryStatus = vm.runInNewContext(edgeSource + '\ntokenExpiryStatus;', { atob, Deno: { serve() {} } });
 const now = Date.parse('2026-10-23T08:00:00Z');
 const jwt = claims => `header.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.signature`;
 const exp = now / 1000 + 4 * 86400;
@@ -18,10 +20,9 @@ for (const [name, token, expected] of [
     assert.deepEqual(Object.keys(result).sort(), ['checkedAt', 'expiresAt', 'status']);
     assert.equal(result.checkedAt, new Date(now).toISOString());
 });
-const edgeSource = stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/send-to-cuez/index.ts', import.meta.url), 'utf8').replace(/^import .*;\n/gm, ''), { mode: 'transform' });
 function handler({ admin = true, signedIn = true, token = jwt({ exp }), adminError = null } = {}) {
     let serve, reads = 0;
-    const context = vm.createContext({ Response, Request, crypto, console, tokenExpiryStatus,
+    const context = vm.createContext({ Response, Request, crypto, console, atob,
         createClient: () => ({ auth: { getUser: async () => ({ data: signedIn ? { user: { id: 'user' } } : null }) },
             from: table => {
                 assert.equal(table, 'admins'); reads++;
