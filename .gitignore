@@ -4,6 +4,9 @@
 /cuez-capture.js
 /token_sniff.js
 
+# Local project notes.
+/docs/
+
 # Credentials, environment files and local tooling state.
 .env
 .env.*
