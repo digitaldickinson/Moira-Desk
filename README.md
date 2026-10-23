@@ -21,6 +21,7 @@ The **Conference** tab gives the whole team a shared board for the morning meeti
 - **Pitch a story.** Add a short title (the slug), the angle in a line and who pitched it. Anyone in the newsroom can contribute.
 - **Choose a producer.** The person leading the bulletin clicks **I’m the producer**. Everyone can see who is making the decisions.
 - **Pick the stories.** The producer adds selected pitches to the running order and chooses how each will be covered. The pitch’s angle stays with the story as a writing brief.
+- **Assign reporters.** New picks use the “Pitched by” name as their reporter. The producer can change or clear the Reporter field on a picked pitch, choosing a suggested name or typing another. Press Enter or leave the field to save. Close any open story editor before changing its assignment here.
 - **Keep track of decisions.** Spike a pitch that isn’t going ahead, with an optional reason. An untouched picked story can be dropped back into the pitches if plans change.
 - **Discuss feedback.** Notes from the executive producer (EP) appear alongside the pitches for the group to consider.
 

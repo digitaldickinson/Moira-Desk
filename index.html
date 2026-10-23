@@ -502,6 +502,7 @@
                     const map = { ...state.pitchesMap };
                     changes.forEach(({ type, id, data }) => { if (type === 'removed') delete map[id]; else map[id] = data; });
                     state.pitchesMap = map;
+                    prunePitchTrash();
                     render('main');
                 }
             );
@@ -522,6 +523,7 @@
                 const rows = await DB.loadPitches(bulletinId, conferenceId);
                 if (seq !== _pitchLoadSeq || bulletinId !== state.currentBulletinId || conferenceId !== state.meta.conferenceId) return;
                 state.pitchesMap = Object.fromEntries(rows.map(p => [p.id, p]));
+                prunePitchTrash();
                 render('main');
             } catch (e) { console.warn('Could not load pitches:', e.message); }
         }
@@ -609,6 +611,7 @@
                 cuezItemNumber: row.cuez_item_number || null,
                 cuezPendingUid: row.cuez_pending_uid || null,
                 brief: row.brief || '',
+                pitchId: row.pitch_id || null,
                 pitchedBy: row.pitched_by || '',
             };
         }
@@ -1006,18 +1009,43 @@
             catch (e) { showError('Could not delete story: ' + DB.errorMessage(e)); }
         }
 
+        function prunePitchTrash() {
+            state.ui.trash = state.ui.trash.filter(entry => {
+                const pitch = state.pitchesMap[entry.story.pitchId];
+                return !pitch || (pitch.status === 'picked' && pitch.storyId === entry.id);
+            });
+        }
+
         async function rescueStory(id) {
             if (!canMutate()) return;
             const entry = state.ui.trash.find(t => t.id === id);
-            if (!entry) return;
-            state.ui.trash = state.ui.trash.filter(t => t.id !== id);
-            const story = { ...entry.story, lockedBySession: null, lockedByName: null, lockedAt: null };
+            if (!entry || entry.restoring) return;
+            const bulletinId = state.currentBulletinId;
+            const localMode = state.localMode;
             const insertAt = Math.min(entry.orderIndex, state.meta.order.length);
-            state.storiesMap[id] = story;
-            state.meta.order.splice(insertAt, 0, id);
+            entry.restoring = true;
             render('main');
-            try { await DB.restoreStory(id, insertAt); }
-            catch (e) { showError('Could not restore story: ' + DB.errorMessage(e)); }
+            try {
+                await DB.restoreStory(id, insertAt);
+                if (bulletinId !== state.currentBulletinId || localMode !== state.localMode) return;
+                state.ui.trash = state.ui.trash.filter(t => t !== entry);
+                // Connected desks receive the authoritative row and order via
+                // Realtime. Never insert a stale browser copy after an RPC.
+                if (localMode) {
+                    state.storiesMap[id] = { ...entry.story, lockedBySession: null, lockedByName: null, lockedAt: null };
+                    state.meta.order = state.meta.order.filter(storyId => storyId !== id);
+                    state.meta.order.splice(insertAt, 0, id);
+                }
+            } catch (e) {
+                if (bulletinId !== state.currentBulletinId || localMode !== state.localMode) return;
+                if (e.message === 'That story can no longer be restored.') {
+                    state.ui.trash = state.ui.trash.filter(t => t !== entry);
+                }
+                showError('Could not restore story: ' + DB.errorMessage(e));
+            } finally {
+                entry.restoring = false;
+                if (bulletinId === state.currentBulletinId && localMode === state.localMode) render('main');
+            }
         }
 
         async function revertStory(id) {
@@ -1169,8 +1197,12 @@
 
         async function unpickPitch(id) {
             const p = state.pitchesMap[id];
-            if (!await confirmAction(`Drop "${p?.slug || 'this story'}" from the running order and put it back with the pitches? This only works while nobody has written it yet.`, { title: 'Return to pitches', confirmLabel: 'Return to pitches' })) return;
-            await conferenceAction('unpick_pitch', { p_pitch_id: id });
+            if (!await confirmAction(`Drop "${p?.slug || 'this story'}" from the running order and put it back with the pitches? A story still in the running order can only be dropped while nobody has written it or is editing it. If it was already deleted, dropping it also removes its Rescue option and any script saved in that deleted copy.`, { title: 'Return to pitches', confirmLabel: 'Return to pitches' })) return;
+            const ok = await conferenceAction('unpick_pitch', { p_pitch_id: id });
+            if (ok && p?.storyId) {
+                state.ui.trash = state.ui.trash.filter(t => t.id !== p.storyId);
+                render('main');
+            }
         }
 
         async function deletePitch(id) {
@@ -1187,6 +1219,19 @@
             story.format = format;
             const ok = await conferenceAction('set_story_format', { p_story_id: storyId, p_format: format });
             if (!ok && state.storiesMap[storyId]) { state.storiesMap[storyId].format = before; render('main'); }
+        }
+
+        async function setPickedReporter(storyId, value) {
+            if (!isProducer() || !canMutate() || state.ui.pitchBusy) return;
+            const story = state.storiesMap[storyId];
+            const reporter = value.trim();
+            if (!story || story.reporter === reporter) return;
+            const before = story.reporter;
+            story.reporter = reporter;
+            const ok = await conferenceAction('set_story_reporter', { p_story_id: storyId, p_reporter: reporter });
+            // A newer server row may have arrived while this request was pending.
+            if (!ok && state.storiesMap[storyId] === story) story.reporter = before;
+            render('main');
         }
 
         // Sign out of this browser: first give up the producer role and any
@@ -1951,7 +1996,10 @@
                 actions = (story && producer ? `<label class="flex items-center gap-1.5 text-xs text-slate-500 mr-1" title="How will we cover it? Sets the format in the running order">Format
                         <select class="picked-format border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold text-slate-700 bg-white outline-none focus:border-blue-500" data-id="${p.storyId}" ${busy}>
                             ${fmts.map(f => `<option value="${escapeHTML(f)}" ${f === story.format ? 'selected' : ''}>${escapeHTML(f)}</option>`).join('')}
-                        </select></label>` : '')
+                        </select></label>
+                        <label class="flex items-center gap-1.5 text-xs text-slate-500" title="Assign a reporter; saves when you leave the field">Reporter
+                            <input class="picked-reporter w-32 min-w-0 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 bg-white outline-none focus:border-blue-500" data-id="${p.storyId}" list="conference-reporters" maxlength="60" autocomplete="off" placeholder="Unassigned" value="${escapeHTML(story.reporter)}" ${busy}>
+                        </label>` : '')
                     + (story ? `<button data-action="open-picked" data-id="${p.storyId}" class="text-xs font-bold text-blue-600 hover:text-blue-800 px-2 py-1.5">In running order <i class="fa-solid fa-arrow-right ml-1"></i></button>`
                         : `<span class="text-xs text-slate-400 italic px-2">Dropped from the running order</span>`)
                     + (producer ? `<button data-action="unpick-pitch" data-id="${p.id}" ${busy} class="text-xs font-bold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg transition-colors" title="Take it back out of the running order (only while nobody has written it)"><i class="fa-solid fa-xmark mr-1"></i>Drop</button>` : '');
@@ -1968,6 +2016,7 @@
                         ${story && !producer && story.format ? `<span class="ml-2 align-middle bg-slate-100 border px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-slate-600">${escapeHTML(story.format)}</span>` : ''}</div>
                     ${p.angle ? `<div class="text-sm text-slate-600 mt-0.5">${escapeHTML(p.angle)}</div>` : ''}
                     <div class="text-xs text-slate-400 mt-1">${p.pitchedBy ? `Pitched by ${escapeHTML(p.pitchedBy)}` : 'Pitched'}${p.status === 'spiked' && p.spikeReason ? ` · <span class="text-slate-600">Spiked: ${escapeHTML(p.spikeReason)}</span>` : p.status === 'spiked' ? ' · Spiked' : ''}</div>
+                    ${story && !producer ? `<div class="text-xs text-blue-700 mt-1">Reporter: ${escapeHTML(story.reporter || 'Unassigned')}</div>` : ''}
                     ${p.epNote ? `<div class="mt-2 text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-2.5 py-1.5"><i class="fa-solid fa-chalkboard-user mr-1.5 text-amber-500"></i><b>EP:</b> ${escapeHTML(p.epNote)}</div>` : ''}
                 </div>
                 <div class="flex items-center gap-1 flex-wrap sm:justify-end shrink-0">${actions}</div>
@@ -2009,6 +2058,7 @@
                 </div>
                 ${section('Pitched', pitched, 'No pitches yet. Add the first one above.')}
                 ${section('Picked for the bulletin', picked, isProducer() ? 'Nothing picked yet.' : 'The producer hasn\'t picked anything yet.')}
+                <datalist id="conference-reporters">${[...new Set([...pitches.map(p => p.pitchedBy), ...Object.values(state.storiesMap).flatMap(s => [s.reporter, s.presenter])].map(name => (name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)).map(name => `<option value="${escapeHTML(name)}"></option>`).join('')}</datalist>
                 ${spiked.length ? section('Spiked', spiked, '') : ''}
                 ${picked.length ? `<div class="text-right"><button data-action="show-view" data-val="rundown" class="text-sm font-bold text-blue-600 hover:text-blue-800">Go to the running order <i class="fa-solid fa-arrow-right ml-1"></i></button></div>` : ''}
             </div>`;
@@ -2105,7 +2155,7 @@
                     <i class="fa-solid fa-trash-arrow-up text-amber-500"></i>
                     <span class="font-semibold">${state.ui.trash.length} deleted this session</span>
                     <div class="flex items-center gap-2 flex-wrap">
-                        ${state.ui.trash.map(t => `<button data-action="rescue-story" data-id="${t.id}" class="bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-800 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors"><i class="fa-solid fa-rotate-left mr-1"></i>${escapeHTML(t.story.slug)}</button>`).join('')}
+                        ${state.ui.trash.map(t => `<button data-action="rescue-story" data-id="${t.id}" ${t.restoring ? 'disabled' : ''} class="bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-800 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"><i class="fa-solid fa-rotate-left mr-1"></i>${escapeHTML(t.story.slug)}${t.restoring ? ' · Restoring…' : ''}</button>`).join('')}
                     </div>
                     <button data-action="clear-trash" class="ml-auto text-amber-400 hover:text-amber-700 text-xs font-bold px-2 py-1 rounded transition-colors">Clear</button>
                 </div>` : ''}
@@ -2727,6 +2777,13 @@
             document.body.addEventListener('change', e => {
                 if (e.target.id === 'room-select' && e.target.value !== state.currentBulletinId) openRoom(e.target.value);
                 if (e.target.classList?.contains('picked-format')) setPickedFormat(e.target.dataset.id, e.target.value);
+                if (e.target.classList?.contains('picked-reporter')) setPickedReporter(e.target.dataset.id, e.target.value);
+            });
+            document.body.addEventListener('keydown', e => {
+                if (e.key === 'Enter' && !e.isComposing && e.target.classList?.contains('picked-reporter')) {
+                    e.preventDefault();
+                    e.target.blur();
+                }
             });
 
             // Drag and drop (polyfilled for touch screens).

@@ -19,6 +19,11 @@ const root = path.resolve(__dirname, '..');
       const snapshot = [{ id: 'room-a', name: 'Newsroom A', producer_name: 'Student producer', pitches: [pitch],
         stories: [{ id: 'story-a', slug: 'Council', format: 'PKG', duration: 30, script: 'Example script' }], order: ['story-a'] }];
       window.supabase = { createClient: () => ({
+        functions: { invoke: async (name, { body }) => {
+          mock.calls.push({ name: body.action });
+          if (mock.tokenError) return { error: { message: 'Status unavailable' } };
+          return { data: mock.tokenInfo || { status: 'valid', checkedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + (4 * 24 + 1) * 3600000).toISOString() } };
+        } },
         auth: {
           getSession: async () => ({ data: { session: null }, error: null }),
           onAuthStateChange: fn => { listener = fn; return { data: { subscription: { unsubscribe() {} } } }; },
@@ -144,6 +149,27 @@ const root = path.resolve(__dirname, '..');
     if (fs.existsSync(path.join(root, 'admin.html'))) {
     const admin = await pageFor('admin.html', true);
     await admin.getByRole('button', { name: 'Sign in', exact: true }).click();
+    const tokenPill = admin.locator('[data-action="cuez-token-status"]');
+    await tokenPill.filter({ hasText: '4 days left' }).waitFor();
+    assert.ok((await tokenPill.getAttribute('class')).includes('ok'));
+    await admin.locator('#new-name').fill('Unsaved newsroom name');
+    await admin.evaluate(async () => {
+      mock.tokenInfo = { status: 'valid', checkedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 2 * 3600000).toISOString() };
+      await refreshCuezTokenStatus();
+    });
+    assert.ok((await tokenPill.getAttribute('class')).includes('err'));
+    assert.equal(await admin.locator('#new-name').inputValue(), 'Unsaved newsroom name');
+    await admin.evaluate(() => { mock.tokenInfo = { status: 'expired', checkedAt: new Date().toISOString(), expiresAt: new Date(Date.now() - 1000).toISOString() }; });
+    await tokenPill.click();
+    await tokenPill.filter({ hasText: 'expired' }).waitFor();
+    await admin.screenshot({ path: '/private/tmp/moira-admin-token-expired.png' });
+    await admin.evaluate(() => { mock.tokenError = true; });
+    await tokenPill.click();
+    await tokenPill.filter({ hasText: 'check unavailable' }).waitFor();
+    assert.ok(!(await tokenPill.getAttribute('class')).includes('ok'));
+    await admin.evaluate(() => { mock.tokenError = false; mock.tokenInfo = null; });
+    await tokenPill.click();
+    await tokenPill.filter({ hasText: '4 days left' }).waitFor();
     const rowCode = admin.locator('#app [data-action="tutor-code"]');
     await rowCode.waitFor();
     assert.equal(await rowCode.getAttribute('title'), 'Tutor code: disabled');

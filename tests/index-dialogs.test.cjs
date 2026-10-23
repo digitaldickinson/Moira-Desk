@@ -93,6 +93,30 @@ assert.equal(/\b(?:prompt|confirm|alert)\s*\(/.test(source), false, 'No browser 
     await page.getByRole('dialog').getByRole('button', { name: 'Spike pitch', exact: true }).click();
     assert.equal(await page.evaluate(() => testDesk.calls.at(-1).args.p_reason), '');
 
+    // Assign a picked pitch from the conference without opening an editor.
+    await page.evaluate(() => {
+      const p = testDesk.state.pitchesMap['pitch-a'];
+      p.status = 'picked'; p.storyId = 'picked-story'; p.pitchedBy = 'Original reporter';
+      testDesk.state.storiesMap['picked-story'] = { slug: 'COUNCIL', format: 'READ', reporter: 'Original reporter', presenter: '' };
+      testDesk.state.ui.view = 'conference';
+      testDesk.render('main');
+    });
+    const reporter = page.getByLabel('Reporter', { exact: true });
+    await reporter.waitFor();
+    assert.equal(await reporter.inputValue(), 'Original reporter');
+    assert.equal(await page.locator('#conference-reporters option[value="Original reporter"]').count(), 1);
+    await reporter.fill('Alex Reporter');
+    await page.evaluate(() => testDesk.render('main'));
+    await page.waitForTimeout(50);
+    assert.equal(await reporter.inputValue(), 'Alex Reporter', 'live refresh preserves assignment draft');
+    await reporter.press('Enter');
+    await page.waitForFunction(() => testDesk.calls.at(-1)?.name === 'set_story_reporter');
+    assert.deepEqual(await page.evaluate(() => testDesk.calls.at(-1).args), { p_story_id: 'picked-story', p_reporter: 'Alex Reporter' });
+    assert.equal(await page.locator('dialog').count(), 0);
+    await page.evaluate(() => { testDesk.state.meta.producerUser = 'someone-else'; testDesk.render('main'); });
+    await page.getByText('Reporter: Alex Reporter', { exact: true }).waitFor();
+    assert.equal(await page.locator('.picked-reporter').count(), 0);
+
     // Background room/session changes cannot apply an old confirmation.
     await page.evaluate(() => { testDesk.confirmAction('Old newsroom action').then(v => { testDesk.result = v; }); });
     await page.evaluate(() => { testDesk.state.currentBulletinId = 'different-room'; });

@@ -4,6 +4,8 @@
 // the episode back to verify the items actually landed.
 //
 // Actions (POST JSON):
+//   { action: "token-status" }
+//       Admin-only expiry metadata. Never returns the Cuez token or its claims.
 //   { action: "parts", episodeId, bulletinId? }
 //       Lists the episode's parts and their items, for the admin page's Cuez
 //       target picker. Admins only, or members of bulletinId.
@@ -37,6 +39,7 @@
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are provided by Supabase automatically.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { tokenExpiryStatus } from "./token-status.ts";
 
 const CUEZ_API = "https://app.cuez.live/api";
 const MAX_STORIES = 50;
@@ -1026,8 +1029,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, message: "Use POST." }, 405);
 
   try {
-    const token = Deno.env.get("CUEZ_BEARER_TOKEN")?.trim().replace(/^Bearer\s+/i, "");
-    if (!token) throw new HttpError(500, "CUEZ_BEARER_TOKEN is not set on the function.");
+    const token = Deno.env.get("CUEZ_BEARER_TOKEN")?.trim().replace(/^Bearer\s+/i, "") || "";
     const url = Deno.env.get("SUPABASE_URL");
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !key) throw new HttpError(500, "The function has no Supabase service credentials.");
@@ -1050,6 +1052,14 @@ Deno.serve(async (req) => {
       db,
       userId,
     };
+
+    // Check access even when the token is missing, so admins can see that
+    // status without exposing configuration details to students.
+    if (body?.action === "token-status") {
+      if (!(await isAdmin(ctx))) throw new HttpError(403, "Only admins can check Cuez token expiry.");
+      return json(tokenExpiryStatus(token));
+    }
+    if (!token) throw new HttpError(500, "CUEZ_BEARER_TOKEN is not set on the function.");
 
     switch (body?.action) {
       case "parts": return await actionParts(ctx, body);

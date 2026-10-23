@@ -215,7 +215,7 @@ async function openWall() {
   el.style.setProperty('--zoom', zoom);
   renderWall();
   el.requestFullscreen?.().catch(() => {});
-  w.timer = setInterval(pollWall, 3000);
+  w.timer = setInterval(() => pollWall(true), 3000);
   await pollWall();
 }
 
@@ -230,15 +230,21 @@ function closeWall() {
 
 // The wall can be closed (or reopened) while a request is in flight, so the
 // answer is only applied to the wall that asked for it.
-// Requests can also overlap (a note saved mid-poll), so only the latest
-// request's answer is used.
-async function pollWall() {
+// Timer ticks never overlap a request. Explicit refreshes (a saved note or
+// returning to the tab) may supersede one, so only the latest answer is used.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') pollWall();
+});
+
+async function pollWall(background = false) {
   const w = wall;
-  if (!w) return;
+  if (!w || document.visibilityState === 'hidden' || (background && w.inFlight)) return;
+  w.inFlight = (w.inFlight || 0) + 1;
   const seq = w.seq = (w.seq || 0) + 1;
   let data = null, error = null;
   try { data = await rpc('tutor_conference', { p_newsroom_ids: w.ids, p_scripts: false }); }
   catch (e) { error = e.message; }
+  finally { w.inFlight--; }
   if (wall !== w || seq !== w.seq) return;
   if (error) { w.error = error; w.data = []; w.sig = ''; }
   else {

@@ -825,8 +825,8 @@ begin
     into v_order, v_format
   from bulletins where id = v.bulletin_id for update;
 
-  insert into stories (id, bulletin_id, slug, format, duration, rev, brief, pitched_by, pitch_id)
-  values (v_story, v.bulletin_id, upper(v.slug), v_format, 10, 1, nullif(v.angle, ''), nullif(v.pitched_by, ''), v.id);
+  insert into stories (id, bulletin_id, slug, format, reporter, duration, rev, brief, pitched_by, pitch_id)
+  values (v_story, v.bulletin_id, upper(v.slug), v_format, left(coalesce(trim(v.pitched_by), ''), 60), 10, 1, nullif(v.angle, ''), nullif(v.pitched_by, ''), v.id);
 
   v_idx := array_position(v_order, 'marker-line');
   if v_idx is not null then
@@ -871,6 +871,9 @@ begin
                          updated_at = now()
     where id = v.bulletin_id;
   end if;
+  -- Drop also invalidates Undo for a story already deleted from the rundown.
+  -- The bulletin lock serialises this with delete_story and restore_story.
+  delete from deleted_stories where id = v.story_id and bulletin_id = v.bulletin_id;
   update pitches set status = 'pitched', story_id = null, decided_at = null where id = p_pitch_id;
 end;
 $$;
@@ -892,6 +895,32 @@ begin
     raise exception '% is editing "%". Change the format in the editor instead.', coalesce(v.locked_by_name, 'Someone'), v.slug;
   end if;
   update stories set format = left(coalesce(trim(p_format), ''), 20), rev = v.rev + 1 where id = p_story_id;
+end;
+$$;
+
+-- Assign directly from a picked pitch without opening the script editor.
+create or replace function set_story_reporter(p_story_id uuid, p_reporter text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v stories;
+  v_reporter text := coalesce(trim(p_reporter), '');
+begin
+  v := member_story(p_story_id);
+  perform require_producer(v.bulletin_id);
+  if not exists (
+    select 1 from pitches p join bulletins b on b.id = p.bulletin_id
+    where p.id = v.pitch_id and p.story_id = v.id and p.status = 'picked'
+      and p.bulletin_id = v.bulletin_id and p.conference_id = b.conference_id
+  ) then
+    raise exception 'This story is not a picked pitch in the current conference.';
+  end if;
+  if length(v_reporter) > 60 then raise exception 'Reporter names must be 60 characters or fewer.'; end if;
+  if v.reporter = v_reporter then return; end if;
+  -- Even this producer may have an unsaved editor open in another tab.
+  if v.locked_by_session is not null and v.locked_at is not null and now_ms() - v.locked_at <= lock_stale_ms() then
+    raise exception '% is editing "%". Change the reporter in the editor instead.', coalesce(v.locked_by_name, 'Someone'), v.slug;
+  end if;
+  update stories set reporter = v_reporter, rev = v.rev + 1 where id = p_story_id;
 end;
 $$;
 
@@ -1402,7 +1431,7 @@ revoke execute on function
   current_conference(text), require_producer(text), member_pitch(uuid), release_removed_producer(),
   claim_producer(text, text), release_producer(text), add_pitch(text, text, text, text, text),
   update_pitch(uuid, text, text, text, text), delete_pitch(uuid), pick_pitch(uuid), unpick_pitch(uuid),
-  spike_pitch(uuid, text), unspike_pitch(uuid), set_story_format(uuid, text),
+  spike_pitch(uuid, text), unspike_pitch(uuid), set_story_format(uuid, text), set_story_reporter(uuid, text),
   start_conference(text), clear_producer(text), set_pitch_note(uuid, text), admin_conference(text[], boolean),
   is_admin(), require_admin(), random_code(),
   create_newsroom(text, text), set_newsroom_code(text, text, boolean),
@@ -1422,7 +1451,7 @@ grant execute on function
   mark_story_not_sent(uuid),
   claim_producer(text, text), release_producer(text), add_pitch(text, text, text, text, text),
   update_pitch(uuid, text, text, text, text), delete_pitch(uuid), pick_pitch(uuid), unpick_pitch(uuid),
-  spike_pitch(uuid, text), unspike_pitch(uuid), set_story_format(uuid, text)
+  spike_pitch(uuid, text), unspike_pitch(uuid), set_story_format(uuid, text), set_story_reporter(uuid, text)
 to authenticated;
 
 -- Admin functions: callable when signed in, but each one checks require_admin().
