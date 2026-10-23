@@ -2,6 +2,7 @@
 /admin.html
 /cuez-test.html
 /cuez-capture.js
+/token_sniff.js
 
 # Credentials, environment files and local tooling state.
 .env
