@@ -4,10 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#080d16">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Moira Prompter">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="manifest" href="prompt_mob.webmanifest">
+<link rel="apple-touch-icon" href="media/prompter-icon-180.png">
 <meta name="robots" content="noindex, nofollow">
 <title>Moira:Desk · Mobile prompter</title>
 <style>
@@ -81,6 +83,7 @@
   #fullscreen-button { font-size: 23px; padding: 4px 10px; min-width: 44px; }
   #focus-controls { position: absolute; z-index: 50; right: max(12px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); display: flex; gap: 8px; }
   #focus-controls button { background: #172338ed; }
+  .focus-updated { align-self: center; padding: 6px 10px; border-radius: 10px; background: #172338ed; color: #fcd34d; font-size: 12px; font-weight: 700; }
   #app.focus-mode #topbar, #app.focus-mode #controls { display: none; }
   #app.focus-mode #stage { inset: 0; }
   #app.focus-mode #content { padding-top: max(12px, env(safe-area-inset-top)); }
@@ -187,11 +190,12 @@ try {
   if (typeof saved?.keepAwake === 'boolean') prefs.keepAwake = saved.keepAwake;
 } catch {}
 const savePrefs = () => lsSet(LS.prefs, JSON.stringify(prefs));
-const state = { phase: 'loading', rooms: [], roomId: null, roomName: '', order: [], stories: {}, pending: null, playing: false, joining: false };
+const state = { phase: 'loading', rooms: [], roomId: null, roomName: '', order: [], stories: {}, pending: null, playing: false, joining: null };
 const app = document.getElementById('app');
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let epoch = 0, channel = null, refreshTimer = null, refreshRunning = null, refreshAgain = false;
-let connection = 'Connecting…', stale = false;
+// live: null while subscribing, then whether realtime is currently delivering.
+let connection = 'Connecting…', stale = false, live = null;
 let wakeLock = null, wakeRequest = null, wakeGeneration = 0, wakeState = 'off';
 let focusMode = false, fullscreenGeneration = 0;
 const wakeSupported = () => typeof navigator.wakeLock?.request === 'function';
@@ -244,9 +248,9 @@ function promptIds() {
 const readableIds = () => promptIds().filter(id => state.stories[id].type !== 'segment');
 function clearRoom() {
   fullscreenGeneration++; leaveReadingMode(false);
-  epoch++; state.playing = false; state.pending = null;
+  epoch++; state.playing = false; scrollStartsAt = 0; state.pending = null;
   if (channel) { void supabase.removeChannel(channel); channel = null; }
-  clearTimeout(refreshTimer); refreshRunning = null; refreshAgain = false;
+  clearTimeout(refreshTimer); refreshRunning = null; refreshAgain = false; live = null;
   state.roomId = null; state.roomName = ''; state.order = []; state.stories = {};
   sleep();
 }
@@ -287,9 +291,10 @@ async function boot() {
   if (room) await openRoom(room.newsroom_id); else showJoin();
 }
 async function join(code) {
-  if (state.joining || !code.trim()) return;
-  state.joining = true;
-  const token = epoch, button = document.querySelector('#join-form button'), errorEl = document.getElementById('join-error');
+  // Only a join for the current screen blocks; an abandoned one finishes harmlessly.
+  if (state.joining === epoch || !code.trim()) return;
+  const token = epoch; state.joining = token;
+  const button = document.querySelector('#join-form button'), errorEl = document.getElementById('join-error');
   button.disabled = true; button.textContent = 'Joining…'; errorEl.textContent = '';
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -311,7 +316,8 @@ async function join(code) {
   } catch (error) {
     if (token === epoch) errorEl.textContent = error.message || 'Could not join. Check your connection and try again.';
   } finally {
-    state.joining = false; button.disabled = false; button.textContent = 'Open prompter';
+    if (state.joining === token) state.joining = null;
+    button.disabled = false; button.textContent = 'Open prompter';
   }
 }
 async function snapshot(id) {
@@ -341,11 +347,12 @@ async function openRoom(id) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bulletins', filter: `id=eq.${id}` }, () => { if (token === epoch) scheduleRefresh(); })
       .subscribe(status => {
         if (token !== epoch) return;
-        if (status === 'SUBSCRIBED') { void refresh(); }
-        else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) setConnection('Live updates interrupted · checking periodically', true);
+        if (status === 'SUBSCRIBED') { live = true; void refresh(); }
+        else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) { live = false; setConnection(LIVE_DOWN, true); }
       });
   } catch (error) { if (token === epoch) showError(error.message || 'Check your connection and try again.'); }
 }
+const LIVE_DOWN = 'Live updates interrupted · checking periodically';
 function lostAccess() { state.rooms = state.rooms.filter(r => r.newsroom_id !== state.roomId); showJoin('Newsroom access has ended. Enter a current code to rejoin.'); }
 function setConnection(message, isStale) {
   connection = message; stale = isStale;
@@ -362,7 +369,8 @@ async function refresh() {
     if (token !== epoch) return;
     if (!data) return lostAccess();
     incoming(data);
-    setConnection('Scripts up to date', false);
+    // A successful poll doesn't mean realtime has recovered.
+    if (live === false) setConnection(LIVE_DOWN, true); else setConnection('Scripts up to date', false);
   } catch {
     if (token === epoch) setConnection('Connection interrupted · showing loaded scripts', true);
   } finally {
@@ -376,8 +384,11 @@ function incoming(data) {
   // Ignore lock heartbeats and other fields that do not affect prompting.
   const signature = value => JSON.stringify([value.order, Object.values(value.stories).sort((a, b) => a.id.localeCompare(b.id)).map(r => [r.id, r.slug, r.script, r.format, r.is_floated, r.type])]);
   if (signature(data) === signature(state.pending || state)) return;
-  if (state.playing) { state.pending = data; document.getElementById('updated').hidden = false; }
+  if (state.playing) { state.pending = data; showPending(); }
   else applyUpdate(data);
+}
+function showPending() {
+  for (const el of document.querySelectorAll('[data-pending]')) el.hidden = !state.pending;
 }
 function anchorPoint() {
   const stage = document.getElementById('stage'); if (!stage) return null;
@@ -396,7 +407,7 @@ function restoreAnchor(anchor) {
 }
 function applyUpdate(data) {
   const anchor = anchorPoint(); Object.assign(state, data); state.pending = null;
-  renderReader(); restoreAnchor(anchor);
+  renderScripts(); restoreAnchor(anchor);
 }
 const layoutObserver = new ResizeObserver(measureLayout);
 function measureLayout() {
@@ -442,21 +453,17 @@ async function enterFullscreen() {
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement && focusMode) { setPlaying(false); leaveReadingMode(); }
 });
+// The shell is built once per room; script updates only replace #content so
+// open dialogs, settings, focus and touch scrolling are left alone.
 function renderReader() {
-  const scroll = document.getElementById('stage')?.scrollTop || 0;
-  const settingsOpen = document.getElementById('settings')?.open || false;
-  const ids = promptIds();
   app.innerHTML = `<header id="topbar"><div class="room-row"><strong class="room-name">${esc(state.roomName)}</strong><button data-act="change-room">Change room</button></div>
     <div id="status-row"><span id="connection" role="status" data-stale="${stale}">${esc(connection)}</span><span data-wake-status role="status"></span></div>
-    <p id="updated" role="status" ${state.pending ? '' : 'hidden'}>Script updated · changes appear when you pause</p></header>
-    <main id="stage" tabindex="0" aria-label="Bulletin script"><div id="content">
-      ${ids.map(id => { const s = state.stories[id]; return s.type === 'segment' ? `<div class="segment">${esc(s.slug)}</div>` : `<section class="story" data-story="${esc(id)}"><div class="story-head"><span class="fmt">${esc(s.format || '')}</span><span class="slug">${esc(s.slug || 'Untitled')}</span></div><div class="script">${scriptHtml(s.script)}</div></section>`; }).join('')}
-      ${readableIds().length ? '<div class="end">End of programme</div>' : '<p>Standing by · no stories above END OF PROGRAMME yet.</p>'}
-    </div></main>
-    <footer id="controls"><div class="transport"><button id="play" class="primary" data-act="play" ${readableIds().length ? '' : 'disabled'}>${state.playing ? '❚❚ Pause' : '▶ Start'}</button>
+    <p id="updated" role="status" data-pending ${state.pending ? '' : 'hidden'}>Script updated · changes appear when you pause</p></header>
+    <main id="stage" tabindex="0" aria-label="Bulletin script"><div id="content"></div></main>
+    <footer id="controls"><div class="transport"><button id="play" class="primary" data-act="play">${state.playing ? '❚❚ Pause' : '▶ Start'}</button>
       <div class="speed"><button data-act="slower" aria-label="Slower">−</button><div class="speed-value"><span id="speed">${prefs.speed}</span><small>Speed</small></div><button data-act="faster" aria-label="Faster">+</button></div>
       <button id="fullscreen-button" data-act="fullscreen" aria-label="Full screen" title="Full screen">⛶</button></div>
-      <details id="settings" ${settingsOpen ? 'open' : ''}><summary>Reading settings</summary><div class="settings">
+      <details id="settings"><summary>Reading settings</summary><div class="settings">
         <div class="landscape-only setting-row"><button data-act="change-room">Change room</button></div>
         <div class="setting-row"><span>Text size</span><div><button data-act="smaller" aria-label="Smaller text">A−</button><span id="font-size">${prefs.fontSize}</span><button data-act="larger" aria-label="Larger text">A+</button></div></div>
         <label class="check"><input id="keep-awake" type="checkbox" ${prefs.keepAwake ? 'checked' : ''}>Keep screen awake</label>
@@ -464,7 +471,7 @@ function renderReader() {
         <button id="wake-retry" data-act="wake">Try keeping screen awake again</button>
         <div class="setting-row"><p>Swipe the script to find your place.</p><button data-act="restart">Back to start</button></div>
       </div></details></footer>
-    <div id="focus-controls" ${focusMode ? '' : 'hidden'}><button data-act="play">${state.playing ? '❚❚ Pause' : '▶ Start'}</button><button data-act="show-controls">Show controls</button></div>
+    <div id="focus-controls" ${focusMode ? '' : 'hidden'}><span class="focus-updated" role="status" data-pending ${state.pending ? '' : 'hidden'}>Script updated</span><button data-act="play">${state.playing ? '❚❚ Pause' : '▶ Start'}</button><button data-act="show-controls">Show controls</button></div>
     <dialog id="fullscreen-help" aria-labelledby="fullscreen-heading"><h2 id="fullscreen-heading">More room to read</h2>
       <p id="fullscreen-message"></p><p>On iPhone, open Safari’s <strong>Share</strong> menu, choose <strong>Add to Home Screen</strong> and leave <strong>Open as Web App</strong> on if shown. Open the new icon to read without Safari’s toolbar and tabs. You may need to enter your newsroom code again.</p>
       <div class="dialog-actions"><button class="primary" data-act="focus">Hide prompter controls</button><button data-act="close-fullscreen-help">Close</button></div>
@@ -472,13 +479,26 @@ function renderReader() {
   document.documentElement.style.setProperty('--script-size', `${prefs.fontSize}px`);
   layoutObserver.disconnect();
   for (const id of ['topbar', 'controls']) layoutObserver.observe(document.getElementById(id));
-  measureLayout(); document.getElementById('stage').scrollTop = scroll;
+  measureLayout();
   document.getElementById('stage').addEventListener('touchstart', () => setPlaying(false), { passive: true });
   document.getElementById('stage').addEventListener('wheel', () => setPlaying(false), { passive: true });
-  updateWakeStatus();
+  updateWakeStatus(); renderScripts();
+}
+function renderScripts() {
+  const content = document.getElementById('content'); if (!content) return;
+  const ids = promptIds(), readable = readableIds().length > 0;
+  content.innerHTML = `${ids.map(id => { const s = state.stories[id]; return s.type === 'segment' ? `<div class="segment">${esc(s.slug)}</div>` : `<section class="story" data-story="${esc(id)}"><div class="story-head"><span class="fmt">${esc(s.format || '')}</span><span class="slug">${esc(s.slug || 'Untitled')}</span></div><div class="script">${scriptHtml(s.script)}</div></section>`; }).join('')}
+    ${readable ? '<div class="end">End of programme</div>' : '<p>Standing by · no stories above END OF PROGRAMME yet.</p>'}`;
+  for (const button of document.querySelectorAll('[data-act="play"]')) button.disabled = !readable;
+  showPending();
 }
 function setPlaying(on) {
+  const wasPlaying = state.playing;
   state.playing = !!on && state.phase === 'ready' && readableIds().length > 0;
+  // Give the reader two seconds on every start/resume. Keep updates held
+  // during this lead-in too; pause, touch and backgrounding cancel it.
+  if (state.playing && !wasPlaying) scrollStartsAt = performance.now() + 2000;
+  if (!state.playing) scrollStartsAt = 0;
   if (!state.playing && state.pending) applyUpdate(state.pending);
   for (const button of document.querySelectorAll('[data-act="play"]')) {
     button.textContent = state.playing ? '❚❚ Pause' : '▶ Start';
@@ -486,11 +506,11 @@ function setPlaying(on) {
   }
   if (state.playing) void wake();
 }
-let lastTs = null, carry = 0;
+let lastTs = null, carry = 0, scrollStartsAt = 0;
 function frame(ts) {
   const stage = document.getElementById('stage');
-  if (stage && state.playing && document.visibilityState === 'visible' && lastTs !== null) {
-    carry += prefs.speed * Math.min((ts - lastTs) / 1000, .1);
+  if (stage && state.playing && document.visibilityState === 'visible' && lastTs !== null && ts >= scrollStartsAt) {
+    carry += prefs.speed * Math.min((ts - Math.max(lastTs, scrollStartsAt)) / 1000, .1);
     const whole = Math.floor(carry); if (whole) { stage.scrollTop += whole; carry -= whole; }
     if (stage.scrollTop >= stage.scrollHeight - stage.clientHeight - 1) setPlaying(false);
   } else carry = 0;

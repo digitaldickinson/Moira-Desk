@@ -256,6 +256,32 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'prompt_mob.html'), 'u
       await layout(fallback);
       assert.equal(await fallback.locator('#topbar').isVisible(), true);
     }
+
+    // Paused updates replace only the scripts: the help dialog, settings and
+    // controls survive. Held updates are flagged in focus mode, and a good poll
+    // doesn't hide that realtime is still down.
+    const shell = await open({ returning: true, fullscreen: 'unsupported' }); await ready(shell);
+    await shell.getByRole('button', { name: 'Full screen', exact: true }).click();
+    await shell.getByRole('dialog').waitFor();
+    const playButton = await shell.locator('#play').elementHandle();
+    await shell.evaluate(async () => { mock.rows[0].script = 'While dialog open'; await testMobile.refresh(); });
+    assert.ok((await shell.locator('.script').first().textContent()).startsWith('While dialog open'));
+    assert.equal(await shell.getByRole('dialog').isVisible(), true, 'update keeps dialog open');
+    assert.equal(await playButton.evaluate(el => el.isConnected), true, 'update keeps controls');
+    await shell.getByRole('button', { name: 'Hide prompter controls', exact: true }).click();
+    assert.equal(await shell.locator('.focus-updated').isVisible(), false);
+    await shell.evaluate(async () => { mock.rows[0].script = 'Long script\n'.repeat(80); await testMobile.refresh(); });
+    await shell.locator('#focus-controls').getByRole('button', { name: '▶ Start', exact: true }).click();
+    await shell.evaluate(async () => { mock.rows[0].script = 'Held in focus\n'.repeat(80); await testMobile.refresh(); });
+    assert.equal(await shell.locator('.focus-updated').isVisible(), true, 'focus mode shows held update');
+    await shell.locator('#focus-controls').getByRole('button', { name: '❚❚ Pause', exact: true }).click();
+    assert.equal(await shell.locator('.focus-updated').isVisible(), false);
+    assert.ok((await shell.locator('.script').first().textContent()).startsWith('Held in focus'));
+    await shell.getByRole('button', { name: 'Show controls', exact: true }).click();
+    await shell.evaluate(async () => { mock.channels.at(-1).status('CHANNEL_ERROR'); await testMobile.refresh(); });
+    assert.ok((await shell.locator('#connection').textContent()).includes('Live updates interrupted'), 'poll keeps realtime warning');
+    await shell.evaluate(async () => { mock.channels.at(-1).status('SUBSCRIBED'); await testMobile.refresh(); });
+    assert.equal(await shell.locator('#connection').textContent(), 'Scripts up to date');
     assert.deepEqual(errors, []);
     console.log('PASS: mobile join, bulletin/cues, updates, wake-lock lifecycle, reconnect, access removal, reduced landscape height, rotation, fullscreen and unsupported/denied/standalone reading modes');
   } finally { await browser.close(); }

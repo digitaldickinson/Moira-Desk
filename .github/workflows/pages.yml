@@ -33,6 +33,8 @@ jobs:
           cp prompt.html _site/prompt.html
           cp prompt_mob.html _site/prompt_mob.html
           cp prompt_mob.webmanifest _site/prompt_mob.webmanifest
+          mkdir -p _site/media
+          cp media/prompter-icon-*.png _site/media/
           touch _site/.nojekyll
       - name: Configure Pages
         uses: actions/configure-pages@v5
