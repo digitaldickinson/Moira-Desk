@@ -2,11 +2,11 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium } = require(process.env.MOIRA_PLAYWRIGHT_MODULE || 'playwright');
+const playwright = require(process.env.MOIRA_PLAYWRIGHT_MODULE || 'playwright');
 const source = fs.readFileSync(path.join(__dirname, '..', 'prompt_mob.html'), 'utf8');
 
 (async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await playwright[process.env.MOIRA_BROWSER || 'chromium'].launch({ headless: true });
   const errors = [];
   async function open(options = {}) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -22,6 +22,9 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'prompt_mob.html'), 'u
         holdWake: !!options.holdWake, denyWake: !!options.denyWake, visibility: 'visible',
       };
       Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => mock.visibility });
+      if (options.fullscreen === 'unsupported') Object.defineProperty(Element.prototype, 'requestFullscreen', { configurable: true, value: undefined });
+      if (options.fullscreen === 'denied') Object.defineProperty(Element.prototype, 'requestFullscreen', { configurable: true, value: async () => { throw Error('Not allowed'); } });
+      if (options.standalone) Object.defineProperty(navigator, 'standalone', { value: true });
       Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: options.unsupported ? undefined : {
         request: async () => {
           mock.wakeCalls++;
@@ -141,9 +144,23 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'prompt_mob.html'), 'u
     assert.equal(await page.locator('[data-story]').count(), 2, 'offline keeps loaded scripts');
     await page.evaluate(async () => { mock.offline = false; mock.rows[0].script = 'Reconnected'; await testMobile.refresh(); });
     assert.equal(await page.locator('.script').first().textContent(), 'Reconnected');
-    for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
+    for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }, { width: 874, height: 274 }, { width: 667, height: 240 }]) {
       await page.setViewportSize(viewport); await page.waitForTimeout(100); await layout(page);
+      if (viewport.width > viewport.height) {
+        assert.ok(await page.locator('#stage').evaluate(el => el.clientHeight / innerHeight) > .65, 'landscape leaves most visible height for the bulletin');
+        assert.ok(await page.locator('#topbar').evaluate(el => el.clientHeight) < 30, 'landscape header occupies one compact row');
+        await page.locator('summary').click();
+        const settings = await page.locator('.settings').boundingBox();
+        assert.ok(settings.y >= 0, 'landscape settings stay inside visible viewport');
+        await page.getByRole('button', { name: 'Change room', exact: true }).waitFor();
+        await page.locator('summary').click();
+      }
     }
+    // Rotate back with settings open; everything returns to the portrait layout.
+    await page.locator('summary').click();
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(100);
+    await layout(page); await page.locator('summary').click();
+    await page.setViewportSize({ width: 874, height: 274 }); await page.waitForTimeout(100);
     await page.screenshot({ path: '/private/tmp/moira-mobile-landscape.png' });
     await page.evaluate(async () => { mock.revoked = true; await testMobile.refresh(); });
     await page.getByLabel('Newsroom code').waitFor();
@@ -196,7 +213,50 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'prompt_mob.html'), 'u
     assert.equal(await denied.locator('[data-story]').count(), 0);
     assert.equal(await denied.evaluate(() => mock.channels.every(ch => ch.removed)), true);
     assert.equal(await denied.evaluate(() => mock.locks.at(-1).released), true);
+
+    // Native fullscreen, browser-driven exit, and controls remain operable.
+    const fullscreen = await open({ returning: true }); await ready(fullscreen);
+    await fullscreen.setViewportSize({ width: 874, height: 274 });
+    const supportsFullscreen = await fullscreen.evaluate(() => !!document.documentElement.requestFullscreen && document.fullscreenEnabled !== false);
+    if (supportsFullscreen) {
+      await fullscreen.getByRole('button', { name: 'Full screen', exact: true }).click();
+      await fullscreen.waitForFunction(() => !!document.fullscreenElement && document.getElementById('app').classList.contains('focus-mode'));
+      assert.equal(await fullscreen.locator('#topbar').isVisible(), false);
+      assert.ok(await fullscreen.locator('#stage').evaluate(el => el.clientHeight >= innerHeight - 1));
+      await fullscreen.getByRole('button', { name: '▶ Start', exact: true }).click();
+      await fullscreen.waitForFunction(() => testMobile.state.playing);
+      await fullscreen.evaluate(() => document.exitFullscreen());
+      await fullscreen.waitForFunction(() => !document.getElementById('app').classList.contains('focus-mode'));
+      assert.equal(await fullscreen.evaluate(() => testMobile.state.playing), false);
+      await fullscreen.getByRole('button', { name: 'Full screen', exact: true }).click();
+      await fullscreen.getByRole('button', { name: 'Show controls', exact: true }).click();
+      await fullscreen.waitForFunction(() => !document.fullscreenElement);
+      await layout(fullscreen);
+    }
+
+    // iPhone-style unsupported API and rejected requests both offer a truthful
+    // fallback. The Home Screen app can hide controls without showing the help.
+    for (const mode of ['unsupported', 'denied', 'standalone']) {
+      const fallback = await open({ returning: true, fullscreen: mode === 'standalone' ? 'unsupported' : mode, standalone: mode === 'standalone' }); await ready(fallback);
+      await fallback.setViewportSize({ width: 874, height: 274 });
+      await fallback.getByRole('button', { name: 'Full screen', exact: true }).click();
+      if (mode !== 'standalone') {
+        await fallback.getByRole('dialog').waitFor();
+        assert.ok((await fallback.getByRole('dialog').textContent()).includes('Add to Home Screen'));
+        await fallback.getByRole('button', { name: 'Hide prompter controls', exact: true }).click();
+      }
+      await fallback.getByRole('button', { name: 'Show controls', exact: true }).waitFor();
+      assert.equal(await fallback.locator('#topbar').isVisible(), false);
+      assert.ok(await fallback.locator('#stage').evaluate(el => el.clientHeight >= innerHeight - 1));
+      await fallback.getByRole('button', { name: '▶ Start', exact: true }).click();
+      await fallback.waitForFunction(() => document.getElementById('stage').scrollTop > 10);
+      await fallback.getByRole('button', { name: '❚❚ Pause', exact: true }).click();
+      if (mode === 'unsupported') await fallback.screenshot({ path: '/private/tmp/moira-mobile-reading-mode.png' });
+      await fallback.getByRole('button', { name: 'Show controls', exact: true }).click();
+      await layout(fallback);
+      assert.equal(await fallback.locator('#topbar').isVisible(), true);
+    }
     assert.deepEqual(errors, []);
-    console.log('PASS: direct join/retry, saved session, bulletin filtering/cues/escaping, deferred updates, touch layouts, awake success/release/retry/denial/unsupported/pending cancellation, app switching, reconnect and access removal');
+    console.log('PASS: mobile join, bulletin/cues, updates, wake-lock lifecycle, reconnect, access removal, reduced landscape height, rotation, fullscreen and unsupported/denied/standalone reading modes');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

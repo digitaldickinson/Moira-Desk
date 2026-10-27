@@ -4,12 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#080d16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Moira Prompter">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="prompt_mob.webmanifest">
 <meta name="robots" content="noindex, nofollow">
 <title>Moira:Desk · Mobile prompter</title>
 <style>
-  :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #f8fafc; background: #080d16; }
+  :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #f8fafc; background: #080d16; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   * { box-sizing: border-box; }
   body { margin: 0; }
+  /* Follow the visible height as mobile browser toolbars expand or collapse. */
+  #app { position: fixed; inset: 0; height: 100%; height: 100dvh; overflow: auto; }
   button, input, select { font: inherit; }
   button, summary, select, .check { min-height: 44px; }
   button, summary { cursor: pointer; touch-action: manipulation; }
@@ -28,7 +34,7 @@
   #code { width: 100%; padding: 16px; font-size: 20px; letter-spacing: .12em; text-transform: uppercase; border: 1px solid #475569; border-radius: 12px; background: #111b2c; color: white; }
   .primary { background: #93c5fd; color: #081324; border-color: #93c5fd; }
   #join-error { color: #fca5a5; margin: 0; }
-  #topbar { position: fixed; z-index: 30; inset: 0 0 auto; padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); background: #080d16f2; border-bottom: 1px solid #253247; }
+  #topbar { position: absolute; z-index: 30; inset: 0 0 auto; padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); background: #080d16f2; border-bottom: 1px solid #253247; }
   .room-row { display: flex; align-items: center; gap: 12px; }
   .room-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #topbar button { font-size: 12px; }
@@ -36,9 +42,9 @@
   [data-wake-state="active"] { color: #86efac; }
   [data-wake-state="denied"], [data-wake-state="released"], [data-wake-state="unsupported"] { color: #fcd34d; }
   #connection[data-stale="true"] { color: #fcd34d; }
-  #stage { position: fixed; inset: var(--top-height, 100px) 0 var(--bottom-height, 135px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; background: #000; touch-action: pan-y; }
+  #stage { position: absolute; inset: var(--top-height, 100px) 0 var(--bottom-height, 135px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; background: #000; touch-action: pan-y; }
   #stage::-webkit-scrollbar { display: none; }
-  #content { max-width: 850px; margin: auto; padding: 12vh max(20px, env(safe-area-inset-right)) 55vh max(20px, env(safe-area-inset-left)); }
+  #content { max-width: 850px; margin: auto; padding: 12dvh max(20px, env(safe-area-inset-right)) 55dvh max(20px, env(safe-area-inset-left)); }
   .story { margin: 0 0 48px; }
   .story-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; background: #162032; padding: 12px; border-left: 3px solid #60a5fa; border-radius: 4px; margin-bottom: 22px; }
   .slug { font-size: 16px; font-weight: 800; overflow-wrap: anywhere; }
@@ -52,7 +58,7 @@
   .lw { display: block; margin-top: .25em; }
   .segment, .end { color: #93c5fd; text-transform: uppercase; letter-spacing: .12em; font-size: 13px; font-weight: 800; padding: 20px 0; border-top: 1px solid #334155; }
   #updated { margin: 8px 0 0; font-size: 12px; color: #fcd34d; }
-  #controls { position: fixed; inset: auto 0 0; z-index: 40; background: #101827; border-top: 1px solid #334155; padding: 8px max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  #controls { position: absolute; inset: auto 0 0; z-index: 40; background: #101827; border-top: 1px solid #334155; padding: 8px max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
   .transport { display: flex; gap: 8px; align-items: center; }
   #play { flex: 1; font-size: 17px; min-height: 50px; }
   .speed { display: flex; align-items: center; gap: 6px; }
@@ -71,13 +77,35 @@
   .settings p { font-size: 13px; margin: 6px 0 12px; }
   #wake-retry { width: 100%; }
   #rooms { width: 100%; padding: 10px; background: #172338; border: 1px solid #475569; border-radius: 10px; color: white; margin: 14px 0; }
+  .landscape-only { display: none; }
+  #fullscreen-button { font-size: 23px; padding: 4px 10px; min-width: 44px; }
+  #focus-controls { position: absolute; z-index: 50; right: max(12px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); display: flex; gap: 8px; }
+  #focus-controls button { background: #172338ed; }
+  #app.focus-mode #topbar, #app.focus-mode #controls { display: none; }
+  #app.focus-mode #stage { inset: 0; }
+  #app.focus-mode #content { padding-top: max(12px, env(safe-area-inset-top)); }
+  #fullscreen-help { max-width: min(420px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid #475569; border-radius: 14px; padding: 20px; background: #101827; color: #f8fafc; }
+  #fullscreen-help::backdrop { background: #000b; }
+  #fullscreen-help h2 { font-size: 20px; margin: 0 0 12px; }
+  #fullscreen-help p { font-size: 14px; }
+  .dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   @media (orientation: landscape) and (max-height: 500px) {
-    #topbar { padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: 4px; }
-    #status-row { margin: 0; }
-    #controls { display: flex; align-items: center; gap: 14px; }
+    #topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding-top: max(3px, env(safe-area-inset-top)); padding-bottom: 3px; font-size: 12px; }
+    .room-row { flex: 1; min-width: 0; }
+    #topbar [data-act="change-room"] { display: none; }
+    #status-row { margin: 0; font-size: 11px; gap: 8px; }
+    #connection[data-stale="false"] { display: none; }
+    #connection { max-width: 35vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #updated { width: 100%; margin: 0; }
+    #controls { display: flex; align-items: center; gap: 14px; padding-top: 4px; padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+    #play { min-height: 44px; }
     .transport { flex: 1; }
     details { margin: 0; }
-    .settings { position: absolute; bottom: 100%; left: 12px; right: 12px; padding: 12px; background: #101827; border: 1px solid #334155; max-height: 65dvh; }
+    .settings { position: absolute; bottom: 100%; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); padding: 12px; background: #101827; border: 1px solid #334155; max-height: calc(100dvh - var(--bottom-height) - env(safe-area-inset-top) - 8px); }
+    .landscape-only { display: block; }
+    #content { padding-top: 12px; }
+    .story { margin-bottom: 24px; }
+    .story-head { padding: 6px 10px; margin-bottom: 10px; }
   }
 </style>
 </head>
@@ -165,6 +193,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let epoch = 0, channel = null, refreshTimer = null, refreshRunning = null, refreshAgain = false;
 let connection = 'Connecting…', stale = false;
 let wakeLock = null, wakeRequest = null, wakeGeneration = 0, wakeState = 'off';
+let focusMode = false, fullscreenGeneration = 0;
 const wakeSupported = () => typeof navigator.wakeLock?.request === 'function';
 const wantsWake = () => prefs.keepAwake && state.phase === 'ready' && document.visibilityState === 'visible';
 const wakeLabels = { off: 'Screen awake: off', waiting: 'Screen awake: waiting', requesting: 'Keeping screen awake…', active: 'Screen staying awake', denied: 'Screen may sleep · request declined', released: 'Screen may sleep · lock released', unsupported: 'Screen awake unavailable' };
@@ -214,6 +243,7 @@ function promptIds() {
 }
 const readableIds = () => promptIds().filter(id => state.stories[id].type !== 'segment');
 function clearRoom() {
+  fullscreenGeneration++; leaveReadingMode(false);
   epoch++; state.playing = false; state.pending = null;
   if (channel) { void supabase.removeChannel(channel); channel = null; }
   clearTimeout(refreshTimer); refreshRunning = null; refreshAgain = false;
@@ -374,6 +404,44 @@ function measureLayout() {
     const el = document.getElementById(id); if (el) document.documentElement.style.setProperty(key, `${el.getBoundingClientRect().height}px`);
   }
 }
+const isStandalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches;
+function setFocusMode(on) {
+  const anchor = anchorPoint();
+  focusMode = on; app.classList.toggle('focus-mode', on);
+  const controls = document.getElementById('focus-controls'); if (controls) controls.hidden = !on;
+  measureLayout(); restoreAnchor(anchor);
+  if (on) document.querySelector('[data-act="show-controls"]')?.focus({ preventScroll: true });
+}
+function leaveReadingMode(restoreFocus = true) {
+  setFocusMode(false);
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  if (restoreFocus) document.getElementById('fullscreen-button')?.focus({ preventScroll: true });
+}
+function showFullscreenHelp(message) {
+  setPlaying(false);
+  const dialog = document.getElementById('fullscreen-help');
+  document.getElementById('fullscreen-message').textContent = message;
+  if (!dialog.open) dialog.showModal();
+}
+async function enterFullscreen() {
+  if (state.phase !== 'ready') return;
+  if (isStandalone() || document.fullscreenElement) { setFocusMode(true); return; }
+  if (!document.documentElement.requestFullscreen || document.fullscreenEnabled === false) {
+    showFullscreenHelp('This browser cannot hide its toolbars from a page. You can still hide the prompter controls for more reading space.');
+    return;
+  }
+  const generation = ++fullscreenGeneration;
+  try {
+    await document.documentElement.requestFullscreen();
+    if (generation !== fullscreenGeneration || state.phase !== 'ready') { if (document.fullscreenElement) await document.exitFullscreen(); return; }
+    setFocusMode(true); void wake();
+  } catch {
+    if (generation === fullscreenGeneration && state.phase === 'ready') showFullscreenHelp('Full screen was not allowed. You can still hide the prompter controls for more reading space.');
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && focusMode) { setPlaying(false); leaveReadingMode(); }
+});
 function renderReader() {
   const scroll = document.getElementById('stage')?.scrollTop || 0;
   const settingsOpen = document.getElementById('settings')?.open || false;
@@ -386,14 +454,21 @@ function renderReader() {
       ${readableIds().length ? '<div class="end">End of programme</div>' : '<p>Standing by · no stories above END OF PROGRAMME yet.</p>'}
     </div></main>
     <footer id="controls"><div class="transport"><button id="play" class="primary" data-act="play" ${readableIds().length ? '' : 'disabled'}>${state.playing ? '❚❚ Pause' : '▶ Start'}</button>
-      <div class="speed"><button data-act="slower" aria-label="Slower">−</button><div class="speed-value"><span id="speed">${prefs.speed}</span><small>Speed</small></div><button data-act="faster" aria-label="Faster">+</button></div></div>
+      <div class="speed"><button data-act="slower" aria-label="Slower">−</button><div class="speed-value"><span id="speed">${prefs.speed}</span><small>Speed</small></div><button data-act="faster" aria-label="Faster">+</button></div>
+      <button id="fullscreen-button" data-act="fullscreen" aria-label="Full screen" title="Full screen">⛶</button></div>
       <details id="settings" ${settingsOpen ? 'open' : ''}><summary>Reading settings</summary><div class="settings">
+        <div class="landscape-only setting-row"><button data-act="change-room">Change room</button></div>
         <div class="setting-row"><span>Text size</span><div><button data-act="smaller" aria-label="Smaller text">A−</button><span id="font-size">${prefs.fontSize}</span><button data-act="larger" aria-label="Larger text">A+</button></div></div>
         <label class="check"><input id="keep-awake" type="checkbox" ${prefs.keepAwake ? 'checked' : ''}>Keep screen awake</label>
         <p>Works while this page is visible, including when paused. Your phone may decline in power-saving mode. If unavailable, adjust your phone’s auto-lock setting while reading.</p>
         <button id="wake-retry" data-act="wake">Try keeping screen awake again</button>
         <div class="setting-row"><p>Swipe the script to find your place.</p><button data-act="restart">Back to start</button></div>
-      </div></details></footer>`;
+      </div></details></footer>
+    <div id="focus-controls" ${focusMode ? '' : 'hidden'}><button data-act="play">${state.playing ? '❚❚ Pause' : '▶ Start'}</button><button data-act="show-controls">Show controls</button></div>
+    <dialog id="fullscreen-help" aria-labelledby="fullscreen-heading"><h2 id="fullscreen-heading">More room to read</h2>
+      <p id="fullscreen-message"></p><p>On iPhone, open Safari’s <strong>Share</strong> menu, choose <strong>Add to Home Screen</strong> and leave <strong>Open as Web App</strong> on if shown. Open the new icon to read without Safari’s toolbar and tabs. You may need to enter your newsroom code again.</p>
+      <div class="dialog-actions"><button class="primary" data-act="focus">Hide prompter controls</button><button data-act="close-fullscreen-help">Close</button></div>
+    </dialog>`;
   document.documentElement.style.setProperty('--script-size', `${prefs.fontSize}px`);
   layoutObserver.disconnect();
   for (const id of ['topbar', 'controls']) layoutObserver.observe(document.getElementById(id));
@@ -405,7 +480,10 @@ function renderReader() {
 function setPlaying(on) {
   state.playing = !!on && state.phase === 'ready' && readableIds().length > 0;
   if (!state.playing && state.pending) applyUpdate(state.pending);
-  const button = document.getElementById('play'); if (button) button.textContent = state.playing ? '❚❚ Pause' : '▶ Start';
+  for (const button of document.querySelectorAll('[data-act="play"]')) {
+    button.textContent = state.playing ? '❚❚ Pause' : '▶ Start';
+    button.disabled = readableIds().length === 0;
+  }
   if (state.playing) void wake();
 }
 let lastTs = null, carry = 0;
@@ -434,6 +512,10 @@ document.addEventListener('click', e => {
   if (action === 'retry') { state.phase = 'loading'; boot().catch(e => showError(e.message)); return; }
   if (state.phase !== 'ready') return;
   if (action === 'play') setPlaying(!state.playing);
+  if (action === 'fullscreen') void enterFullscreen();
+  if (action === 'focus') { document.getElementById('fullscreen-help').close(); setFocusMode(true); void wake(); }
+  if (action === 'close-fullscreen-help') document.getElementById('fullscreen-help').close();
+  if (action === 'show-controls') { fullscreenGeneration++; setPlaying(false); leaveReadingMode(); }
   if (action === 'wake') void wake();
   if (action === 'restart') { setPlaying(false); document.getElementById('stage').scrollTop = 0; }
   if (action === 'slower' || action === 'faster') {
@@ -445,6 +527,7 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && focusMode) { e.preventDefault(); fullscreenGeneration++; setPlaying(false); leaveReadingMode(); return; }
   if (state.phase !== 'ready' || e.target.closest('input, select, button, summary, a') || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === ' ') { e.preventDefault(); setPlaying(!state.playing); }
 });

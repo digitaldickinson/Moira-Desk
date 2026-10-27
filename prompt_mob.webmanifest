@@ -1,0 +1,11 @@
+{
+  "id": "./prompt_mob.html",
+  "name": "Moira:Desk Mobile Prompter",
+  "short_name": "Moira Prompter",
+  "start_url": "./prompt_mob.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080d16",
+  "theme_color": "#080d16",
+  "lang": "en-GB"
+}

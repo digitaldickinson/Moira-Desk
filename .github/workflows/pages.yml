@@ -32,6 +32,7 @@ jobs:
           cp tutor.html _site/tutor.html
           cp prompt.html _site/prompt.html
           cp prompt_mob.html _site/prompt_mob.html
+          cp prompt_mob.webmanifest _site/prompt_mob.webmanifest
           touch _site/.nojekyll
       - name: Configure Pages
         uses: actions/configure-pages@v5
