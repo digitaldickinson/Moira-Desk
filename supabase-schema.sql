@@ -697,7 +697,7 @@ begin
 end;
 $$;
 
--- Claim the producer role (the queen of hearts). Fails if someone else holds it.
+-- Claim the producer role. Fails if someone else holds it.
 create or replace function claim_producer(p_bulletin_id text, p_name text)
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -1184,7 +1184,7 @@ $$;
 -- ── News conference, from the EP's side ─────────────────────────────────
 
 -- A fresh conference for a newsroom: a clean board, and the producer role is
--- free for whoever drew the queen. Earlier pitches are kept for the record.
+-- free for anyone to claim. Earlier pitches are kept for the record.
 create or replace function start_conference(p_newsroom_id text)
 returns void language plpgsql security definer set search_path = public as $$
 begin

@@ -1157,8 +1157,8 @@
         }
 
         // ── News conference ───────────────────────────────────────────────
-        // Anyone in the newsroom can pitch; the producer (whoever drew the queen
-        // and claimed the role) picks and spikes. The database enforces who may
+        // Anyone in the newsroom can pitch; the producer (whoever claimed the
+        // role) picks and spikes. The database enforces who may
         // do what, so these just call it and show what comes back.
 
         function isProducer() { return !state.localMode && !!supabaseUser && state.meta.producerUser === supabaseUser.id; }
@@ -2000,7 +2000,7 @@
                     producer = `<span class="text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-full" title="The producer picks the stories and sends the bulletin to Cuez"><i class="fa-solid fa-crown mr-1.5 text-amber-500"></i>Producer: ${escapeHTML(state.meta.producerName || 'someone')}</span>`;
                 } else {
                     producer = `<span class="flex items-center gap-2"><span class="text-xs text-slate-500">No producer yet</span>
-                        <button data-action="claim-producer" ${state.ui.pitchBusy ? 'disabled' : ''} class="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-full shadow-sm transition-colors" title="For whoever drew the queen"><i class="fa-solid fa-crown mr-1.5"></i>I'm the producer</button></span>`;
+                        <button data-action="claim-producer" ${state.ui.pitchBusy ? 'disabled' : ''} class="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-full shadow-sm transition-colors" title="For whoever is leading the bulletin"><i class="fa-solid fa-crown mr-1.5"></i>I'm the producer</button></span>`;
                 }
             }
             return `<div class="${state.ui.view === 'conference' ? 'max-w-5xl' : 'max-w-7xl'} mx-auto px-4 md:px-6 pt-4 flex flex-wrap items-center justify-between gap-3">
@@ -2083,7 +2083,7 @@
             const started = state.meta.conferenceStartedAt ? new Date(state.meta.conferenceStartedAt) : null;
             const who = isProducer() ? 'You pick the stories: Pick adds one to the running order, Spike drops it (with a reason, if you give one).'
                 : hasProducer() ? `Anyone can pitch. ${escapeHTML(state.meta.producerName || 'The producer')} picks the stories.`
-                : 'Anyone can pitch. Whoever drew the queen should claim producer: they pick the stories.';
+                : 'Anyone can pitch. Only the producer can pick stories.';
             const section = (title, list, empty, offset = 0) => `
                 <div>
                     <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">${title} <span class="text-slate-400">${list.length}</span></h3>
