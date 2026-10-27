@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#080d16">
+<meta name="robots" content="noindex, nofollow">
+<title>Moira:Desk · Mobile prompter</title>
+<style>
+  :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #f8fafc; background: #080d16; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  button, input, select { font: inherit; }
+  button, summary, select, .check { min-height: 44px; }
+  button, summary { cursor: pointer; touch-action: manipulation; }
+  button { border: 1px solid #334155; border-radius: 12px; background: #1e293b; color: #fff; padding: 10px 14px; font-weight: 700; }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, #stage:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; }
+  a { color: #93c5fd; }
+  [hidden] { display: none !important; }
+  .brand { color: #93c5fd; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .card { min-height: 100svh; display: grid; place-items: center; padding: 24px max(24px, env(safe-area-inset-right)) 24px max(24px, env(safe-area-inset-left)); }
+  .card > div { width: 100%; max-width: 400px; }
+  h1 { font-size: 32px; letter-spacing: -.04em; margin: 14px 0; }
+  p { line-height: 1.5; color: #aebcd0; }
+  form { display: grid; gap: 12px; margin: 28px 0; }
+  form label { font-weight: 700; }
+  #code { width: 100%; padding: 16px; font-size: 20px; letter-spacing: .12em; text-transform: uppercase; border: 1px solid #475569; border-radius: 12px; background: #111b2c; color: white; }
+  .primary { background: #93c5fd; color: #081324; border-color: #93c5fd; }
+  #join-error { color: #fca5a5; margin: 0; }
+  #topbar { position: fixed; z-index: 30; inset: 0 0 auto; padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); background: #080d16f2; border-bottom: 1px solid #253247; }
+  .room-row { display: flex; align-items: center; gap: 12px; }
+  .room-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #topbar button { font-size: 12px; }
+  #status-row { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; margin-top: 5px; color: #aebcd0; }
+  [data-wake-state="active"] { color: #86efac; }
+  [data-wake-state="denied"], [data-wake-state="released"], [data-wake-state="unsupported"] { color: #fcd34d; }
+  #connection[data-stale="true"] { color: #fcd34d; }
+  #stage { position: fixed; inset: var(--top-height, 100px) 0 var(--bottom-height, 135px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; background: #000; touch-action: pan-y; }
+  #stage::-webkit-scrollbar { display: none; }
+  #content { max-width: 850px; margin: auto; padding: 12vh max(20px, env(safe-area-inset-right)) 55vh max(20px, env(safe-area-inset-left)); }
+  .story { margin: 0 0 48px; }
+  .story-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; background: #162032; padding: 12px; border-left: 3px solid #60a5fa; border-radius: 4px; margin-bottom: 22px; }
+  .slug { font-size: 16px; font-weight: 800; overflow-wrap: anywhere; }
+  .fmt { font-size: 11px; letter-spacing: .1em; color: #93c5fd; }
+  .script { font-size: var(--script-size, 32px); line-height: 1.55; overflow-wrap: anywhere; }
+  .script strong { font-weight: 900; }
+  .empty-script { color: #94a3b8; font-style: italic; }
+  .pill { display: block; width: fit-content; max-width: 100%; margin: .6em 0; padding: .4em .6em; border-radius: 6px; font-size: .65em; font-weight: 800; line-height: 1.4; }
+  .pill.clip { background: #fbbf24; color: #111; }
+  .pill.cue { background: #cbd5e1; color: #111827; }
+  .lw { display: block; margin-top: .25em; }
+  .segment, .end { color: #93c5fd; text-transform: uppercase; letter-spacing: .12em; font-size: 13px; font-weight: 800; padding: 20px 0; border-top: 1px solid #334155; }
+  #updated { margin: 8px 0 0; font-size: 12px; color: #fcd34d; }
+  #controls { position: fixed; inset: auto 0 0; z-index: 40; background: #101827; border-top: 1px solid #334155; padding: 8px max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  .transport { display: flex; gap: 8px; align-items: center; }
+  #play { flex: 1; font-size: 17px; min-height: 50px; }
+  .speed { display: flex; align-items: center; gap: 6px; }
+  .speed-value { text-align: center; min-width: 38px; font-variant-numeric: tabular-nums; }
+  .speed-value small { display: block; color: #94a3b8; font-size: 10px; }
+  details { margin-top: 4px; }
+  summary { display: flex; align-items: center; justify-content: center; color: #b8c9e0; font-size: 13px; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: ' +'; margin-left: 6px; }
+  details[open] summary::after { content: ' −'; }
+  .settings { max-height: 42dvh; overflow-y: auto; border-top: 1px solid #334155; padding: 10px 0; }
+  .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0 10px; }
+  .setting-row > div { display: flex; align-items: center; gap: 10px; }
+  .check { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+  .check input { width: 22px; height: 22px; accent-color: #93c5fd; }
+  .settings p { font-size: 13px; margin: 6px 0 12px; }
+  #wake-retry { width: 100%; }
+  #rooms { width: 100%; padding: 10px; background: #172338; border: 1px solid #475569; border-radius: 10px; color: white; margin: 14px 0; }
+  @media (orientation: landscape) and (max-height: 500px) {
+    #topbar { padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: 4px; }
+    #status-row { margin: 0; }
+    #controls { display: flex; align-items: center; gap: 14px; }
+    .transport { flex: 1; }
+    details { margin: 0; }
+    .settings { position: absolute; bottom: 100%; left: 12px; right: 12px; padding: 12px; background: #101827; border: 1px solid #334155; max-height: 65dvh; }
+  }
+</style>
+</head>
+<body>
+<div id="app"><main class="card"><div><p>Loading the mobile prompter…</p></div></main></div>
+<script type="module">
+// Mobile reader. Joining grants the existing newsroom membership; scripts are never edited here.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+
+// ── Same project as index.html ───────────────────────────────────────────
+const SUPABASE_URL = 'https://ushtoubwyopjdlogapew.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaHRvdWJ3eW9wamRsb2dhcGV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTY3MzUsImV4cCI6MjEwODA3MjczNX0.qyukiNYqfnaOrnqGiL9mAGgmSmvBFKHe5YlzD59BFOA';
+
+// ── Script tags: keep in step with parseTag in index.html and the function ──
+const TAG_RE = /\[([^\]\n]+)\]/g;
+const PLACEHOLDERS = new Set(['clip title', 'last words', 'name', 'job title', 'direction']);
+const realValue = (v) => (PLACEHOLDERS.has(v.trim().toLowerCase()) ? '' : v.trim());
+function parseTag(inner) {
+  const t = inner.trim();
+  let m = t.match(/^CLIP\b(?::(\d+):(\d{2}))?\s*([\s\S]*)$/i);
+  if (m) {
+    let title = '', sound = null, lastWords = null;
+    for (const part of m[3].split('|').map(x => x.trim()).filter(Boolean)) {
+      if (/^(SOT|OFF)$/i.test(part)) sound = part.toUpperCase();
+      else if (/^LW\b/i.test(part)) lastWords = realValue(part.replace(/^LW\b\s*:?\s*/i, '')) || null;
+      else if (!title) title = realValue(part);
+    }
+    const seconds = m[1] !== undefined ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
+    return { kind: 'clip', title, duration: m[1] !== undefined ? `${parseInt(m[1], 10)}:${m[2]}` : '', seconds, sound, lastWords };
+  }
+  m = t.match(/^STRAP\b\s*:?\s*([\s\S]*)$/i);
+  if (m) {
+    const [name = '', ...rest] = m[1].split('|').map(x => realValue(x));
+    return { kind: 'strap', name, role: rest.filter(Boolean).join(' | ') };
+  }
+  return { kind: 'instructions', text: realValue(t) };
+}
+// ─────────────────────────────────────────────────────────────────────────
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+
+// Prompter text: plain lines read aloud, *word* for emphasis. Clips become an
+// amber cue with duration, sound and last words; directions a pale cue; straps
+// (lower thirds) are for the gallery, not the presenter, so they're left out.
+function textHtml(chunk) {
+  return esc(chunk).replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+}
+function scriptHtml(script) {
+  const text = String(script ?? '').replace(/\r\n?/g, '\n');
+  if (!text.trim()) return '<span class="empty-script">[ No script yet ]</span>';
+  let out = '', last = 0;
+  for (const m of text.matchAll(TAG_RE)) {
+    out += textHtml(text.slice(last, m.index));
+    last = m.index + m[0].length;
+    const tag = parseTag(m[1]);
+    if (tag.kind === 'clip') {
+      const bits = ['Clip', tag.duration, tag.title, tag.sound].filter(Boolean).map(esc).join(' · ');
+      out += `<span class="pill clip">▶ ${bits}${tag.lastWords ? `<span class="lw">LW: ${esc(tag.lastWords)}</span>` : ''}</span>`;
+    } else if (tag.kind === 'instructions' && tag.text) {
+      out += `<span class="pill cue">${esc(tag.text)}</span>`;
+    }
+    // straps and empty placeholders: nothing
+  }
+  out += textHtml(text.slice(last));
+  // Tags sit on their own lines in the script; don't leave gaps around the cues.
+  return out.replace(/(<br>\s*)+(<span class="pill)/g, '$2').replace(/(<\/span>)(\s*<br>)+/g, '$1').replace(/^(\s*<br>)+|(<br>\s*)+$/g, '');
+}
+
+
+const LS = { room: 'moiradesk_mobile_room', prefs: 'moiradesk_mobile_prompt_prefs' };
+const lsGet = key => { try { return localStorage.getItem(key); } catch { return null; } };
+const lsSet = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
+const prefs = { speed: 35, fontSize: 32, keepAwake: true };
+try {
+  const saved = JSON.parse(lsGet(LS.prefs));
+  for (const [key, min, max] of [['speed', 5, 150], ['fontSize', 20, 64]]) {
+    if (typeof saved?.[key] === 'number' && Number.isFinite(saved[key])) prefs[key] = Math.max(min, Math.min(max, saved[key]));
+  }
+  if (typeof saved?.keepAwake === 'boolean') prefs.keepAwake = saved.keepAwake;
+} catch {}
+const savePrefs = () => lsSet(LS.prefs, JSON.stringify(prefs));
+const state = { phase: 'loading', rooms: [], roomId: null, roomName: '', order: [], stories: {}, pending: null, playing: false, joining: false };
+const app = document.getElementById('app');
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let epoch = 0, channel = null, refreshTimer = null, refreshRunning = null, refreshAgain = false;
+let connection = 'Connecting…', stale = false;
+let wakeLock = null, wakeRequest = null, wakeGeneration = 0, wakeState = 'off';
+const wakeSupported = () => typeof navigator.wakeLock?.request === 'function';
+const wantsWake = () => prefs.keepAwake && state.phase === 'ready' && document.visibilityState === 'visible';
+const wakeLabels = { off: 'Screen awake: off', waiting: 'Screen awake: waiting', requesting: 'Keeping screen awake…', active: 'Screen staying awake', denied: 'Screen may sleep · request declined', released: 'Screen may sleep · lock released', unsupported: 'Screen awake unavailable' };
+
+function updateWakeStatus() {
+  for (const el of document.querySelectorAll('[data-wake-status]')) { el.textContent = wakeLabels[wakeState]; el.dataset.wakeState = wakeState; }
+  const retry = document.getElementById('wake-retry');
+  if (retry) retry.hidden = !prefs.keepAwake || !['denied', 'released'].includes(wakeState);
+}
+async function releaseLock(lock) { try { await lock?.release(); } catch {} }
+function sleep() {
+  wakeGeneration++;
+  const lock = wakeLock; wakeLock = null;
+  void releaseLock(lock);
+  wakeState = prefs.keepAwake ? 'waiting' : 'off'; updateWakeStatus();
+}
+async function wake() {
+  if (!wantsWake()) return;
+  if (!wakeSupported()) { wakeState = 'unsupported'; updateWakeStatus(); return; }
+  if (wakeLock || wakeRequest) return;
+  const generation = wakeGeneration;
+  wakeState = 'requesting'; updateWakeStatus();
+  const request = (async () => {
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      if (generation !== wakeGeneration || !wantsWake()) { await releaseLock(lock); return; }
+      wakeLock = lock;
+      wakeState = lock.released ? 'released' : 'active';
+      if (lock.released) wakeLock = null;
+      lock.addEventListener('release', () => {
+        if (wakeLock !== lock) return;
+        wakeLock = null; wakeState = wantsWake() ? 'released' : (prefs.keepAwake ? 'waiting' : 'off'); updateWakeStatus();
+      });
+    } catch { if (generation === wakeGeneration) wakeState = 'denied'; }
+  })();
+  wakeRequest = request;
+  await request;
+  if (wakeRequest === request) wakeRequest = null;
+  updateWakeStatus();
+  // A pending request may finish after returning from another app or changing rooms.
+  if (generation !== wakeGeneration && wantsWake()) void wake();
+}
+
+function promptIds() {
+  const end = state.order.indexOf('marker-line');
+  return (end < 0 ? state.order : state.order.slice(0, end)).filter(id => state.stories[id] && !state.stories[id].is_floated);
+}
+const readableIds = () => promptIds().filter(id => state.stories[id].type !== 'segment');
+function clearRoom() {
+  epoch++; state.playing = false; state.pending = null;
+  if (channel) { void supabase.removeChannel(channel); channel = null; }
+  clearTimeout(refreshTimer); refreshRunning = null; refreshAgain = false;
+  state.roomId = null; state.roomName = ''; state.order = []; state.stories = {};
+  sleep();
+}
+function showJoin(message = '') {
+  clearRoom(); state.phase = 'join'; renderJoin(message);
+}
+function renderJoin(message = '') {
+  app.innerHTML = `<main class="card"><div>
+    <div class="brand">Moira:Desk / On the move</div><h1>Your bulletin.<br>Ready to read.</h1>
+    <p>Enter your newsroom code to open the whole bulletin on your phone.</p>
+    ${state.rooms.length ? `<label for="rooms">Return to a newsroom</label><select id="rooms"><option value="">Choose newsroom…</option>${state.rooms.map(r => `<option value="${esc(r.newsroom_id)}">${esc(r.newsroom_name)}</option>`).join('')}</select>` : ''}
+    <form id="join-form"><label for="code">Newsroom code</label><input id="code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="80" required aria-describedby="join-error" placeholder="Enter code">
+    <p id="join-error" role="alert">${esc(message)}</p><button class="primary" type="submit">Open prompter</button></form>
+    <p>Scripts follow the running order above END OF PROGRAMME. Floated stories are left out.</p>
+    <a href="./">Back to Moira:Desk</a>
+  </div></main>`;
+}
+function showError(message) {
+  clearRoom(); state.phase = 'error';
+  app.innerHTML = `<main class="card"><div><div class="brand">Moira:Desk</div><h1>Unable to load</h1><p role="alert">${esc(message)}</p><button data-act="retry">Try again</button> <button data-act="change-room">Enter a code</button></div></main>`;
+}
+async function loadRooms() {
+  const { data, error } = await supabase.rpc('my_newsrooms');
+  if (error) throw error;
+  return data || [];
+}
+async function boot() {
+  const token = epoch;
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (token !== epoch) return;
+  if (error) throw error;
+  if (!session) return showJoin();
+  const rooms = await loadRooms();
+  if (token !== epoch) return;
+  state.rooms = rooms;
+  const wanted = new URLSearchParams(location.search).get('room') || lsGet(LS.room) || lsGet('moiradesk_bulletin_id');
+  const room = rooms.find(r => r.newsroom_id === wanted) || (rooms.length === 1 ? rooms[0] : null);
+  if (room) await openRoom(room.newsroom_id); else showJoin();
+}
+async function join(code) {
+  if (state.joining || !code.trim()) return;
+  state.joining = true;
+  const token = epoch, button = document.querySelector('#join-form button'), errorEl = document.getElementById('join-error');
+  button.disabled = true; button.textContent = 'Joining…'; errorEl.textContent = '';
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (token !== epoch) return;
+    if (!session) {
+      const { error } = await supabase.auth.signInAnonymously();
+      if (error) throw error;
+    }
+    if (token !== epoch) return;
+    const { data, error } = await supabase.rpc('join_newsroom', { p_code: code.trim() });
+    if (token !== epoch) return;
+    if (error) throw error;
+    if (!data?.[0]) throw new Error('That code isn’t recognised. Check it with your tutor or editor.');
+    const rooms = await loadRooms();
+    if (token !== epoch) return;
+    state.rooms = rooms;
+    await openRoom(data[0].newsroom_id);
+  } catch (error) {
+    if (token === epoch) errorEl.textContent = error.message || 'Could not join. Check your connection and try again.';
+  } finally {
+    state.joining = false; button.disabled = false; button.textContent = 'Open prompter';
+  }
+}
+async function snapshot(id) {
+  const [b, s] = await Promise.all([
+    supabase.from('bulletins').select('order_ids').eq('id', id).maybeSingle(),
+    supabase.from('stories').select('id, slug, script, format, is_floated, type').eq('bulletin_id', id),
+  ]);
+  if (b.error || s.error) throw b.error || s.error;
+  if (!b.data) return null;
+  return { order: b.data.order_ids || [], stories: Object.fromEntries((s.data || []).map(row => [row.id, row])) };
+}
+async function openRoom(id) {
+  const room = state.rooms.find(r => r.newsroom_id === id);
+  if (!room) return showJoin();
+  clearRoom(); const token = epoch;
+  state.phase = 'loading'; state.roomId = id; state.roomName = room.newsroom_name;
+  app.innerHTML = '<main class="card"><div><p>Loading the bulletin…</p></div></main>';
+  try {
+    const data = await snapshot(id);
+    if (token !== epoch) return;
+    if (!data) return lostAccess();
+    Object.assign(state, data); state.phase = 'ready';
+    lsSet(LS.room, id); history.replaceState(null, '', `?room=${encodeURIComponent(id)}`);
+    connection = 'Bulletin loaded'; stale = false; renderReader(); void wake();
+    channel = supabase.channel(`mobile-prompt-${id}-${token}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stories', filter: `bulletin_id=eq.${id}` }, () => { if (token === epoch) scheduleRefresh(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bulletins', filter: `id=eq.${id}` }, () => { if (token === epoch) scheduleRefresh(); })
+      .subscribe(status => {
+        if (token !== epoch) return;
+        if (status === 'SUBSCRIBED') { void refresh(); }
+        else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) setConnection('Live updates interrupted · checking periodically', true);
+      });
+  } catch (error) { if (token === epoch) showError(error.message || 'Check your connection and try again.'); }
+}
+function lostAccess() { state.rooms = state.rooms.filter(r => r.newsroom_id !== state.roomId); showJoin('Newsroom access has ended. Enter a current code to rejoin.'); }
+function setConnection(message, isStale) {
+  connection = message; stale = isStale;
+  const el = document.getElementById('connection');
+  if (el) { el.textContent = message; el.dataset.stale = String(isStale); }
+}
+function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => void refresh(), 180); }
+async function refresh() {
+  if (state.phase !== 'ready' || document.visibilityState !== 'visible') return;
+  if (refreshRunning) { refreshAgain = true; return; }
+  const token = epoch, request = {}; refreshRunning = request;
+  try {
+    const data = await snapshot(state.roomId);
+    if (token !== epoch) return;
+    if (!data) return lostAccess();
+    incoming(data);
+    setConnection('Scripts up to date', false);
+  } catch {
+    if (token === epoch) setConnection('Connection interrupted · showing loaded scripts', true);
+  } finally {
+    if (refreshRunning === request) {
+      refreshRunning = null;
+      if (refreshAgain) { refreshAgain = false; scheduleRefresh(); }
+    }
+  }
+}
+function incoming(data) {
+  // Ignore lock heartbeats and other fields that do not affect prompting.
+  const signature = value => JSON.stringify([value.order, Object.values(value.stories).sort((a, b) => a.id.localeCompare(b.id)).map(r => [r.id, r.slug, r.script, r.format, r.is_floated, r.type])]);
+  if (signature(data) === signature(state.pending || state)) return;
+  if (state.playing) { state.pending = data; document.getElementById('updated').hidden = false; }
+  else applyUpdate(data);
+}
+function anchorPoint() {
+  const stage = document.getElementById('stage'); if (!stage) return null;
+  const line = stage.getBoundingClientRect().top + 20;
+  let anchor = null;
+  for (const el of stage.querySelectorAll('[data-story]')) {
+    const top = el.getBoundingClientRect().top;
+    if (top <= line) anchor = { id: el.dataset.story, offset: line - top };
+  }
+  return anchor;
+}
+function restoreAnchor(anchor) {
+  if (!anchor) return;
+  const stage = document.getElementById('stage'), el = stage?.querySelector(`[data-story="${CSS.escape(anchor.id)}"]`);
+  if (el) stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top - 20 + anchor.offset;
+}
+function applyUpdate(data) {
+  const anchor = anchorPoint(); Object.assign(state, data); state.pending = null;
+  renderReader(); restoreAnchor(anchor);
+}
+const layoutObserver = new ResizeObserver(measureLayout);
+function measureLayout() {
+  for (const [id, key] of [['topbar', '--top-height'], ['controls', '--bottom-height']]) {
+    const el = document.getElementById(id); if (el) document.documentElement.style.setProperty(key, `${el.getBoundingClientRect().height}px`);
+  }
+}
+function renderReader() {
+  const scroll = document.getElementById('stage')?.scrollTop || 0;
+  const settingsOpen = document.getElementById('settings')?.open || false;
+  const ids = promptIds();
+  app.innerHTML = `<header id="topbar"><div class="room-row"><strong class="room-name">${esc(state.roomName)}</strong><button data-act="change-room">Change room</button></div>
+    <div id="status-row"><span id="connection" role="status" data-stale="${stale}">${esc(connection)}</span><span data-wake-status role="status"></span></div>
+    <p id="updated" role="status" ${state.pending ? '' : 'hidden'}>Script updated · changes appear when you pause</p></header>
+    <main id="stage" tabindex="0" aria-label="Bulletin script"><div id="content">
+      ${ids.map(id => { const s = state.stories[id]; return s.type === 'segment' ? `<div class="segment">${esc(s.slug)}</div>` : `<section class="story" data-story="${esc(id)}"><div class="story-head"><span class="fmt">${esc(s.format || '')}</span><span class="slug">${esc(s.slug || 'Untitled')}</span></div><div class="script">${scriptHtml(s.script)}</div></section>`; }).join('')}
+      ${readableIds().length ? '<div class="end">End of programme</div>' : '<p>Standing by · no stories above END OF PROGRAMME yet.</p>'}
+    </div></main>
+    <footer id="controls"><div class="transport"><button id="play" class="primary" data-act="play" ${readableIds().length ? '' : 'disabled'}>${state.playing ? '❚❚ Pause' : '▶ Start'}</button>
+      <div class="speed"><button data-act="slower" aria-label="Slower">−</button><div class="speed-value"><span id="speed">${prefs.speed}</span><small>Speed</small></div><button data-act="faster" aria-label="Faster">+</button></div></div>
+      <details id="settings" ${settingsOpen ? 'open' : ''}><summary>Reading settings</summary><div class="settings">
+        <div class="setting-row"><span>Text size</span><div><button data-act="smaller" aria-label="Smaller text">A−</button><span id="font-size">${prefs.fontSize}</span><button data-act="larger" aria-label="Larger text">A+</button></div></div>
+        <label class="check"><input id="keep-awake" type="checkbox" ${prefs.keepAwake ? 'checked' : ''}>Keep screen awake</label>
+        <p>Works while this page is visible, including when paused. Your phone may decline in power-saving mode. If unavailable, adjust your phone’s auto-lock setting while reading.</p>
+        <button id="wake-retry" data-act="wake">Try keeping screen awake again</button>
+        <div class="setting-row"><p>Swipe the script to find your place.</p><button data-act="restart">Back to start</button></div>
+      </div></details></footer>`;
+  document.documentElement.style.setProperty('--script-size', `${prefs.fontSize}px`);
+  layoutObserver.disconnect();
+  for (const id of ['topbar', 'controls']) layoutObserver.observe(document.getElementById(id));
+  measureLayout(); document.getElementById('stage').scrollTop = scroll;
+  document.getElementById('stage').addEventListener('touchstart', () => setPlaying(false), { passive: true });
+  document.getElementById('stage').addEventListener('wheel', () => setPlaying(false), { passive: true });
+  updateWakeStatus();
+}
+function setPlaying(on) {
+  state.playing = !!on && state.phase === 'ready' && readableIds().length > 0;
+  if (!state.playing && state.pending) applyUpdate(state.pending);
+  const button = document.getElementById('play'); if (button) button.textContent = state.playing ? '❚❚ Pause' : '▶ Start';
+  if (state.playing) void wake();
+}
+let lastTs = null, carry = 0;
+function frame(ts) {
+  const stage = document.getElementById('stage');
+  if (stage && state.playing && document.visibilityState === 'visible' && lastTs !== null) {
+    carry += prefs.speed * Math.min((ts - lastTs) / 1000, .1);
+    const whole = Math.floor(carry); if (whole) { stage.scrollTop += whole; carry -= whole; }
+    if (stage.scrollTop >= stage.scrollHeight - stage.clientHeight - 1) setPlaying(false);
+  } else carry = 0;
+  lastTs = ts; requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+document.addEventListener('submit', e => { if (e.target.id === 'join-form') { e.preventDefault(); void join(document.getElementById('code').value); } });
+document.addEventListener('change', e => {
+  if (e.target.id === 'rooms' && e.target.value) void openRoom(e.target.value);
+  if (e.target.id === 'keep-awake') {
+    prefs.keepAwake = e.target.checked; savePrefs();
+    if (prefs.keepAwake) void wake(); else sleep();
+  }
+});
+document.addEventListener('click', e => {
+  const button = e.target.closest('[data-act]'); if (!button || button.disabled) return;
+  const action = button.dataset.act;
+  if (action === 'change-room') return showJoin();
+  if (action === 'retry') { state.phase = 'loading'; boot().catch(e => showError(e.message)); return; }
+  if (state.phase !== 'ready') return;
+  if (action === 'play') setPlaying(!state.playing);
+  if (action === 'wake') void wake();
+  if (action === 'restart') { setPlaying(false); document.getElementById('stage').scrollTop = 0; }
+  if (action === 'slower' || action === 'faster') {
+    prefs.speed = Math.max(5, Math.min(150, prefs.speed + (action === 'faster' ? 5 : -5))); savePrefs(); document.getElementById('speed').textContent = prefs.speed;
+  }
+  if (action === 'smaller' || action === 'larger') {
+    const anchor = anchorPoint(); prefs.fontSize = Math.max(20, Math.min(64, prefs.fontSize + (action === 'larger' ? 2 : -2))); savePrefs();
+    document.documentElement.style.setProperty('--script-size', `${prefs.fontSize}px`); document.getElementById('font-size').textContent = prefs.fontSize; restoreAnchor(anchor);
+  }
+});
+document.addEventListener('keydown', e => {
+  if (state.phase !== 'ready' || e.target.closest('input, select, button, summary, a') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === ' ') { e.preventDefault(); setPlaying(!state.playing); }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') { setPlaying(false); sleep(); }
+  else { void wake(); void refresh(); }
+});
+window.addEventListener('pagehide', () => { setPlaying(false); sleep(); });
+window.addEventListener('pageshow', () => { void wake(); void refresh(); });
+window.addEventListener('online', () => void refresh());
+window.addEventListener('offline', () => setConnection('Offline · showing loaded scripts', true));
+setInterval(() => void refresh(), 30000);
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') { state.rooms = []; showJoin('You have signed out. Enter your newsroom code to rejoin.'); }
+});
+boot().catch(e => showError(e.message || 'Check your connection and try again.'));
+</script>
+</body>
+</html>

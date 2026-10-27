@@ -48,6 +48,10 @@ Choose **Prompter** at the top of the desk to open your newsroom’s scripts as 
 
 The prompter follows the running order above **END OF PROGRAMME**, leaving out floated stories. Clip cues and production directions appear alongside the words to read; straps are hidden. Adjust the text size and scrolling speed, jump between stories, or use full screen and mirroring for autocue glass. Press **Space** to scroll or pause.
 
+On a phone, use the [mobile prompter](https://digitaldickinson.github.io/Moira-Desk/prompt_mob.html). Enter your newsroom code directly; there is no need to open the desk first. It shows the whole bulletin above **END OF PROGRAMME**, excluding floated stories, with touch controls for scrolling speed and text size. Script changes wait until you pause. Touching the script pauses automatic scrolling so you can swipe to find your place.
+
+**Keep screen awake**, under **Reading settings**, is on by default and also works while paused. The status at the top confirms whether the phone granted it. If the phone declines or releases it, use the retry button in settings; older browsers or power-saving settings may prevent it. Switching to another app pauses scrolling and releases the screen lock. Returning checks for current scripts and requests the lock again; tap **Start** to resume. Internet access is needed to join and fetch updates; if the connection drops, the page keeps the loaded text and displays a connection notice. Offline reopening is not supported.
+
 Script updates wait until you pause, so live edits do not move the text mid-read. The prompter is read-only: its controls do not change the shared running order.
 
 ## Prepare scripts for Cuez
