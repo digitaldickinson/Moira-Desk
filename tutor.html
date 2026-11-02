@@ -108,6 +108,31 @@
   .wall-pitch .note { margin-top: .4em; font-size: .85em; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: .3em .5em; }
   .wall-pitch .note-btn { float: right; font-size: 12px; padding: 2px 8px; margin-left: 6px; }
   .wall .empty { color: var(--muted); font-style: italic; padding: .5em; }
+
+  /* Review: read the running order and scripts, leave EP feedback */
+  .review { position: fixed; inset: 0; z-index: 90; background: var(--bg); display: flex; flex-direction: column; }
+  .review-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+  .review-page { max-width: 900px; margin: 0 auto; padding: 18px 16px 80px; display: grid; gap: 14px; }
+  .review-page h2 { margin: 6px 0 0; }
+  .review-story { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; }
+  .review-story.dim { opacity: .75; }
+  .review-story .top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .review-story .num { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 1.5em; text-align: right; }
+  .review-story .slug { font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+  .review-story .meta { color: var(--muted); font-size: 13px; }
+  .review-script { white-space: pre-wrap; font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0; overflow-wrap: anywhere; }
+  .review-seg { color: #4338ca; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; padding: 4px 2px 0; }
+  .review-eop { background: var(--err); color: #fff; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; padding: 6px 10px; border-radius: 6px; }
+  .fb-list { display: grid; gap: 8px; }
+  .fb { background: var(--warn-bg); border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; }
+  .fb .by { font-size: 12px; font-weight: 700; color: var(--warn); display: flex; gap: 6px; align-items: center; }
+  .fb .by .spacer { flex: 1; }
+  .fb blockquote { margin: 0; padding-left: 10px; border-left: 3px solid var(--warn); color: var(--muted); font-style: italic; white-space: pre-wrap; }
+  .fb .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .fb-dialog { width: min(640px, calc(100vw - 32px)); }
+  .fb-dialog textarea { width: 100%; resize: vertical; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; line-height: 1.5; }
+  .fb-dialog textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .fb-dialog .note-help { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -149,7 +174,7 @@ function render() {
     <span class="muted">${esc(state.user.email)}</span><button data-action="refresh">Refresh</button><button data-action="sign-out">Sign out</button></header>
     <main>${state.message ? `<div class="msg ${state.message.tone}" role="status">${esc(state.message.text)}</div>` : ''}
       <section class="card"><h2>Your newsrooms</h2>
-        <p>Select one or more newsrooms to discuss their pitches on the EP wall or generate a report. Use <strong>Show join code</strong> when a student needs to join.</p>
+        <p>Select one or more newsrooms to discuss their pitches on the EP wall or generate a report. Use <strong>Review</strong> to read a newsroom's running order and scripts and leave EP feedback, and <strong>Show join code</strong> when a student needs to join.</p>
         ${state.loading ? '<p class="muted">Loading…</p>' : renderTable()}</section>
       ${renderConferenceCard()}
       <p class="muted">Missing a newsroom or a join code? Ask your administrator to assign it to you. <a href="mailto:a.dickinson@mmu.ac.uk?subject=Moira%3ADesk%20feedback">Help and feedback</a></p>
@@ -168,11 +193,11 @@ function renderTable() {
   if (!state.rooms.length) return '<p class="muted">No newsrooms are assigned to you yet. Ask your administrator to add them.</p>';
   const all = state.rooms.every(r => state.selected.has(r.newsroom_id));
   return `<div class="table-wrap"><table><thead><tr><th class="sel"><input type="checkbox" id="sel-all" ${all ? 'checked' : ''} aria-label="Select all newsrooms"></th>
-    <th>Newsroom</th><th>Conference</th><th>Stories</th><th>Student access</th></tr></thead><tbody>${state.rooms.map(r => `<tr>
+    <th>Newsroom</th><th>Conference</th><th>Stories</th><th>Feedback</th><th>Student access</th></tr></thead><tbody>${state.rooms.map(r => `<tr>
       <td class="sel"><input type="checkbox" class="sel-room" data-id="${esc(r.newsroom_id)}" ${state.selected.has(r.newsroom_id) ? 'checked' : ''} aria-label="Select ${esc(r.name)}"></td>
       <td><strong>${esc(r.name)}</strong><div class="sub">${r.members} members</div></td>
       <td>${r.producer_name ? `Producer: ${esc(r.producer_name)}` : 'No producer yet'}<div class="sub">${r.pitches} pitches · ${r.picked} picked</div></td>
-      <td>${r.stories}</td><td>${r.tutor_code_available ? `<button class="small" data-action="show-code" data-id="${esc(r.newsroom_id)}">Show join code</button>` : '<span class="muted">Ask administrator for a code</span>'}</td>
+      <td>${r.stories}</td><td><button class="small" data-action="review" data-id="${esc(r.newsroom_id)}">Review</button></td><td>${r.tutor_code_available ? `<button class="small" data-action="show-code" data-id="${esc(r.newsroom_id)}">Show join code</button>` : '<span class="muted">Ask administrator for a code</span>'}</td>
     </tr>`).join('')}</tbody></table></div>`;
 }
 function renderConferenceCard() {
@@ -182,7 +207,7 @@ function renderConferenceCard() {
     <button data-action="report" ${disabled}>Generate report</button>
       <button data-action="alert" ${disabled}>Send alert</button>
     <label class="check" style="margin:0"><input type="checkbox" id="report-scripts" ${state.reportScripts ? 'checked' : ''}> Include scripts in the report</label></div>
-    <p class="muted">The EP wall updates live and lets you leave notes on pitches. Reports capture the current conference and running order for sharing or a debrief.</p></section>`;
+    <p class="muted">The EP wall updates live and lets you leave notes on pitches. Reports capture the current conference, running order and EP feedback for sharing or a debrief.</p></section>`;
 }
 function alertDialog() {
   const ids = tickedIds();
@@ -371,6 +396,190 @@ function wallNote(pitchId) {
   count(); dialog.showModal(); input.focus();
 }
 
+// ── Review and EP feedback ─────────────────────────────────────────────
+// One newsroom's running order and scripts, read top to bottom, with feedback
+// on the whole bulletin and on each story. Students see it all as "EP".
+
+let review = null;
+
+async function openReview(id) {
+  if (!room(id) || review) return;
+  const el = document.createElement('div');
+  el.className = 'review';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', `Review ${room(id).name}`);
+  el.innerHTML = '<div class="wall-bar" data-review-bar></div><div class="review-scroll"><div class="review-page" data-review-page></div></div>';
+  document.body.appendChild(el);
+  review = { id, el, data: null, error: null, selection: null };
+  renderReview();
+  await loadReview();
+}
+
+function closeReview() {
+  if (!review) return;
+  review.dialog?.remove();
+  review.el.remove();
+  review = null;
+  loadRooms();
+}
+
+async function loadReview() {
+  const r = review;
+  if (!r) return;
+  const seq = r.seq = (r.seq || 0) + 1;
+  let data = null, error = null;
+  try { data = (await rpc('tutor_conference', { p_newsroom_ids: [r.id], p_scripts: true }))?.[0] || null; }
+  catch (e) { error = e.message; }
+  if (review !== r || seq !== r.seq) return;
+  if (error) r.error = error;
+  else if (!data) r.error = 'This newsroom is no longer available to you.';
+  else { r.error = null; r.data = data; }
+  renderReview();
+}
+
+function renderFeedbackItems(items) {
+  return items.length ? `<div class="fb-list">${items.map((f) => `<div class="fb">
+      <div class="by">EP<span class="spacer"></span>
+        <button class="small" data-action="review-edit" data-id="${esc(f.id)}">Edit</button>
+        <button class="small danger" data-action="review-delete" data-id="${esc(f.id)}">Delete</button></div>
+      ${f.quote ? `<blockquote>${esc(f.quote)}</blockquote>` : ''}
+      <div class="text">${esc(f.body)}</div></div>`).join('')}</div>` : '';
+}
+
+function renderReview() {
+  const r = review;
+  if (!r) return;
+  const n = r.data;
+  r.el.querySelector('[data-review-bar]').innerHTML = `<h1>Review: ${esc(n?.name || room(r.id)?.name || '')}</h1>
+    <span class="muted">${r.error ? `<span style="color:var(--err)">${esc(r.error)}</span>` : n ? `${n.feedback.length} comment${n.feedback.length === 1 ? '' : 's'} · students see these as EP feedback` : 'Loading…'}</span>
+    <span class="spacer"></span>
+    <button data-action="review-refresh">Refresh</button>
+    <button class="primary" data-action="review-close">Close (Esc)</button>`;
+  const page = r.el.querySelector('[data-review-page]');
+  if (!n) { page.innerHTML = r.error ? '' : '<p class="muted">Loading…</p>'; return; }
+  const scroll = r.el.querySelector('.review-scroll').scrollTop;
+  const byId = Object.fromEntries(n.stories.map((s) => [s.id, s]));
+  const fbFor = (storyId) => n.feedback.filter((f) => f.story_id === storyId);
+  let below = false, num = 0, trt = 0;
+  const shown = new Set();
+  const items = (Array.isArray(n.order) ? n.order : []).map((id) => {
+    if (id === 'marker-line') { below = true; return '<div class="review-eop">End of programme</div>'; }
+    const s = byId[id];
+    if (!s) return '';
+    if (s.type === 'segment') { if (!below) trt += s.duration || 0; return `<div class="review-seg">${esc(s.slug)}${s.duration ? ` · ${dur(s.duration)}` : ''}</div>`; }
+    if (!below && !s.is_floated) trt += s.duration || 0;
+    shown.add(s.id);
+    const who = [s.reporter, s.presenter && `presenter ${s.presenter}`].filter(Boolean).join(' · ');
+    return `<article class="review-story ${below || s.is_floated ? 'dim' : ''}" data-story="${esc(s.id)}">
+      <div class="top"><span class="num">${below ? '' : ++num}</span><span class="slug">${esc(s.slug || 'Untitled')}</span>
+        <span class="meta">${[s.format, dur(s.duration), who, s.is_floated && 'floated', below && 'below the line'].filter(Boolean).map(esc).join(' · ')}</span></div>
+      ${s.script ? `<pre class="review-script" data-script="${esc(s.id)}">${esc(s.script)}</pre>` : '<p class="muted" style="margin:0">No script.</p>'}
+      ${renderFeedbackItems(fbFor(s.id))}
+      <div><button class="small" data-action="review-add" data-id="${esc(s.id)}">Add feedback</button></div>
+    </article>`;
+  }).join('');
+  // Feedback on stories that have since left the running order.
+  const removed = n.feedback.filter((f) => f.story_id && !shown.has(f.story_id));
+  const target = n.target_duration != null ? ` · target ${dur(n.target_duration)}` : '';
+  page.innerHTML = `
+    <p class="muted" style="margin:0">${n.producer_name ? `Producer: ${esc(n.producer_name)} · ` : ''}TRT ${dur(trt)}${target}. Select words in a script before choosing <strong>Add feedback</strong> to quote them.</p>
+    <section class="review-story"><div class="top"><span class="slug">Overall feedback</span><span class="meta">on the bulletin as a whole</span></div>
+      ${renderFeedbackItems(fbFor(null))}
+      <div><button class="small primary" data-action="review-add" data-id="">Add overall feedback</button></div></section>
+    <h2>Running order</h2>
+    ${items || '<p class="muted">No stories yet.</p>'}
+    ${removed.length ? `<h2>Removed stories</h2><section class="review-story"><p class="muted" style="margin:0">Feedback on stories no longer in the running order.</p>
+      ${removed.map((f) => `<div><div class="slug" style="margin-bottom:4px">${esc(f.story_slug || 'Untitled')}</div>${renderFeedbackItems([f])}</div>`).join('')}</section>` : ''}`;
+  r.el.querySelector('.review-scroll').scrollTop = scroll;
+}
+
+// Returning to the tab picks up students' latest edits.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && review && !review.dialog) loadReview();
+});
+
+// Remember text selected inside one story's script, for quoting.
+document.addEventListener('selectionchange', () => {
+  if (!review || review.dialog) return;
+  const sel = document.getSelection();
+  const box = (node) => (node?.nodeType === 1 ? node : node?.parentElement)?.closest?.('[data-script]');
+  const a = box(sel?.anchorNode), b = box(sel?.focusNode);
+  review.selection = sel && !sel.isCollapsed && a && a === b && review.el.contains(a)
+    ? { storyId: a.dataset.script, text: sel.toString().trim() } : null;
+});
+// Keep that selection when the Add feedback button is pressed.
+document.addEventListener('mousedown', (e) => { if (review && e.target.closest?.('[data-action="review-add"]')) e.preventDefault(); });
+
+function feedbackDialog({ storyId = null, item = null }) {
+  const r = review;
+  if (!r?.data || r.dialog) return;
+  const story = storyId ? r.data.stories.find((s) => s.id === storyId) : null;
+  const slug = story?.slug || item?.story_slug || '';
+  const quote = item ? item.quote || '' : (r.selection?.storyId === storyId && storyId ? r.selection.text : '');
+  const dialog = document.createElement('dialog');
+  dialog.className = 'wall-note-dialog fb-dialog';
+  dialog.setAttribute('aria-labelledby', 'fb-title');
+  dialog.innerHTML = `<form>
+    <div class="head"><h3 id="fb-title">${item ? 'Edit feedback' : storyId ? 'Add feedback' : 'Add overall feedback'}</h3><button type="button" class="small" data-fb-cancel aria-label="Close">✕</button></div>
+    <div class="body">
+      <p class="note-story">${storyId ? esc(slug || 'Untitled') : 'The bulletin as a whole'}</p>
+      ${storyId ? `<div><label for="fb-quote">Quoted from the script (optional)</label>
+        <textarea id="fb-quote" rows="2" maxlength="500">${esc(quote)}</textarea></div>` : ''}
+      <div><label for="fb-body">Feedback</label>
+        <textarea id="fb-body" rows="6" maxlength="2000" aria-describedby="fb-help">${esc(item?.body || '')}</textarea></div>
+      <div class="note-help"><span id="fb-help">The whole newsroom sees this as EP feedback, and it's included in reports.</span><span data-fb-count></span></div>
+      <div class="msg err" data-fb-error role="alert" hidden></div>
+    </div>
+    <div class="foot"><button type="button" data-fb-cancel>Cancel</button><button type="submit" class="primary">${item ? 'Save changes' : 'Post feedback'}</button></div>
+  </form>`;
+  r.dialog = dialog;
+  document.body.appendChild(dialog);
+  const body = dialog.querySelector('#fb-body'), quoteEl = dialog.querySelector('#fb-quote');
+  const error = dialog.querySelector('[data-fb-error]'), submit = dialog.querySelector('[type="submit"]');
+  let saving = false;
+  const count = () => { dialog.querySelector('[data-fb-count]').textContent = `${body.value.length}/2000`; };
+  const close = () => {
+    if (saving) return;
+    dialog.close(); dialog.remove();
+    if (r.dialog === dialog) r.dialog = null;
+  };
+  dialog.querySelectorAll('[data-fb-cancel]').forEach((b) => b.addEventListener('click', close));
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  dialog.addEventListener('keydown', (e) => e.stopPropagation());
+  body.addEventListener('input', count);
+  dialog.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (saving || review !== r) return;
+    if (!body.value.trim()) { error.textContent = 'Write some feedback first.'; error.hidden = false; body.focus(); return; }
+    saving = true; error.hidden = true;
+    dialog.querySelectorAll('button, textarea').forEach((x) => { x.disabled = true; });
+    submit.textContent = 'Saving…';
+    try {
+      await rpc('tutor_save_feedback', { p_feedback_id: item?.id || null, p_newsroom_id: r.id, p_story_id: storyId,
+        p_quote: quoteEl ? quoteEl.value : null, p_body: body.value });
+      saving = false; close();
+      await loadReview();
+    } catch (err) {
+      saving = false;
+      if (r.dialog !== dialog) return;
+      error.textContent = err.message || 'Could not save your feedback. Please try again.';
+      error.hidden = false;
+      dialog.querySelectorAll('button, textarea').forEach((x) => { x.disabled = false; });
+      submit.textContent = item ? 'Save changes' : 'Post feedback';
+    }
+  });
+  count(); dialog.showModal(); body.focus();
+}
+
+async function deleteFeedback(id) {
+  const r = review;
+  if (!r?.data?.feedback.some((f) => f.id === id)) return;
+  if (!confirm('Delete this feedback? Students will no longer see it, and it will drop out of reports.')) return;
+  try { await rpc('tutor_delete_feedback', { p_feedback_id: id }); }
+  catch (e) { if (review === r) { r.error = e.message; renderReview(); } return; }
+  await loadReview();
+}
+
 // ── Report ─────────────────────────────────────────────────────────────
 // A single self-contained web page: no login, no database, prints cleanly.
 
@@ -378,6 +587,19 @@ const CHECKED = { 'needs-checking': 'Needs checking', 'checked-ok': 'Checked OK'
 const dur = (s) => { s = Math.max(0, Number(s) || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const fullWhen = (t) => t ? new Date(t).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 const shortTime = (t) => t ? new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+
+// EP feedback grouped for the report: the bulletin as a whole, then each story
+// in running-order order, then stories that have since been removed.
+function feedbackGroups(n) {
+  const fb = Array.isArray(n.feedback) ? n.feedback : [];
+  if (!fb.length) return [];
+  const byId = Object.fromEntries(n.stories.map((s) => [s.id, s]));
+  const order = (Array.isArray(n.order) ? n.order : []).filter((id) => byId[id] && byId[id].type !== 'segment');
+  const ids = [...new Set([...order, ...fb.map((f) => f.story_id).filter(Boolean)])];
+  return [{ title: 'The bulletin as a whole', items: fb.filter((f) => !f.story_id) },
+    ...ids.map((id) => ({ title: byId[id] ? byId[id].slug || 'Untitled' : `${fb.find((f) => f.story_id === id).story_slug || 'Untitled'} (removed from the running order)`,
+      items: fb.filter((f) => f.story_id === id) }))].filter((g) => g.items.length);
+}
 
 function reportSection(n, withScripts) {
   const byId = Object.fromEntries(n.stories.map((s) => [s.id, s]));
@@ -424,6 +646,8 @@ function reportSection(n, withScripts) {
 
   const scripts = withScripts ? order.map((id) => byId[id]).filter((s) => s && s.type !== 'segment' && s.script)
     .map((s) => `<div class="script"><h4>${esc(s.slug)}</h4><pre>${esc(s.script)}</pre></div>`).join('') : '';
+  const feedback = feedbackGroups(n).map((g) => `<div class="fb"><h4>${esc(g.title)}</h4>${g.items.map((f) =>
+    `${f.quote ? `<blockquote>${esc(f.quote)}</blockquote>` : ''}<p>${esc(f.body)}</p>`).join('')}</div>`).join('');
 
   return `<section class="newsroom" id="nr-${esc(n.id)}">
     <h2>${esc(n.name)}</h2>
@@ -434,6 +658,7 @@ function reportSection(n, withScripts) {
     ${pitched ? `<table><thead><tr><th class="num">#</th><th>Pitch</th><th>Pitched by</th><th>Outcome</th><th>EP note</th></tr></thead><tbody>${confRows}</tbody></table>` : '<p class="sub">No pitches recorded.</p>'}
     <h3>Running order <span class="sub">TRT ${dur(trt)}${target}</span></h3>
     ${roRows ? `<table><thead><tr><th class="num">#</th><th>Slug</th><th>Format</th><th>Reporter / presenter</th><th class="num">Dur</th><th>Checked</th><th>Cuez</th></tr></thead><tbody>${roRows}</tbody></table>` : '<p class="sub">No stories.</p>'}
+    ${feedback ? `<h3>EP feedback</h3>${feedback}` : ''}
     ${scripts ? `<h3>Scripts</h3>${scripts}` : ''}
   </section>`;
 }
@@ -471,6 +696,11 @@ function buildReport(data, withScripts) {
   tr.eop td { background: var(--eop); color: #fff; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; }
   tr.seg td { color: var(--seg); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; background: #eef0ff; }
   tr.dim td { color: var(--muted); }
+  .fb { border-left: 3px solid #b45309; padding: 2px 0 2px 12px; margin: 10px 0 14px; }
+  .fb h4 { margin: 0 0 6px; }
+  .fb blockquote { margin: 6px 0 2px; color: var(--muted); font-style: italic; white-space: pre-wrap; }
+  .fb blockquote::before { content: "“"; } .fb blockquote::after { content: "”"; }
+  .fb p { margin: 0 0 8px; white-space: pre-wrap; }
   .script pre { white-space: pre-wrap; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--head); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 0; }
   footer { margin-top: 40px; color: var(--muted); font-size: 12px; }
   @media (max-width: 640px) { table { font-size: 13px; } td, th { padding: 6px 5px; } }
@@ -479,7 +709,7 @@ function buildReport(data, withScripts) {
     .newsroom { break-before: page; border-top: 0; margin-top: 0; }
     .newsroom:first-of-type { break-before: auto; }
     nav { break-after: page; }
-    tr, .script { break-inside: avoid; }
+    tr, .script, .fb { break-inside: avoid; }
     tr.eop td, tr.seg td, th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style></head>
@@ -504,7 +734,7 @@ async function generateReport() {
   const who = data.length === 1 ? data[0].name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : 'conference';
   if (lastReport) URL.revokeObjectURL(lastReport.url);
   lastReport = { url: URL.createObjectURL(new Blob([html], { type: 'text/html' })), name: `moira-desk-${who}-${stamp}.html` };
-  const totals = data.map((n) => `<li><strong>${esc(n.name)}</strong>: ${n.pitches.length} pitched, ${n.pitches.filter((p) => p.status === 'picked').length} picked, ${n.stories.filter((s) => s.type !== 'segment').length} stories</li>`).join('');
+  const totals = data.map((n) => `<li><strong>${esc(n.name)}</strong>: ${n.pitches.length} pitched, ${n.pitches.filter((p) => p.status === 'picked').length} picked, ${n.stories.filter((s) => s.type !== 'segment').length} stories${n.feedback?.length ? `, ${n.feedback.length} EP comment${n.feedback.length === 1 ? '' : 's'}` : ''}</li>`).join('');
   openDialog('Report ready', `<ul style="margin:0;padding-left:20px">${totals}</ul>
     <p class="muted" style="margin:0">One self-contained web page${withScripts ? ', with scripts' : ''}: share it by email, Moodle or Teams, or print it to PDF. It's a snapshot of right now.</p>`,
     `<button data-action="open-report">Open in a new tab</button>
@@ -516,6 +746,7 @@ async function generateReport() {
 function clearSession() {
   sessionEpoch++;
   if (wall) { clearInterval(wall.timer); wall.el.remove(); wall = null; }
+  if (review) { review.dialog?.remove(); review.el.remove(); review = null; }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   closeDialog();
   if (lastReport) URL.revokeObjectURL(lastReport.url);
@@ -637,15 +868,23 @@ document.addEventListener('click', async e => {
     else if (action === 'report') await generateReport();
     else if (action === 'open-report' && lastReport) window.open(lastReport.url, '_blank', 'noopener');
     else if (action === 'show-code') await showJoinCode(id);
+    else if (action === 'review') await openReview(id);
+    else if (action === 'review-close') closeReview();
+    else if (action === 'review-refresh') await loadReview();
+    else if (action === 'review-add') feedbackDialog({ storyId: id || null });
+    else if (action === 'review-edit') { const item = review?.data?.feedback.find((f) => f.id === id); if (item) feedbackDialog({ storyId: item.story_id, item }); }
+    else if (action === 'review-delete') await deleteFeedback(id);
     else if (action === 'copy-code') { await navigator.clipboard.writeText(document.getElementById('code-text').textContent); btn.textContent = 'Copied'; }
   } catch (e) {
     if (wall) { wall.error = e.message; renderWall(); }
+    else if (review) { review.error = e.message; renderReview(); }
     else if (dlg.open) { closeDialog(); flash(e.message, 'err'); }
     else flash(e.message, 'err');
   } finally { btn.disabled = false; }
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && wall && !dlg.open) closeWall();
+  else if (e.key === 'Escape' && review && !review.dialog && !dlg.open) closeReview();
 });
 dlg.addEventListener('close', () => { dlg.innerHTML = ''; });
 document.addEventListener('change', e => {

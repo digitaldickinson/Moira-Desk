@@ -223,8 +223,9 @@
             seenAlertAtByRoom: {},
             storiesMap: {},
             pitchesMap: {},                // this newsroom's pitches (current conference shown)
+            feedbackMap: {},               // EP feedback (current conference shown)
             ui: {
-                view: lsGet(LS.view) === 'conference' ? 'conference' : 'rundown',
+                view: ['conference', 'feedback'].includes(lsGet(LS.view)) ? lsGet(LS.view) : 'rundown',
                 editingPitchId: null, // pitch being edited inline
                 pitchBusy: false,     // waiting on a pitch/producer action
                 draggedStoryId: null,
@@ -423,6 +424,7 @@
             state.lastSeenAlertAt = state.seenAlertAtByRoom[room.id] || null;
             state.storiesMap = {};
             state.pitchesMap = {};
+            state.feedbackMap = {};
             state.meta = { ...INITIAL_META };
             Object.assign(state.ui, {
                 draggedStoryId: null, editingStoryId: null, pendingConflict: null,
@@ -527,7 +529,7 @@
                         playAlertChime();
                         showNotice('📢 EP Alert — Click to dismiss', data.epAlertText, 'warn', true);
                     }
-                    if (conferenceChanged) refreshPitches();
+                    if (conferenceChanged) { refreshPitches(); refreshFeedback(); }
                     render('header', 'main');
                 },
                 (changes, err) => {
@@ -548,6 +550,13 @@
                     state.pitchesMap = map;
                     prunePitchTrash();
                     render('main');
+                },
+                (changes) => {
+                    if (bulletinId !== state.currentBulletinId) return;
+                    const map = { ...state.feedbackMap };
+                    changes.forEach(({ type, id, data }) => { if (type === 'removed') delete map[id]; else map[id] = data; });
+                    state.feedbackMap = map;
+                    render('main', 'modal');
                 }
             );
         }
@@ -572,6 +581,21 @@
             } catch (e) { console.warn('Could not load pitches:', e.message); }
         }
 
+        // EP feedback for the current conference, loaded the same way as pitches.
+        let _feedbackLoadSeq = 0;
+        async function refreshFeedback() {
+            if (state.localMode || !state.currentBulletinId) return;
+            const seq = ++_feedbackLoadSeq;
+            const bulletinId = state.currentBulletinId;
+            const conferenceId = state.meta.conferenceId;
+            try {
+                const rows = await DB.loadFeedback(bulletinId, conferenceId);
+                if (seq !== _feedbackLoadSeq || bulletinId !== state.currentBulletinId || conferenceId !== state.meta.conferenceId) return;
+                state.feedbackMap = Object.fromEntries(rows.map(f => [f.id, f]));
+                render('main', 'modal');
+            } catch (e) { console.warn('Could not load EP feedback:', e.message); }
+        }
+
         // ==========================================
         // 6. DB ADAPTERS
         // ==========================================
@@ -594,6 +618,7 @@
             setStoryFloated:     async () => {},
             markNotSent:         async () => {},
             loadPitches:         async () => [],
+            loadFeedback:        async () => [],
             pitchAction:         async () => null,
             errorMessage:              (e) => e?.message || 'Unknown error',
         };
@@ -625,6 +650,12 @@
                 status: row.status || 'pitched', spikeReason: row.spike_reason || '', epNote: row.ep_note || '',
                 storyId: row.story_id || null, position: row.position ?? 0,
                 createdAt: row.created_at || null, decidedAt: row.decided_at || null,
+            };
+        }
+        function feedbackFromRow(row) {
+            return {
+                id: row.id, conferenceId: row.conference_id, storyId: row.story_id || null, storySlug: row.story_slug || '',
+                quote: row.quote || '', body: row.body || '', createdAt: row.created_at || null,
             };
         }
         const BULLETIN_FIELD_MAP = {
@@ -679,7 +710,7 @@
 
         const DB_SUPABASE = {
             // Prime with a select (Realtime only carries future changes), then subscribe.
-            subscribe: (onBulletin, onStories, onPitches) => {
+            subscribe: (onBulletin, onStories, onPitches, onFeedback) => {
                 const bulletinId = state.currentBulletinId;
                 (async () => {
                     try {
@@ -688,6 +719,7 @@
                         onBulletin(data ? bulletinFromRow(data) : null);
                     } catch (e) { onBulletin(null, e); }
                     refreshPitches();
+                    refreshFeedback();
                     try {
                         const { data, error } = await supabase.from('stories').select('*').eq('bulletin_id', bulletinId);
                         if (error) throw error;
@@ -722,10 +754,19 @@
                     })
                     .subscribe();
 
+                const feedbackChannel = supabase
+                    .channel(`feedback-${bulletinId}`)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'ep_feedback', filter: `bulletin_id=eq.${bulletinId}` }, payload => {
+                        if (payload.eventType === 'DELETE') onFeedback([{ type: 'removed', id: payload.old.id }]);
+                        else onFeedback([{ type: 'modified', id: payload.new.id, data: feedbackFromRow(payload.new) }]);
+                    })
+                    .subscribe();
+
                 return () => {
                     supabase.removeChannel(bulletinChannel);
                     supabase.removeChannel(storiesChannel);
                     supabase.removeChannel(pitchesChannel);
+                    supabase.removeChannel(feedbackChannel);
                 };
             },
 
@@ -735,6 +776,14 @@
                     .eq('bulletin_id', bulletinId).eq('conference_id', conferenceId);
                 if (error) throw error;
                 return (data || []).map(pitchFromRow);
+            },
+
+            loadFeedback: async (bulletinId, conferenceId) => {
+                if (!conferenceId) return [];
+                const { data, error } = await supabase.from('ep_feedback').select('*')
+                    .eq('bulletin_id', bulletinId).eq('conference_id', conferenceId);
+                if (error) throw error;
+                return (data || []).map(feedbackFromRow);
             },
 
             // Conference actions all go through database functions that check
@@ -1168,6 +1217,13 @@
                 .filter(p => p.conferenceId && p.conferenceId === state.meta.conferenceId)
                 .sort((a, b) => a.position - b.position);
         }
+        // EP feedback, oldest first: the running order as a whole (no story) or one story.
+        function currentFeedback() {
+            return Object.values(state.feedbackMap)
+                .filter(f => f.conferenceId && f.conferenceId === state.meta.conferenceId)
+                .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || a.id.localeCompare(b.id));
+        }
+        function feedbackFor(storyId) { return currentFeedback().filter(f => f.storyId === storyId); }
         function canEditPitch(p) { return p.status === 'pitched' && (isProducer() || (!!supabaseUser && p.createdBy === supabaseUser.id)); }
 
         async function conferenceAction(fn, args) {
@@ -1337,7 +1393,7 @@
         }
 
         function showView(view) {
-            state.ui.view = view === 'conference' ? 'conference' : 'rundown';
+            state.ui.view = ['conference', 'feedback'].includes(view) ? view : 'rundown';
             lsSet(LS.view, state.ui.view);
             render('main');
         }
@@ -1978,7 +2034,7 @@
             if (!state.localMode && !state.currentBulletinId) {
                 return state.connectionState === 'error' ? '' : `<div class="flex h-full items-center justify-center text-slate-400"><i class="fa-solid fa-circle-notch fa-spin mr-3"></i>Connecting…</div>`;
             }
-            return renderViewBar() + (state.ui.view === 'conference' ? renderConference() : renderNewsroom());
+            return renderViewBar() + (state.ui.view === 'conference' ? renderConference() : state.ui.view === 'feedback' ? renderFeedback() : renderNewsroom());
         }
 
         // Conference / Running order switch, plus who the producer is.
@@ -1986,6 +2042,7 @@
             const pitches = currentPitches();
             const open = pitches.filter(p => p.status === 'pitched').length;
             const stories = (state.meta.order || []).filter(id => id !== 'marker-line' && state.storiesMap[id]?.type !== 'segment').length;
+            const feedbackCount = currentFeedback().length;
             const tab = (view, icon, label, count) => {
                 const on = state.ui.view === view;
                 return `<button data-action="show-view" data-val="${view}" class="px-4 py-2 rounded-lg text-sm font-bold transition-colors ${on ? 'bg-white text-slate-800 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-800'}">
@@ -2007,8 +2064,39 @@
                 <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                     ${tab('conference', 'fa-comments', 'Conference', open)}
                     ${tab('rundown', 'fa-bars-staggered', 'Running order', stories)}
+                    ${feedbackCount || state.ui.view === 'feedback' ? tab('feedback', 'fa-chalkboard-user', 'EP feedback', feedbackCount) : ''}
                 </div>
                 ${producer}
+            </div>`;
+        }
+
+        function renderFeedbackItems(items) {
+            return items.map(f => `<div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-950">
+                ${f.quote ? `<blockquote class="border-l-4 border-amber-300 pl-3 mb-1.5 italic text-slate-600 whitespace-pre-wrap">${escapeHTML(f.quote)}</blockquote>` : ''}
+                <div class="whitespace-pre-wrap break-words">${escapeHTML(f.body)}</div></div>`).join('');
+        }
+
+        // Read-only: feedback the EP wrote after the session, in running-order order.
+        function renderFeedback() {
+            const all = currentFeedback();
+            const order = (state.meta.order || []).filter(id => state.storiesMap[id] && state.storiesMap[id].type !== 'segment');
+            const ids = [...new Set([...order, ...all.map(f => f.storyId).filter(Boolean)])];
+            const overall = all.filter(f => !f.storyId);
+            const card = (title, sub, items, id) => `<section class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 space-y-2" ${id ? `data-feedback-story="${escapeHTML(id)}"` : ''}>
+                <div class="flex items-baseline gap-2 flex-wrap"><h3 class="font-bold text-slate-800">${escapeHTML(title)}</h3>${sub ? `<span class="text-xs text-slate-500">${escapeHTML(sub)}</span>` : ''}</div>
+                ${renderFeedbackItems(items)}</section>`;
+            const stories = ids.map(id => {
+                const items = all.filter(f => f.storyId === id);
+                if (!items.length) return '';
+                const story = state.storiesMap[id];
+                return story ? card(story.slug || 'Untitled', [story.format, formatDuration(story.duration)].filter(Boolean).join(' · '), items, id)
+                    : card(items[0].storySlug || 'Untitled', 'Removed from the running order', items, id);
+            }).join('');
+            return `<div class="max-w-4xl mx-auto p-4 md:p-6 pb-24 space-y-4">
+                <div><h2 class="text-3xl font-bold text-slate-800"><i class="fa-solid fa-chalkboard-user mr-3 text-amber-500"></i>EP feedback</h2>
+                <p class="text-sm text-slate-500 mt-1">Notes from your EP on this session. Everyone in the newsroom sees them, and they're included in the report.</p></div>
+                ${all.length ? `${overall.length ? card('The bulletin as a whole', '', overall) : ''}${stories}`
+                    : `<div class="text-slate-400 text-center py-16"><i class="fa-solid fa-chalkboard-user text-3xl mb-3 block"></i>No EP feedback yet.</div>`}
             </div>`;
         }
 
@@ -2167,6 +2255,7 @@
                             : locked ? `<span class="ml-2 text-[10px] font-bold text-blue-600 whitespace-nowrap" title="Open in another of your tabs"><i class="fa-solid fa-lock mr-1"></i>You, other tab</span>` : ''}
                         ${story.isFloated ? `<span class="ml-2 text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded uppercase tracking-wide">Floated</span>` : ''}
                         ${story.brief ? `<i class="fa-solid fa-lightbulb ml-2 text-violet-400 text-xs" title="${escapeHTML(`Pitch: ${story.brief}${story.pitchedBy ? ` (${story.pitchedBy})` : ''}`)}"></i>` : ''}
+                        ${renderFeedbackMarker(id)}
                     </td>
                     <td class="px-3 py-1.5 text-sm w-24"><span class="bg-slate-100 border px-2 py-0.5 rounded text-xs font-mono font-bold">${escapeHTML(story.format)}</span></td>
                     <td class="px-3 py-1.5 w-32"><div class="text-xs font-bold text-blue-700">${escapeHTML(story.reporter)}</div><div class="text-xs text-slate-600">${escapeHTML(story.presenter)}</div></td>
@@ -2233,6 +2322,11 @@
             </div>`;
         }
 
+        function renderFeedbackMarker(id) {
+            const n = feedbackFor(id).length;
+            return n ? `<button data-action="show-feedback" data-id="${id}" class="ml-2 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded whitespace-nowrap" title="Read the EP's feedback on this story"><i class="fa-solid fa-comment mr-1"></i>EP ${n}</button>` : '';
+        }
+
         function renderRundownMobileCards(order, live) {
             let isBelowLine = false;
             return order.map((id, idx) => {
@@ -2260,6 +2354,7 @@
                     <div class="flex items-center justify-between px-4 py-3 gap-2">
                         <div class="flex items-center gap-2 min-w-0">
                             <span class="font-semibold truncate">${escapeHTML(story.slug)}</span>
+                            ${renderFeedbackMarker(id)}
                             ${locked ? `<i class="fa-solid fa-lock text-red-500 text-xs" title="Being edited by ${escapeHTML(story.lockedByName)}"></i>` : ''}
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
@@ -2386,6 +2481,10 @@
                     </div>` : ''}
                     ${story.brief || story.pitchedBy ? `<div class="bg-violet-50 border-b border-violet-200 px-6 py-2.5 text-sm text-violet-900">
                         <i class="fa-solid fa-lightbulb mr-2 text-violet-400"></i><b>Pitch:</b> ${escapeHTML(story.brief || '(no angle given)')}${story.pitchedBy ? ` <span class="text-violet-500">· pitched by ${escapeHTML(story.pitchedBy)}</span>` : ''}
+                    </div>` : ''}
+                    ${feedbackFor(state.ui.editingStoryId).length ? `<div class="bg-amber-50/60 border-b border-amber-200 px-6 py-2.5 max-h-48 overflow-y-auto space-y-2" data-editor-feedback>
+                        <div class="text-xs font-bold text-amber-800 uppercase tracking-wide"><i class="fa-solid fa-chalkboard-user mr-1.5"></i>EP feedback</div>
+                        ${renderFeedbackItems(feedbackFor(state.ui.editingStoryId))}
                     </div>` : ''}
                     <div class="p-6 overflow-y-auto flex-1 min-h-0 space-y-5">
                         <input type="hidden" id="edit-rev" value="${story.rev}">
@@ -2608,6 +2707,11 @@
 
             const handleConference = async ({ action, val, id }) => {
                 if (action === 'show-view')         { showView(val); return true; }
+                if (action === 'show-feedback') {
+                    showView('feedback');
+                    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`[data-feedback-story="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'start' })));
+                    return true;
+                }
                 if (action === 'claim-producer')    { claimProducer(); return true; }
                 if (action === 'release-producer')  { releaseProducer(); return true; }
                 if (action === 'add-pitch')         { addPitch(); return true; }
