@@ -451,7 +451,7 @@ function renderReview() {
   if (!r) return;
   const n = r.data;
   r.el.querySelector('[data-review-bar]').innerHTML = `<h1>Review: ${esc(n?.name || room(r.id)?.name || '')}</h1>
-    <span class="muted">${r.error ? `<span style="color:var(--err)">${esc(r.error)}</span>` : n ? `${n.feedback.length} comment${n.feedback.length === 1 ? '' : 's'} · students see these as EP feedback` : 'Loading…'}</span>
+    <span class="muted">${r.error ? `<span style="color:var(--err)">${esc(r.error)}</span>` : n ? `${n.feedback.length} comment${n.feedback.length === 1 ? '' : 's'} · included in this newsroom's report as EP feedback` : 'Loading…'}</span>
     <span class="spacer"></span>
     <button data-action="review-refresh">Refresh</button>
     <button class="primary" data-action="review-close">Close (Esc)</button>`;
@@ -527,7 +527,7 @@ function feedbackDialog({ storyId = null, item = null }) {
         <textarea id="fb-quote" rows="2" maxlength="500">${esc(quote)}</textarea></div>` : ''}
       <div><label for="fb-body">Feedback</label>
         <textarea id="fb-body" rows="6" maxlength="2000" aria-describedby="fb-help">${esc(item?.body || '')}</textarea></div>
-      <div class="note-help"><span id="fb-help">The whole newsroom sees this as EP feedback, and it's included in reports.</span><span data-fb-count></span></div>
+      <div class="note-help"><span id="fb-help">Shown as EP feedback in this newsroom's report. Students don't see it on the desk.</span><span data-fb-count></span></div>
       <div class="msg err" data-fb-error role="alert" hidden></div>
     </div>
     <div class="foot"><button type="button" data-fb-cancel>Cancel</button><button type="submit" class="primary">${item ? 'Save changes' : 'Post feedback'}</button></div>

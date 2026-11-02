@@ -42,8 +42,6 @@ The desk helps you keep track of the work:
 
 Save your changes before leaving a story. If a save fails, the editor keeps your text open and shows an error so you can retry.
 
-After a session, your EP may leave feedback on the bulletin and its stories. It appears in an **EP feedback** tab next to **Running order**, with an **EP** marker on each story that has feedback and a panel at the top of that story's editor. Everyone in the newsroom can see it, and it's included in the session report.
-
 ## Read from the prompter
 
 Choose **Prompter** at the top of the desk to open your newsroom’s scripts as an autocue in a new tab. It uses the same browser session, so join the newsroom on the desk first.
@@ -76,7 +74,7 @@ The **EP wall** displays selected groups’ pitches side by side for discussion 
 
 To call groups back or share a quick update, tick their newsrooms and choose **Send alert**. Messages can be up to 240 characters. Students receive a live alert that stays until dismissed, with a short chime when their browser allows sound. Students joining within five minutes can also see the latest alert.
 
-After a session, choose **Review** next to a newsroom to read its running order and scripts from top to bottom and leave EP feedback, either on the bulletin as a whole or on a story. To quote part of a script, select the words before choosing **Add feedback**. Students see all feedback as coming from “EP”, in an **EP feedback** tab and in the story editor. They can’t reply to it. Any tutor assigned to the newsroom can edit or delete any feedback.
+After a session, choose **Review** next to a newsroom to read its running order and scripts from top to bottom and leave EP feedback, either on the bulletin as a whole or on a story. To quote part of a script, select the words before choosing **Add feedback**. It appears as “EP” feedback in the newsroom’s report, not on the student desk, so share the report with the group afterwards. Any tutor assigned to the newsroom can edit or delete any feedback.
 
 You can also generate a shareable report containing the pitches, decisions, EP notes, running order and EP feedback, with scripts included if wanted. Use it for a debrief or to keep a record of the session. Generate the report before starting a new conference, as earlier pitches leave the current board and report.
 
