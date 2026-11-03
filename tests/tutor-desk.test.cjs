@@ -71,7 +71,7 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'tutor.html'), 'utf8').r
     assert.match(await text('#live-status'), /^Live · updated \d\d:\d\d$/);
     const alpha = page.locator('.room-card').first();
     const alphaText = (await alpha.textContent()).replace(/\s+/g, ' ');
-    for (const t of ['5 members', 'Alpha producer', '4 pitched · 1 picked · 1 spiked · 2 undecided', '3 stories · 1:50 running time', '1 OK', '1 needs work', '1 to check', '2 comments'])
+    for (const t of ['5 members', 'Alpha producer', '4 pitched · 1 picked · 1 spiked · 2 undecided', '3 stories · 1:50 running time', '1 OK', '1 needs work', '0 to check', '1 not checked', '2 comments'])
       assert.ok(alphaText.includes(t), `Alpha card shows ${t}`);
     assert.ok((await page.locator('.room-card').nth(1).innerText()).includes('Nothing picked yet'));
     assert.ok((await page.locator('.room-card').nth(4).innerText()).includes('No producer yet'));
@@ -158,6 +158,9 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'tutor.html'), 'utf8').r
     assert.equal(await page.locator('.rl-row.ticked').count(), 2);
     assert.ok((await page.locator('.rl-row:not(.head)').first().innerText()).includes('1 of 4 picked'));
     await page.locator('.list-key').waitFor();
+    const mids = await page.locator('.rl-row:not(.head)').first().locator('.chk i').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; }));
+    assert.ok(Math.max(...mids) - Math.min(...mids) < 1, `check markers line up: ${mids}`);
+    await page.locator('.room-list-wrap').screenshot({ path: '/private/tmp/moira-tutor-desk-list.png' });
     await page.reload();
     await page.locator('.rl-row').first().waitFor();
     assert.equal(await page.getByRole('button', { name: 'List', exact: true }).getAttribute('aria-pressed'), 'true');

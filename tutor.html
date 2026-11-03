@@ -106,16 +106,18 @@
   .confbar .spiked, .dot.spiked { background: var(--err); }
   .nw { white-space: nowrap; }
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
-  .chk { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; white-space: nowrap; }
+  .chk { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; white-space: nowrap; vertical-align: middle; }
   .chk:last-child { margin-right: 0; }
   .chk i { font-style: normal; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; font-weight: 800; color: var(--panel); }
-  .chk.ok i { background: var(--ok); }
-  .chk.work i { background: var(--err); }
-  .chk.todo i { border: 2px solid var(--warn); }
+  /* The same colours as the check dots on the student desk's running order. */
+  .chk.ok i { background: #10b981; }
+  .chk.work i { background: #ef4444; }
+  .chk.todo i { background: #eab308; color: #1b1f27; }
+  .chk.none i { background: #cbd5e1; color: #1b1f27; }
   .room-foot { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
   .room-list-wrap { position: relative; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
-  .room-list { min-width: 1080px; }
-  .rl-row { display: grid; grid-template-columns: 44px minmax(170px, 1.5fr) minmax(130px, 1fr) 120px 140px 160px 100px 270px; align-items: center; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .room-list { min-width: 1120px; }
+  .rl-row { display: grid; grid-template-columns: 44px minmax(170px, 1.5fr) minmax(130px, 1fr) 120px 140px 200px 100px 270px; align-items: center; border-bottom: 1px solid var(--line); font-size: 14px; }
   .rl-row:last-child { border-bottom: 0; }
   .rl-row > * { min-width: 0; padding: 10px 8px; overflow-wrap: anywhere; }
   .rl-row.head > * { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
@@ -316,7 +318,8 @@ function confSummary(s) {
 function checksSummary(b, compact) {
   if (!b) return '—';
   const mark = (cls, sym, n, label) => `<span class="chk ${cls}"><i aria-hidden="true">${sym}</i>${n}<span${compact ? ' class="sr-only"' : ''}> ${label}</span></span>`;
-  return mark('ok', '✓', b.checks.ok, 'OK') + mark('work', '!', b.checks.work, 'needs work') + mark('todo', '', b.checks.todo, 'to check');
+  return mark('ok', '✓', b.checks.ok, 'OK') + mark('work', '!', b.checks.work, 'needs work')
+    + mark('todo', '?', b.checks.todo, 'to check') + mark('none', '', b.checks.none, 'not checked');
 }
 const feedbackSummary = (b, none) => !b ? '—' : b.feedback ? plural(b.feedback, 'comment') : none;
 function roomButtons(r, list) {
@@ -355,7 +358,7 @@ function renderList(rooms) {
   }).join('');
   return `<div class="room-list-wrap"><div class="room-list" role="table" aria-label="Newsrooms">
       <div class="rl-row head" role="row">${head.map((h) => `<div role="columnheader">${h}</div>`).join('')}</div>${rows}</div></div>
-    <p class="list-key"><span class="chk ok"><i aria-hidden="true">✓</i>checked OK</span> <span class="chk work"><i aria-hidden="true">!</i>needs work</span> <span class="chk todo"><i aria-hidden="true"></i>to check, including stories not yet marked</span></p>`;
+    <p class="list-key"><span class="chk ok"><i aria-hidden="true">✓</i>checked OK</span> <span class="chk work"><i aria-hidden="true">!</i>needs work</span> <span class="chk todo"><i aria-hidden="true">?</i>needs checking</span> <span class="chk none"><i aria-hidden="true"></i>not checked yet</span></p>`;
 }
 // Writes only the parts that change: newsrooms, selection bar, summary, status.
 function renderRooms() {
@@ -849,12 +852,12 @@ const shortTime = (t) => t ? new Date(t).toLocaleTimeString('en-GB', { hour: '2-
 
 // The bulletin above END OF PROGRAMME: running time (segments included,
 // floated stories not), story count and editorial checks. Used by the cards,
-// the review and the report so they always agree. Stories not yet marked
-// count as "to check", as the desk's Cuez send warning treats them.
+// the review and the report so they always agree. Checks use the desk's four
+// states: OK, needs work, needs checking, and not yet marked.
 function bulletinStats(n) {
   const byId = Object.fromEntries((n.stories || []).map((s) => [s.id, s]));
   let trt = 0, stories = 0;
-  const checks = { ok: 0, work: 0, todo: 0 };
+  const checks = { ok: 0, work: 0, todo: 0, none: 0 };
   for (const id of Array.isArray(n.order) ? n.order : []) {
     if (id === 'marker-line') break;
     const s = byId[id];
@@ -862,7 +865,7 @@ function bulletinStats(n) {
     if (s.type === 'segment') { trt += s.duration || 0; continue; }
     if (!s.is_floated) trt += s.duration || 0;
     stories++;
-    checks[s.completed === 'checked-ok' ? 'ok' : s.completed === 'checked-needs-work' ? 'work' : 'todo']++;
+    checks[{ 'checked-ok': 'ok', 'checked-needs-work': 'work', 'needs-checking': 'todo' }[s.completed] || 'none']++;
   }
   return { trt, stories, checks, feedback: Array.isArray(n.feedback) ? n.feedback.length : 0 };
 }

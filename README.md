@@ -68,7 +68,7 @@ Once a producer has claimed the role, they send the bulletin to Cuez. The desk s
 
 [Open the tutor desk](https://digitaldickinson.github.io/Moira-Desk/tutor.html) and sign in with your staff email and password. You’ll see only the newsrooms your administrator has assigned to you.
 
-Each newsroom has a card showing its producer, how the conference is going (pitched, picked, spiked and undecided), the running order and its running time, editorial checks (OK, needs work, to check) and how much EP feedback it has. The page refreshes itself every 30 seconds; the line beside the title shows when it last updated, or in red if a refresh failed. Use **List** for one row per newsroom, which is handy when you have many groups. Type in **Find a newsroom** to filter by name.
+Each newsroom has a card showing its producer, how the conference is going (pitched, picked, spiked and undecided), the running order and its running time, editorial checks (OK, needs work, to check and not checked yet, in the same colours as the running order) and how much EP feedback it has. The page refreshes itself every 30 seconds; the line beside the title shows when it last updated, or in red if a refresh failed. Use **List** for one row per newsroom, which is handy when you have many groups. Type in **Find a newsroom** to filter by name.
 
 Tick newsrooms (click anywhere on a card’s heading) to work with several at once. A bar along the bottom of the screen shows what you’ve ticked and offers **Open EP wall**, **Send alert** and **Report…**. Ticks stay in place while you search, and **Select all** acts on the newsrooms showing.
 
