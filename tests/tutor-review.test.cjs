@@ -45,7 +45,7 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'tutor.html'), 'utf8').r
     });
     await page.route('**/*', route => route.request().url() === 'http://moira.test/tutor.html' ? route.fulfill({ contentType: 'text/html', body: html }) : route.abort());
     await page.goto('http://moira.test/tutor.html');
-    await page.getByRole('button', { name: 'Review', exact: true }).click();
+    await page.getByRole('button', { name: 'Review & feedback: Newsroom A', exact: true }).click();
     const review = page.locator('.review');
     await review.getByText('Overall feedback', { exact: true }).waitFor();
     assert.equal(await review.locator('img').count(), 0, 'slugs are escaped');
@@ -111,7 +111,8 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'tutor.html'), 'utf8').r
     await page.keyboard.press('Escape');
     await review.waitFor({ state: 'detached' });
     await page.getByRole('checkbox', { name: 'Select Newsroom A', exact: true }).check();
-    await page.getByRole('button', { name: 'Generate report', exact: true }).click();
+    await page.getByRole('button', { name: 'Report…', exact: true }).click();
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
     await page.getByText('2 EP comments').waitFor();
     const report = await page.evaluate(async () => await (await fetch(document.querySelector('dialog a[download]').href)).text());
     assert.ok(report.indexOf('EP feedback') > report.indexOf('Running order'));

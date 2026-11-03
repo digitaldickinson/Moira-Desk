@@ -66,17 +66,21 @@ Once a producer has claimed the role, they send the bulletin to Cuez. The desk s
 
 ## For tutors and executive producers
 
-[Open the tutor desk](https://digitaldickinson.github.io/Moira-Desk/tutor.html) and sign in with your staff email and password. You’ll see only the newsrooms your administrator has assigned to you. Select one or more groups to supervise together.
+[Open the tutor desk](https://digitaldickinson.github.io/Moira-Desk/tutor.html) and sign in with your staff email and password. You’ll see only the newsrooms your administrator has assigned to you.
 
-If a student needs the newsroom code, choose **Show join code**. This displays a separate student join code enabled by your administrator; it does not reveal or change the main code.
+Each newsroom has a card showing its producer, how the conference is going (pitched, picked, spiked and undecided), the running order and its running time, editorial checks (OK, needs work, to check) and how much EP feedback it has. The page refreshes itself every 30 seconds; the line beside the title shows when it last updated, or in red if a refresh failed. Use **List** for one row per newsroom, which is handy when you have many groups. Type in **Find a newsroom** to filter by name.
 
-The **EP wall** displays selected groups’ pitches side by side for discussion or projection. Add notes to guide their choices while leaving the editorial decisions with each group’s producer.
+Tick newsrooms (click anywhere on a card’s heading) to work with several at once. A bar along the bottom of the screen shows what you’ve ticked and offers **Open EP wall**, **Send alert** and **Report…**. Ticks stay in place while you search, and **Select all** acts on the newsrooms showing.
+
+If a student needs the newsroom code, choose **Join code** on the newsroom’s card. This displays a separate student join code enabled by your administrator; it does not reveal or change the main code. The button appears only when a tutor code is available.
+
+The **EP wall** shows the ticked groups’ pitches side by side for discussion or projection, with undecided and picked pitches in separate groups and spiked pitches folded away. Click a pitch to add or change a note guiding the group, while the editorial decisions stay with each group’s producer. New pitches are marked **NEW** for 30 seconds. Click a newsroom’s name to focus on it in larger type, then use **←** and **→** to move between groups and **Esc** to return to all of them. **A+** and **A−** change the text size. **Hide notes** takes your notes off the projected wall, though students still see them. **Present** (or **P**) hides the controls and stops clicks opening notes during the meeting; **Show controls** or **P** brings them back.
 
 To call groups back or share a quick update, tick their newsrooms and choose **Send alert**. Messages can be up to 240 characters. Students receive a live alert that stays until dismissed, with a short chime when their browser allows sound. Students joining within five minutes can also see the latest alert.
 
-After a session, choose **Review** next to a newsroom to read its running order and scripts from top to bottom and leave EP feedback, either on the bulletin as a whole or on a story. To quote part of a script, select the words before choosing **Add feedback**. It appears as “EP” feedback in the newsroom’s report, not on the student desk, so share the report with the group afterwards. Any tutor assigned to the newsroom can edit or delete any feedback.
+After a session, choose **Review & feedback** on a newsroom’s card to read its running order and scripts from top to bottom and leave EP feedback, either on the bulletin as a whole or on a story. To quote part of a script, select the words before choosing **Add feedback**. It appears as “EP” feedback in the newsroom’s report, not on the student desk, so share the report with the group afterwards. Any tutor assigned to the newsroom can edit or delete any feedback.
 
-You can also generate a shareable report containing the pitches, decisions, EP notes, running order and EP feedback, with scripts included if wanted. Use it for a debrief or to keep a record of the session. Generate the report before starting a new conference, as earlier pitches leave the current board and report.
+Choose **Report** on a card for one newsroom, or **Report…** in the bottom bar for every ticked newsroom. The report is a shareable page with the pitches, decisions, EP notes, running order and EP feedback; tick **Include scripts** to add the scripts. Use it for a debrief or to keep a record of the session. Generate the report before starting a new conference, as earlier pitches leave the current board and report.
 
 Your administrator manages staff access, starts fresh conferences, resets producer roles and chooses Cuez destinations. Ask them if a newsroom or join code is missing. On a shared computer, sign out of the tutor desk when you finish.
 
