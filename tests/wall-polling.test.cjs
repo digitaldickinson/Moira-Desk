@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-for (const file of ['tutor.html', 'admin.html']) {
+// The wall is shared by both desks, so test the shared copy once.
+for (const file of ['desk-shared.js']) {
     const html = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
     const source = html.slice(html.indexOf("document.addEventListener('visibilitychange'"), html.indexOf('function renderWall()'));
     function harness() {
@@ -11,7 +12,7 @@ for (const file of ['tutor.html', 'admin.html']) {
         const document = { visibilityState: 'visible', addEventListener: (name, fn) => { listeners[name] = fn; } };
         const wall = { ids: ['room'], sig: '' };
         const context = vm.createContext({ wall, document, Date, JSON,
-            rpc: (name, args) => new Promise((resolve, reject) => calls.push({ name, args, resolve, reject })),
+            desk: { conferenceRpc: 'tutor_conference', rpc: (name, args) => new Promise((resolve, reject) => calls.push({ name, args, resolve, reject })) },
             renderWall: () => renders.push(context.wall.data),
         });
         vm.runInContext(source, context);

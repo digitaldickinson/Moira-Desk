@@ -3,9 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require(process.env.MOIRA_PLAYWRIGHT_MODULE || 'playwright');
+const { pageHtml } = require('./desk-page.cjs');
 const file = path.join(__dirname, '..', 'admin.html');
 if (!fs.existsSync(file)) { console.log('SKIP: local admin.html is not present'); process.exit(0); }
-const html = fs.readFileSync(file, 'utf8').replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*>\s*<\/script>/g, '');
+const html = pageHtml('admin.html');
 (async () => {
  const browser = await chromium.launch({ headless: true });
  const errors = [], calls = [];
@@ -58,7 +59,7 @@ const html = fs.readFileSync(file, 'utf8').replace(/<script\b[^>]*\bsrc="[^"]*"[
   await group.waitFor();
   assert.equal(await group.locator('.folder-toggle').getAttribute('aria-expanded'), 'false');
   for (const name of ['Newsday Blue', 'Newsday Red']) await page.getByRole('checkbox', { name: `Select ${name}`, exact: true }).check();
-  await page.getByRole('button', { name: 'Move selected (2)', exact: true }).click();
+  await page.getByRole('button', { name: 'Move to folder…', exact: true }).click();
   await page.getByLabel('Destination').selectOption('folder-1');
   await page.getByRole('button', { name: 'Move newsrooms', exact: true }).click();
   await group.locator('[data-newsroom="room-0"]').waitFor();
@@ -70,12 +71,12 @@ const html = fs.readFileSync(file, 'utf8').replace(/<script\b[^>]*\bsrc="[^"]*"[
   await page.getByLabel('Find a newsroom').fill('Blue');
   await group.locator('[data-newsroom="room-0"]').waitFor();
   assert.equal(await page.locator('[data-newsroom]').count(), 1, 'search reaches collapsed folders');
-  await group.getByRole('checkbox', { name: 'Select all shown in Autumn 2026' }).check();
+  await group.getByRole('button', { name: 'Tick folder Autumn 2026' }).click();
   assert.deepEqual(await page.evaluate(() => [...state.selected]), ['room-0'], 'select all only selects matching rooms');
   await page.getByLabel('Find a newsroom').fill('');
   assert.equal(await group.locator('.folder-toggle').getAttribute('aria-expanded'), 'false');
-  assert.equal(await group.locator('.folder-selection').innerText(), '1 selected');
-  await page.getByRole('button', { name: 'Clear selection (1)' }).click();
+  assert.equal(await group.locator('.folder-selection').innerText(), '1 ticked');
+  await page.getByRole('button', { name: 'Clear', exact: true }).click();
   await page.getByRole('button', { name: 'Rename folder Autumn 2026', exact: true }).click();
   await page.getByLabel('Folder name').fill('<img src=x onerror=alert(1)>');
   await page.getByRole('button', { name: 'Save folder' }).click();
@@ -90,7 +91,8 @@ const html = fs.readFileSync(file, 'utf8').replace(/<script\b[^>]*\bsrc="[^"]*"[
   await page.getByRole('button', { name: 'Save folder' }).click();
   await page.getByRole('button', { name: 'Rename folder Autumn 2026', exact: true }).waitFor();
   const unfiled = page.locator('[data-folder="unfiled"]');
-  await unfiled.locator('[data-newsroom="room-2"] [data-action="move-room"]').click();
+  await unfiled.locator('[data-newsroom="room-2"] [data-action="manage"]').click();
+  await page.locator('#manage').getByRole('button', { name: 'Move', exact: true }).click();
   await page.getByLabel('Destination').selectOption('folder-1'); failMove = true;
   await page.getByRole('button', { name: 'Move newsrooms', exact: true }).click();
   await page.getByText('Move failed. Try again.', { exact: true }).waitFor();
@@ -99,6 +101,8 @@ const html = fs.readFileSync(file, 'utf8').replace(/<script\b[^>]*\bsrc="[^"]*"[
   failMove = false;
   await page.getByRole('button', { name: 'Move newsrooms', exact: true }).click();
   await group.locator('[data-newsroom="room-2"]').waitFor();
+  await page.keyboard.press('Escape');
+  await page.locator('#manage').waitFor({ state: 'hidden' });
   await group.locator('.folder-toggle').click();
   await page.screenshot({ path: '/private/tmp/moira-admin-folders.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

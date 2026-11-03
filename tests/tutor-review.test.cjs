@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require(process.env.MOIRA_PLAYWRIGHT_MODULE || 'playwright');
-const html = fs.readFileSync(path.join(__dirname, '..', 'tutor.html'), 'utf8').replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*>\s*<\/script>/g, '');
+const { pageHtml } = require('./desk-page.cjs');
+const html = pageHtml('tutor.html');
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const errors = [];

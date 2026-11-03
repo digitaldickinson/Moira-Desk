@@ -4,12 +4,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require(process.env.MOIRA_PLAYWRIGHT_MODULE || 'playwright');
+const { pageHtml } = require('./desk-page.cjs');
 const file = path.join(__dirname, '..', 'admin.html');
 if (!fs.existsSync(file)) { console.log('SKIP: local admin.html is not present'); process.exit(0); }
 const libs = process.env.MOIRA_REPORT_LIBS || path.join(__dirname, '..', 'node_modules');
 const lib = (rel) => fs.readFileSync(path.join(libs, rel));
 const JSZip = require(path.join(libs, 'jszip'));
-const html = fs.readFileSync(file, 'utf8').replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*>\s*<\/script>/g, '');
+const html = pageHtml('admin.html');
 const CDN = {
  'https://cdn.jsdelivr.net/npm/pdfmake@0.3.13/build/pdfmake.min.js': 'pdfmake/build/pdfmake.min.js',
  'https://cdn.jsdelivr.net/npm/pdfmake@0.3.13/build/vfs_fonts.js': 'pdfmake/build/vfs_fonts.js',
@@ -69,8 +70,10 @@ const conference = (id, name) => ({
   await page.getByLabel('Find a newsroom').waitFor();
   const dialog = page.locator('dialog[open]');
   const generate = async (ids, scripts) => {
-   await page.evaluate(({ ids, scripts }) => { state.selected = new Set(ids); state.reportScripts = scripts; render(); }, { ids, scripts });
-   await page.getByRole('button', { name: 'Generate report', exact: true }).click();
+   await page.evaluate((ids) => { state.selected = new Set(ids); render(); }, ids);
+   await page.getByRole('button', { name: 'Report…', exact: true }).click();
+   await dialog.getByRole('checkbox', { name: 'Include scripts' }).setChecked(scripts);
+   await dialog.getByRole('button', { name: 'Generate', exact: true }).click();
   };
   const download = async (link) => { const [d] = await Promise.all([page.waitForEvent('download'), link.click()]); return { name: d.suggestedFilename(), body: fs.readFileSync(await d.path()) }; };
 
