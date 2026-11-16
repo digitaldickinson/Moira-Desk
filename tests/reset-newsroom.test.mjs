@@ -5,7 +5,8 @@ import { readFile } from 'node:fs/promises';
 const { PGlite } = await import(process.env.MOIRA_PGLITE_MODULE || '@electric-sql/pglite');
 const db = new PGlite();
 const schema = await readFile(new URL('../supabase-schema.sql', import.meta.url), 'utf8');
-const migration = await readFile(new URL('../supabase/migrations/20261116_reset_newsroom.sql', import.meta.url), 'utf8');
+const migrations = await Promise.all(['20261116_reset_newsroom.sql', '20261116_tutor_reset_newsroom.sql']
+    .map((f) => readFile(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8')));
 await db.exec(`
   create role anon; create role authenticated; create role service_role;
   create schema auth;
@@ -20,8 +21,7 @@ await db.exec(`
 const baseline = process.env.MOIRA_BASELINE_SCHEMA
     ? await readFile(process.env.MOIRA_BASELINE_SCHEMA, 'utf8') : schema;
 await db.exec(baseline.replace('create extension if not exists pgcrypto;', ''));
-await db.exec(migration);
-await db.exec(migration);
+for (const m of migrations) { await db.exec(m); await db.exec(m); }
 
 const admin = '00000000-0000-0000-0000-000000000001';
 const student = '00000000-0000-0000-0000-000000000002';
@@ -67,6 +67,13 @@ for (const who of [student, tutor]) {
     await assert.rejects(db.query('select clear_running_order($1)', [room]), /admin/i);
     await assert.rejects(db.query('select reset_newsroom($1)', [room]), /admin/i);
 }
+await asUser(student);
+await assert.rejects(db.query('select tutor_reset_newsroom($1)', [room]), /Staff access/);
+await assert.rejects(db.query('select reset_newsroom_now($1)', [room]), /permission denied/);
+await asUser(tutor);
+await assert.rejects(db.query('select tutor_reset_newsroom($1)', [other]), /Newsroom unavailable/, 'unassigned newsroom');
+await assert.rejects(db.query("select tutor_reset_newsroom('bulletin-nope')"), /Newsroom unavailable/);
+await assert.rejects(db.query('select reset_newsroom_now($1)', [room]), /permission denied/);
 await asUser(admin);
 await assert.rejects(db.query("select clear_running_order('bulletin-nope')"), /No newsroom/);
 
@@ -129,3 +136,23 @@ await asUser(student);
 await db.query("select * from join_newsroom('RESETA123')");
 await db.query("select claim_producer($1, 'New producer')", [room]);
 console.log('PASS: reset_newsroom readies the newsroom for a new group');
+
+// A tutor resets their assigned newsroom the same way.
+await seedRoom();
+await asUser(tutor);
+await db.query("select tutor_send_alert(array[$1], 'Back at 3')", [room]);
+await asOwner("update bulletins set cuez_sending_at = now() where id = $1", [room]);
+await asUser(tutor);
+await assert.rejects(db.query('select tutor_reset_newsroom($1)', [room]), /Cuez send is in progress/);
+await asOwner("update bulletins set cuez_sending_at = null where id = $1", [room]);
+const [prev] = await asOwner('select conference_id from bulletins where id = $1', [room]);
+await asUser(tutor);
+await db.query('select tutor_reset_newsroom($1)', [room]);
+[b] = await asOwner('select order_ids, conference_id, producer_name, ep_alert_text from bulletins where id = $1', [room]);
+assert.deepEqual(b.order_ids, ['marker-line']);
+assert.notEqual(b.conference_id, prev.conference_id);
+assert.equal(b.producer_name, null); assert.equal(b.ep_alert_text, null);
+assert.equal((await asOwner('select count(*)::int n from stories where bulletin_id = $1', [room]))[0].n, 0);
+assert.equal((await asOwner('select count(*)::int n from newsroom_members where bulletin_id = $1', [room]))[0].n, 0);
+assert.equal((await asOwner('select count(*)::int n from stories where bulletin_id = $1', [other]))[0].n, 1, 'other newsroom untouched');
+console.log('PASS: tutors can reset only their assigned newsrooms');

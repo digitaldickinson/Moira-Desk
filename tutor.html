@@ -134,6 +134,8 @@
   .selbar .names { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c3cad6; }
   .selbar .acts { display: flex; gap: 8px; flex-wrap: wrap; }
   .selbar button { background: #2a3140; border-color: #3a4252; color: #f5f7fb; }
+  .selbar button.danger-outline { background: transparent; border-color: #ff8f84; color: #ff8f84; }
+  button.danger-solid { background: var(--err); border-color: var(--err); color: #fff; }
   .selbar button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
   /* Review: read the running order and scripts, leave EP feedback */
@@ -180,7 +182,7 @@ const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 let savedView = 'cards';
 try { if (sessionStorage.getItem('moiradesk-tutor-view') === 'list') savedView = 'list'; } catch {}
 const state = { user: null, rooms: [], loading: false, loaded: false, loginBusy: false, loginEmail: '', loginError: null,
-  message: null, selected: new Set(), reportScripts: false, reportIds: [], query: '', view: savedView,
+  message: null, selected: new Set(), reportScripts: false, reportIds: [], resetIds: [], query: '', view: savedView,
   updated: null, refreshError: null, pollTimer: null, roomsSeq: 0, roomsInFlight: 0 };
 const app = document.getElementById('app'), dlg = document.getElementById('dlg');
 let sessionEpoch = 0;
@@ -314,8 +316,9 @@ function renderRooms() {
     document.getElementById('selbar').innerHTML = !rooms.length ? '' : ids.length
       ? `<div class="selbar-in"><strong>${plural(ids.length, 'newsroom')}</strong><span class="names" title="${esc(names)}">${esc(names)}</span>
         <span class="acts"><button class="primary" data-action="wall">Open EP wall</button><button data-action="alert">Send alert</button>
-        <button data-action="report-dialog">Report…</button><button data-action="clear-selection">Clear</button></span></div>`
-      : `<div class="selbar-in"><span class="hint">Tick newsrooms to open the EP wall, send an alert or build one report for several groups.</span>
+        <button data-action="report-dialog">Report…</button><button class="danger-outline" data-action="reset-dialog">Reset…</button>
+        <button data-action="clear-selection">Clear</button></span></div>`
+      : `<div class="selbar-in"><span class="hint">Tick newsrooms to open the EP wall, send an alert, build one report for several groups or reset them for a new group.</span>
         <button data-action="select-all" ${sel.shown.length ? '' : 'disabled'}>${esc(sel.label)}</button></div>`;
   });
 }
@@ -553,14 +556,35 @@ async function deleteFeedback(id) {
 // A single self-contained web page (buildReport, shared): no login, no database, prints cleanly.
 
 let lastReport = null;
-function reportDialog(ids) {
+// Ready newsrooms for a new group. The database checks each one is assigned to this tutor.
+function resetDialog(ids) {
+  ids = ids.filter((id) => room(id));
+  if (!ids.length) return;
+  state.resetIds = ids;
+  openDialog(ids.length === 1 ? 'Reset for a new group' : `Reset ${ids.length} newsrooms for a new group`,
+    `<p style="margin:0">This applies to:</p><ul style="margin:0;padding-left:20px;max-height:140px;overflow:auto">${ids.map((id) => `<li>${esc(room(id).name)}</li>`).join('')}</ul>
+    <p style="margin:0">It starts a new conference, frees the producer role, deletes every story and script, removes all members and clears the EP alert.</p>
+    <p style="margin:0">The name, join codes, tutors and Cuez target stay, so old members can rejoin with the same code; ask your administrator for a new code if that matters. Anything already in Cuez stays there. Generate a report first if you want a record: this can't be undone.</p>`,
+    `<button data-action="close-dialog">Cancel</button><button data-action="reset-report">Make a report first</button>
+     <button class="danger-solid" data-action="reset-confirm">Reset newsroom${ids.length === 1 ? '' : 's'}</button>`);
+}
+async function resetRooms(btn) {
+  const ids = state.resetIds.filter((id) => room(id)), names = ids.map((id) => room(id).name);
+  if (!ids.length) return;
+  btn.disabled = true;
+  try { for (const id of ids) await rpc('tutor_reset_newsroom', { p_newsroom_id: id }); }
+  catch (err) { await loadRooms(); throw err; }
+  closeDialog(); flash(`Reset ${names.join(', ')} for a new group.`); await loadRooms();
+}
+
+function reportDialog(ids, scripts = state.reportScripts) {
   ids = ids.filter((id) => room(id));
   if (!ids.length) return;
   state.reportIds = ids;
   const names = ids.map((id) => room(id).name);
   openDialog(ids.length === 1 ? `Report: ${names[0]}` : `Report on ${ids.length} newsrooms`,
     `<p style="margin:0">Covers:</p><ul style="margin:0;padding-left:20px;max-height:140px;overflow:auto">${names.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
-    <label class="check" style="margin:0"><input type="checkbox" id="report-scripts" ${state.reportScripts ? 'checked' : ''}> Include scripts</label>
+    <label class="check" style="margin:0"><input type="checkbox" id="report-scripts" ${scripts ? 'checked' : ''}> Include scripts</label>
     <p class="muted" style="margin:0">The pitches, decisions, EP notes, running order and EP feedback, as one web page. It's a snapshot of right now.</p>`,
     '<button data-action="close-dialog">Cancel</button><button class="primary" data-action="report">Generate</button>');
 }
@@ -593,7 +617,7 @@ function clearSession() {
   closeDialog();
   if (lastReport) URL.revokeObjectURL(lastReport.url);
   lastReport = null;
-  state.user = null; state.rooms = []; state.selected.clear(); state.message = null; state.loading = false; state.loaded = false;
+  state.user = null; state.rooms = []; state.selected.clear(); state.resetIds = []; state.message = null; state.loading = false; state.loaded = false;
   state.query = ''; state.updated = null; state.refreshError = null; state.pollTimer = null; state.roomsInFlight = 0;
   state.reportIds = []; state.reportScripts = false;
   render();
@@ -743,6 +767,9 @@ document.addEventListener('click', async e => {
       btn.textContent = 'Generating…';
       await generateReport(state.reportIds, !!document.getElementById('report-scripts')?.checked);
     }
+    else if (action === 'reset-dialog') resetDialog(tickedIds());
+    else if (action === 'reset-report') reportDialog(state.resetIds, true);
+    else if (action === 'reset-confirm') await resetRooms(btn);
     else if (action === 'open-report' && lastReport) window.open(lastReport.url, '_blank', 'noopener');
     else if (action === 'show-code') await showJoinCode(id);
     else if (action === 'review') await openReview(id);

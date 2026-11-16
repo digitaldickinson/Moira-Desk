@@ -38,6 +38,10 @@ const root = path.resolve(__dirname, '..');
             if (mock.holdAlert) return new Promise(resolve => { mock.resolveAlert = () => resolve({ data: null }); });
             return { data: null };
           }
+          if (name === 'tutor_reset_newsroom') {
+            if (mock.resetError) return { error: { message: 'Newsroom unavailable. Refresh your newsroom list.' } };
+            Object.assign(rooms[0], { members: 0, producer_name: null, stories: 0 }); return { data: null };
+          }
           if (name === 'is_admin') return { data: mock.admin };
           if (name === 'is_tutor') return { data: !mock.denied };
           if (name === 'tutor_newsrooms') return { data: rooms.map(r => ({ ...r, tutor_code_available: mock.admin ? !!mock.code : true })) };
@@ -100,11 +104,36 @@ const root = path.resolve(__dirname, '..');
     await page.getByRole('checkbox', { name: 'Select Newsroom A', exact: true }).uncheck();
     console.log('PASS: staff broadcast selection, trimmed message, retry preserves draft and duplicate submit prevented');
   }
+  async function checkReset(page) {
+    const resets = () => page.evaluate(() => mock.calls.filter(c => c.name === 'tutor_reset_newsroom').map(c => c.args));
+    await page.getByRole('checkbox', { name: 'Select Newsroom A', exact: true }).check();
+    await page.getByRole('button', { name: 'Reset…', exact: true }).click();
+    await page.getByRole('heading', { name: 'Reset for a new group' }).waitFor();
+    await page.getByRole('button', { name: 'Make a report first', exact: true }).click();
+    await page.getByRole('heading', { name: 'Report: Newsroom A' }).waitFor();
+    assert.equal(await page.getByRole('checkbox', { name: 'Include scripts' }).isChecked(), true);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    assert.deepEqual(await resets(), [], 'Make a report first resets nothing');
+    await page.evaluate(() => { mock.resetError = true; });
+    await page.getByRole('button', { name: 'Reset…', exact: true }).click();
+    await page.getByRole('button', { name: 'Reset newsroom', exact: true }).click();
+    await page.getByText('Newsroom unavailable. Refresh your newsroom list.', { exact: true }).waitFor();
+    await page.evaluate(() => { mock.resetError = false; });
+    await page.getByRole('button', { name: 'Reset…', exact: true }).click();
+    await page.getByRole('button', { name: 'Reset newsroom', exact: true }).click();
+    await page.getByText('Reset Newsroom A for a new group.', { exact: true }).waitFor();
+    await page.getByText('0 members · No producer yet', { exact: true }).waitFor();
+    assert.deepEqual(await resets(), [{ p_newsroom_id: 'room-a' }, { p_newsroom_id: 'room-a' }]);
+    await page.evaluate(() => { mock.calls.length = 0; });
+    await page.getByRole('checkbox', { name: 'Select Newsroom A', exact: true }).uncheck();
+    console.log('PASS: tutor Reset dialog, Make a report first, error message and reset of the ticked newsroom');
+  }
   try {
     const page = await pageFor('tutor.html');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByText('Newsroom A', { exact: true }).waitFor();
     await checkBroadcast(page, true);
+    await checkReset(page);
     assert.equal(await page.locator('[data-action="wall"]').count(), 0);
     assert.equal(await page.evaluate(() => mock.calls.some(c => c.name === 'get_tutor_join_code')), false);
     await page.getByRole('button', { name: 'Join code: Newsroom A' }).click();

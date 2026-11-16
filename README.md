@@ -82,7 +82,9 @@ After a session, choose **Review & feedback** on a newsroom’s card to read its
 
 Choose **Report** on a card for one newsroom, or **Report…** in the bottom bar for every ticked newsroom. The report is a shareable page with the pitches, decisions, EP notes, running order and EP feedback; tick **Include scripts** to add the scripts. Use it for a debrief or to keep a record of the session. Generate the report before starting a new conference, as earlier pitches leave the current board and report.
 
-Your administrator manages staff access, starts fresh conferences, resets producer roles, clears running orders and chooses Cuez destinations. To hand a newsroom to a new group, they can **Reset** it: a new conference, no producer, an empty running order, no members and no EP alert, keeping its name, join codes, tutors and Cuez target. Ask them if a newsroom or join code is missing. On a shared computer, sign out of the tutor desk when you finish.
+To hand newsrooms to a new group, tick them and choose **Reset…**. This starts a new conference, frees the producer role, deletes every story and script, removes all members and clears the EP alert. The name, join codes, tutors and Cuez target stay, so old members could rejoin with the same code. Choose **Make a report first** in the dialog if you want a record, as a reset can't be undone.
+
+Your administrator manages staff access, starts fresh conferences, resets producer roles, clears running orders, changes join codes and chooses Cuez destinations. Ask them if a newsroom or join code is missing. On a shared computer, sign out of the tutor desk when you finish.
 
 ## Finishing on a shared computer
 
