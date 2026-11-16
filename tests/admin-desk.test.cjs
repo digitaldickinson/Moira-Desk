@@ -35,6 +35,8 @@ const html = pageHtml('admin.html');
     if (name === 'rename_newsroom') { rooms.find((r) => r.newsroom_id === args.p_newsroom_id).name = args.p_name; return { data: null }; }
     if (name === 'delete_newsroom') { rooms = rooms.filter((r) => r.newsroom_id !== args.p_newsroom_id); return { data: null }; }
     if (name === 'start_conference') { const r = rooms.find((x) => x.newsroom_id === args.p_newsroom_id); r.pitches = 0; r.picked = 0; r.producer_name = null; return { data: null }; }
+    if (name === 'clear_running_order') { const r = rooms.find((x) => x.newsroom_id === args.p_newsroom_id); const n = r.stories; r.stories = 0; r.sent_stories = 0; r.picked = 0; return { data: n }; }
+    if (name === 'reset_newsroom') { const r = rooms.find((x) => x.newsroom_id === args.p_newsroom_id); Object.assign(r, { stories: 0, sent_stories: 0, pitches: 0, picked: 0, members: 0, producer_name: null }); return { data: null }; }
     if (name === 'create_newsroom') { const id = `bulletin-${args.p_name.toLowerCase()}`; rooms.push({ newsroom_id: id, name: args.p_name, members: 0, stories: 0, sent_stories: 0, has_code: true, pitches: 0, picked: 0 }); return { data: [{ newsroom_id: id, join_code: 'NEWROOM1' }] }; }
     if (name === 'move_admin_newsrooms') {
       if (failMove) return { error: { message: 'Move failed.' } };
@@ -84,7 +86,7 @@ const html = pageHtml('admin.html');
     assert.ok((await text(rowB)).includes('No producer yet') && (await text(rowB)).includes('No pitches yet'));
     assert.equal(await page.locator('b').count(), 0, 'names escaped');
     assert.ok((await text(rowA)).includes('11 pitches · 5 picked'));
-    await page.getByText('Tick newsrooms to open the EP wall, send an alert, make a report, move them to a folder or start a new conference.').waitFor();
+    await page.getByText('Tick newsrooms to open the EP wall, send an alert, make a report, move them to a folder, start a new conference, clear running orders or reset them for a new group.').waitFor();
     console.log('PASS: summary, one Manage button per row, setup line, escaping, empty selection bar');
 
     // ── Selection bar, folder notes, collapsed folders, Tick folder with search ──
@@ -192,6 +194,45 @@ const html = pageHtml('admin.html');
     await page.getByText('New conference started for Alpha Prime, Charlie.', { exact: true }).waitFor();
     assert.deepEqual(calls.filter((c) => c.name === 'start_conference').map((c) => c.args.p_newsroom_id), ['room-d', 'room-a', 'room-c'], 'only the listed newsrooms');
     console.log('PASS: new conference dialog from the panel and the bar, Make a report first, only listed newsrooms cleared');
+
+    // ── Clear running order and Reset: from the panel and from the bar ──
+    await page.getByRole('button', { name: 'Clear', exact: true }).click();
+    await page.getByRole('button', { name: 'Manage Charlie' }).click();
+    assert.ok((await text(panel)).includes('Running order1 story'), 'running order line shows the story count');
+    await panel.getByRole('button', { name: 'Clear running order…' }).click();
+    await dlg.getByRole('heading', { name: 'Clear the running order', exact: true }).waitFor();
+    assert.deepEqual(await dlg.locator('li').allInnerTexts(), ['Charlie']);
+    await dlg.getByRole('button', { name: 'Make a report first' }).click();
+    await dlg.getByRole('heading', { name: 'Report: Charlie' }).waitFor();
+    assert.equal(await dlg.getByRole('checkbox', { name: 'Include scripts' }).isChecked(), true, 'report before clearing includes scripts');
+    assert.equal(count('clear_running_order'), 0, 'Make a report first clears nothing');
+    await dlg.getByRole('button', { name: 'Cancel' }).click();
+    await panel.getByRole('button', { name: 'Clear running order…' }).click();
+    await dlg.getByRole('button', { name: 'Clear running order', exact: true }).click();
+    await page.getByText('Cleared the running order for Charlie.', { exact: true }).waitFor();
+    await panel.getByText('0 stories', { exact: true }).waitFor();
+    assert.equal(count('reset_newsroom'), 0);
+    await panel.getByRole('button', { name: 'Reset newsroom…' }).click();
+    await dlg.getByRole('heading', { name: 'Reset for a new group' }).waitFor();
+    await dlg.getByRole('button', { name: 'Reset newsroom', exact: true }).click();
+    await page.getByText('Reset Charlie for a new group.', { exact: true }).waitFor();
+    await panel.getByText('0 members joined', { exact: true }).waitFor();
+    await page.keyboard.press('Escape');
+    for (const n of ['Alpha Prime', 'Delta']) await page.getByRole('checkbox', { name: `Select ${n}` }).check();
+    await page.locator('.selbar').getByRole('button', { name: 'Clear running orders…' }).click();
+    await dlg.getByRole('heading', { name: 'Clear the running order for 2 newsrooms' }).waitFor();
+    await dlg.getByRole('button', { name: 'Clear running orders', exact: true }).click();
+    await page.getByText('Cleared the running order for Alpha Prime, Delta.', { exact: true }).waitFor();
+    assert.deepEqual(calls.filter((c) => c.name === 'clear_running_order').map((c) => c.args.p_newsroom_id), ['room-c', 'room-a', 'room-d']);
+    await page.locator('.selbar').getByRole('button', { name: 'Reset…' }).click();
+    await dlg.getByRole('heading', { name: 'Reset 2 newsrooms for a new group' }).waitFor();
+    await page.screenshot({ path: '/private/tmp/moira-admin-reset.png' });
+    await dlg.getByRole('button', { name: 'Reset newsrooms', exact: true }).click();
+    await page.getByText('Reset Alpha Prime, Delta for a new group.', { exact: true }).waitFor();
+    assert.deepEqual(calls.filter((c) => c.name === 'reset_newsroom').map((c) => c.args.p_newsroom_id), ['room-c', 'room-a', 'room-d'], 'only the listed newsrooms');
+    await page.getByRole('checkbox', { name: 'Select Delta' }).uncheck();
+    await page.getByRole('checkbox', { name: 'Select Charlie' }).check();
+    console.log('PASS: clear running order and reset from the panel and the bar, with Make a report first');
 
     // ── Report dialog from the bar ──
     await page.locator('.selbar').getByRole('button', { name: 'Report…' }).click();
