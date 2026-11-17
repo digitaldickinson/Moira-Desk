@@ -22,12 +22,12 @@ const conference = (id, name) => ({
  id, name, producer_name: 'Sam', conference_started_at: '2026-11-02T09:00:00Z', target_duration: 120,
  cuez_episode_title: 'Lunch', cuez_part_title: 'Part 1',
  pitches: [
-  { slug: 'Bridge closure', angle: 'Commuters face delays', pitched_by: 'Ana', status: 'picked', story_id: 's1', decided_at: '2026-11-02T09:10:00Z', ep_note: 'Get a council voice' },
+  { slug: 'Bridge closure', angle: 'Commuters face delays', pitched_by: 'Ana', status: 'picked', story_id: 's1', decided_at: '2026-11-02T09:10:00Z', ep_note: 'Get a council voice', source: 'pa', source_url: 'https://explore.pa.media/story/bridge-1' },
   { slug: 'Cat show', pitched_by: 'Ben', status: 'spiked', spike_reason: 'Too soft', decided_at: '2026-11-02T09:12:00Z' },
  ],
  stories: [
   { id: 'seg', type: 'segment', slug: 'Headlines', duration: 20 },
-  { id: 's1', slug: 'Bridge closure', format: 'PKG', reporter: 'Ana', presenter: 'Joe', duration: 95, completed: 'checked-ok', script: 'LINK: The bridge shuts tonight.\n  Indented line.', brief: 'Commuters face delays', pitched_by: 'Ana' },
+  { id: 's1', slug: 'Bridge closure', format: 'PKG', reporter: 'Ana', presenter: 'Joe', duration: 95, completed: 'checked-ok', script: 'LINK: The bridge shuts tonight.\n  Indented line.', brief: 'Commuters face delays', pitched_by: 'Ana', source_url: 'https://explore.pa.media/story/bridge-1' },
   { id: 's2', slug: 'Weather', format: 'OOV', duration: 30, is_floated: true, script: 'Rain later.' },
  ],
  order: ['seg', 's1', 'marker-line', 's2'],
@@ -114,6 +114,8 @@ const conference = (id, name) => ({
    assert.ok(doc.includes(JSON.stringify(text).slice(1, -1)), `PDF includes ${text}`);
   }
   assert.ok(doc.indexOf('SCRIPTS') > doc.indexOf('RUNNING ORDER'), 'scripts come after the running order');
+  assert.equal(doc.split('"link":"https://explore.pa.media/story/bridge-1"').length - 1, 2, 'PA link in the conference and running order');
+  assert.ok(doc.includes('PA story: https://explore.pa.media/story/bridge-1') && doc.includes('"text":"  PA"'), 'PA pitch marked');
   for (const text of ['EP FEEDBACK', 'The bulletin as a whole', 'Good pace, lead buried.', '“The bridge shuts tonight.”', 'Attribute this.', 'Dropped (removed from the running order)'])
    assert.ok(doc.includes(text), `PDF feedback includes ${text}`);
   assert.ok(doc.indexOf('RUNNING ORDER') < doc.indexOf('EP FEEDBACK') && doc.indexOf('EP FEEDBACK') < doc.indexOf('SCRIPTS'), 'feedback sits between the running order and scripts');

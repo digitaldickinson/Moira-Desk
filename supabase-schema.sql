@@ -123,11 +123,25 @@ create table if not exists pitches (
 );
 create index if not exists pitches_conference_idx on pitches(bulletin_id, conference_id, position);
 
+-- Pitches dropped in from the PA wire keep a source marker and the story link;
+-- picking one carries the link to the story (shown with the brief, never in the script).
+alter table pitches add column if not exists source     text;   -- 'pa' or null
+alter table pitches add column if not exists source_url text;
+alter table pitches drop constraint if exists pitches_source_check;
+alter table pitches add constraint pitches_source_check check (source is null or source = 'pa');
+alter table pitches drop constraint if exists pitches_source_url_check;
+alter table pitches add constraint pitches_source_url_check
+  check (source_url is null or (source_url ~* '^https?://[^[:space:]]+$' and length(source_url) <= 2000));
+
 -- A story picked from conference keeps its pitch, shown in the editor and
 -- never sent to Cuez.
 alter table stories add column if not exists brief       text;
 alter table stories add column if not exists pitched_by  text;
 alter table stories add column if not exists pitch_id    uuid;
+alter table stories add column if not exists source_url  text;
+alter table stories drop constraint if exists stories_source_url_check;
+alter table stories add constraint stories_source_url_check
+  check (source_url is null or (source_url ~* '^https?://[^[:space:]]+$' and length(source_url) <= 2000));
 
 -- One join code per newsroom, stored only as a hash.
 create table if not exists newsroom_codes (
@@ -744,11 +758,16 @@ end;
 $$;
 
 -- Anyone in the newsroom can pitch (usually the producer types them in).
-create or replace function add_pitch(p_bulletin_id text, p_slug text, p_angle text, p_format text, p_pitched_by text)
+-- A pitch dropped in from the PA wire also passes p_source 'pa' and its link.
+drop function if exists add_pitch(text, text, text, text, text);
+create or replace function add_pitch(p_bulletin_id text, p_slug text, p_angle text, p_format text, p_pitched_by text,
+                                     p_source text default null, p_source_url text default null)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare
   v_conf uuid;
   v_id uuid := gen_random_uuid();
+  v_source text := nullif(lower(trim(coalesce(p_source, ''))), '');
+  v_url text := nullif(trim(coalesce(p_source_url, '')), '');
 begin
   if not is_member(p_bulletin_id) then
     raise exception 'Bulletin missing';
@@ -756,11 +775,18 @@ begin
   if coalesce(trim(p_slug), '') = '' then
     raise exception 'Give the pitch a slug.';
   end if;
+  if v_source is not null and v_source <> 'pa' then
+    raise exception 'Unknown pitch source.';
+  end if;
+  if v_url is not null and (v_url !~* '^https?://[^[:space:]]+$' or length(v_url) > 2000) then
+    raise exception 'The source link must be a web address starting http:// or https://.';
+  end if;
   v_conf := current_conference(p_bulletin_id);
-  insert into pitches (id, bulletin_id, conference_id, slug, angle, format, pitched_by, created_by, position)
+  insert into pitches (id, bulletin_id, conference_id, slug, angle, format, pitched_by, created_by, position, source, source_url)
   values (v_id, p_bulletin_id, v_conf, left(trim(p_slug), 80), left(coalesce(trim(p_angle), ''), 500),
           left(coalesce(trim(p_format), ''), 20), left(coalesce(trim(p_pitched_by), ''), 60), auth.uid(),
-          coalesce((select max(position) + 1 from pitches where bulletin_id = p_bulletin_id and conference_id = v_conf), 0));
+          coalesce((select max(position) + 1 from pitches where bulletin_id = p_bulletin_id and conference_id = v_conf), 0),
+          v_source, v_url);
   return v_id;
 end;
 $$;
@@ -808,7 +834,7 @@ end;
 $$;
 
 -- Producer picks a pitch: it becomes a story at the end of the running order
--- (above END OF PROGRAMME), carrying the pitch as its brief.
+-- (above END OF PROGRAMME), carrying the pitch as its brief and its source link.
 create or replace function pick_pitch(p_pitch_id uuid)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare
@@ -827,8 +853,8 @@ begin
     into v_order, v_format
   from bulletins where id = v.bulletin_id for update;
 
-  insert into stories (id, bulletin_id, slug, format, reporter, duration, rev, brief, pitched_by, pitch_id)
-  values (v_story, v.bulletin_id, upper(v.slug), v_format, left(coalesce(trim(v.pitched_by), ''), 60), 10, 1, nullif(v.angle, ''), nullif(v.pitched_by, ''), v.id);
+  insert into stories (id, bulletin_id, slug, format, reporter, duration, rev, brief, pitched_by, pitch_id, source_url)
+  values (v_story, v.bulletin_id, upper(v.slug), v_format, left(coalesce(trim(v.pitched_by), ''), 60), 10, 1, nullif(v.angle, ''), nullif(v.pitched_by, ''), v.id, v.source_url);
 
   v_idx := array_position(v_order, 'marker-line');
   if v_idx is not null then
@@ -1233,14 +1259,15 @@ begin
         select jsonb_agg(jsonb_build_object(
           'id', p.id, 'slug', p.slug, 'angle', p.angle, 'format', p.format, 'pitched_by', p.pitched_by,
           'status', p.status, 'spike_reason', p.spike_reason, 'ep_note', p.ep_note,
-          'story_id', p.story_id, 'created_at', p.created_at, 'decided_at', p.decided_at
+          'story_id', p.story_id, 'created_at', p.created_at, 'decided_at', p.decided_at,
+          'source', p.source, 'source_url', p.source_url
         ) order by p.position)
         from pitches p where p.bulletin_id = b.id and p.conference_id = b.conference_id), '[]'::jsonb),
       'stories', coalesce((
         select jsonb_agg(jsonb_build_object(
           'id', s.id, 'slug', s.slug, 'format', s.format, 'presenter', s.presenter, 'reporter', s.reporter,
           'duration', s.duration, 'completed', s.completed, 'is_floated', s.is_floated, 'type', s.type,
-          'brief', s.brief, 'pitched_by', s.pitched_by, 'rev', s.rev,
+          'brief', s.brief, 'pitched_by', s.pitched_by, 'rev', s.rev, 'source_url', s.source_url,
           'cuez_item_uid', s.cuez_item_uid, 'cuez_item_number', s.cuez_item_number,
           'cuez_sent_rev', s.cuez_sent_rev, 'cuez_pending_uid', s.cuez_pending_uid,
           'script', case when p_scripts then s.script end
@@ -1437,7 +1464,7 @@ revoke execute on function
   save_slug(uuid, text, text), set_story_status(uuid, text), set_story_floated(uuid, boolean),
   mark_story_not_sent(uuid), claim_cuez_send(text, int),
   current_conference(text), require_producer(text), member_pitch(uuid), release_removed_producer(),
-  claim_producer(text, text), release_producer(text), add_pitch(text, text, text, text, text),
+  claim_producer(text, text), release_producer(text), add_pitch(text, text, text, text, text, text, text),
   update_pitch(uuid, text, text, text, text), delete_pitch(uuid), pick_pitch(uuid), unpick_pitch(uuid),
   spike_pitch(uuid, text), unspike_pitch(uuid), set_story_format(uuid, text), set_story_reporter(uuid, text),
   start_conference(text), clear_producer(text), set_pitch_note(uuid, text), admin_conference(text[], boolean),
@@ -1457,7 +1484,7 @@ grant execute on function
   lock_story(uuid, text, text), take_lock(uuid, text, text), renew_lock(uuid, text), unlock_story(uuid, text),
   save_slug(uuid, text, text), set_story_status(uuid, text), set_story_floated(uuid, boolean),
   mark_story_not_sent(uuid),
-  claim_producer(text, text), release_producer(text), add_pitch(text, text, text, text, text),
+  claim_producer(text, text), release_producer(text), add_pitch(text, text, text, text, text, text, text),
   update_pitch(uuid, text, text, text, text), delete_pitch(uuid), pick_pitch(uuid), unpick_pitch(uuid),
   spike_pitch(uuid, text), unspike_pitch(uuid), set_story_format(uuid, text), set_story_reporter(uuid, text)
 to authenticated;

@@ -33,3 +33,22 @@ test('neither page declares a name that desk-shared.js already declares', () => 
 test('desk-shared.js can be inlined for tests', () => {
   assert.ok(!/<\/script/i.test(shared.toString()));
 });
+
+test('EP wall and report mark PA pitches and link their stories safely', () => {
+  const ctx = { window: {}, URL, Date, console, document: { head: { insertAdjacentHTML() {} }, addEventListener() {} } };
+  vm.createContext(ctx);
+  vm.runInContext(`${shared}\nwall = { firstSeen: new Map(), present: false, hideNotes: false };
+    globalThis.t = { wallPitch, reportSection };`, ctx);
+  const url = 'https://explore.pa.media/story/commons-tourism-123';
+  const pa = { id: 'p1', slug: 'COMMONS Tourism', angle: 'Visitor levy', status: 'picked', story_id: 's1', pitched_by: 'Sam', source: 'pa', source_url: url };
+  const plain = { id: 'p2', slug: 'Bins', angle: '', status: 'pitched', pitched_by: 'Ali', source: null, source_url: 'javascript:alert(1)' };
+  const card = ctx.t.wallPitch(pa, {});
+  assert.match(card, /<span class="wall-tag pa"[^>]*>PA<\/span>COMMONS Tourism/);
+  assert.doesNotMatch(card, /<a\b/, 'no link inside the wall card button');
+  assert.doesNotMatch(ctx.t.wallPitch(plain, {}), /wall-tag pa/);
+  const html = ctx.t.reportSection({ id: 'r1', name: 'Room', order: ['s1', 'marker-line'], pitches: [pa, plain], feedback: [],
+    stories: [{ id: 's1', slug: 'COMMONS TOURISM', format: 'READ', duration: 20, brief: 'Visitor levy', pitched_by: 'Sam', source_url: url }] }, false);
+  assert.equal(html.match(/<a href="https:\/\/explore\.pa\.media\/story\/commons-tourism-123" target="_blank" rel="noopener noreferrer">PA story ↗<\/a>/g)?.length, 2, 'conference and running-order rows link the PA story');
+  assert.match(html, /<strong>COMMONS Tourism<\/strong> <span class="tag">PA<\/span>/);
+  assert.doesNotMatch(html, /javascript:/);
+});
