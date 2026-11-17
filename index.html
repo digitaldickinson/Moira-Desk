@@ -91,6 +91,30 @@
         .desk-dialog .desk-dialog-close { padding: 4px 10px; font-size: 20px; }
         .desk-dialog .desk-dialog-submit { background: #2563eb; color: #fff; }
         .desk-dialog .desk-dialog-submit.danger { background: #b91c1c; }
+        /* Social newsrooms: the 9:16 picture plan and its layout cards */
+        .sp-phone { width: 200px; aspect-ratio: 9 / 16; margin: 8px auto 10px; border-radius: 18px; border: 6px solid #0f172a; background: #0f172a; position: relative; overflow: hidden; }
+        .sp-zone { position: absolute; left: 0; right: 0; display: grid; place-items: center; text-align: center; color: #cbd5e1; font-size: 11px; font-weight: 600; }
+        .sp-lbl { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 10px; }
+        .sp-zone i { font-size: 28px; opacity: .8; }
+        .sp-presenter { background: linear-gradient(#334155, #1e293b); }
+        .sp-footage { background: repeating-linear-gradient(135deg, #1d4ed8 0 10px, #1e40af 10px 20px); color: #dbeafe; align-items: start; padding-top: 18px; }
+        .sp-footage2 { background: repeating-linear-gradient(45deg, #0e7490 0 10px, #155e75 10px 20px); color: #cffafe; align-items: start; padding-top: 18px; }
+        .sp-graphic { background: linear-gradient(135deg, #7c3aed, #4c1d95); color: #ede9fe; align-items: start; padding-top: 18px; }
+        .sp-overlay { position: absolute; right: 6%; bottom: 14%; width: 52%; height: 44%; background: linear-gradient(#475569, #1e293b); border-radius: 60px 60px 6px 6px; box-shadow: 0 0 0 2px rgba(255,255,255,.85), 0 6px 18px rgba(0,0,0,.45); display: grid; place-items: center; color: #e2e8f0; font-size: 11px; font-weight: 600; text-align: center; }
+        .sp-overlay i { font-size: 28px; display: block; margin-bottom: 4px; opacity: .85; }
+        .sp-caption { position: absolute; left: 8px; right: 8px; bottom: 16%; background: rgba(0,0,0,.78); color: #fff; font-weight: 800; font-size: 13px; line-height: 1.2; padding: 5px 7px; border-radius: 4px; text-align: center; overflow-wrap: anywhere; }
+        .sp-credit { position: absolute; right: 6px; font-size: 8.5px; font-weight: 700; background: rgba(0,0,0,.6); color: #fff; padding: 2px 5px; border-radius: 3px; max-width: 70%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sp-credit.missing { background: #dc2626; }
+        .sp-vo { position: absolute; left: 6px; top: 8px; font-size: 8.5px; font-weight: 800; background: #f59e0b; color: #000; padding: 2px 5px; border-radius: 3px; z-index: 2; }
+        .sp-safe { position: absolute; left: 0; right: 0; bottom: 0; height: 14%; background: repeating-linear-gradient(45deg, rgba(255,255,255,.08) 0 6px, transparent 6px 12px); border-top: 1px dashed rgba(255,255,255,.35); color: rgba(255,255,255,.55); font-size: 8.5px; display: grid; place-items: center; }
+        .sp-layouts { position: relative; display: flex; gap: 8px; margin: 0 -4px 8px; padding: 3px 4px 8px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; }
+        .sp-layouts button { flex: 0 0 82px; scroll-snap-align: center; border: 1px solid #cbd5e1; background: #fff; border-radius: 10px; padding: 8px 6px; font-size: 11.5px; line-height: 1.2; font-weight: 600; display: grid; justify-items: center; align-content: start; gap: 6px; text-align: center; color: #334155; }
+        .sp-layouts button:hover:not(:disabled) { border-color: #93c5fd; }
+        .sp-layouts button.on { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb; color: #2563eb; background: #eff6ff; }
+        .sp-layouts button:disabled { opacity: .6; cursor: default; }
+        .sp-mini { position: relative; width: 30px; height: 52px; border-radius: 4px; border: 1px solid #cbd5e1; overflow: hidden; display: grid; }
+        .sp-mini b { display: block; } .sp-mini .p { background: #64748b; } .sp-mini .f { background: #3b82f6; } .sp-mini .f2 { background: #93c5fd; } .sp-mini .g { background: #8b5cf6; }
+        .sp-mini .ov { position: absolute; right: 2px; bottom: 6px; width: 14px; height: 20px; background: #334155; border-radius: 8px 8px 2px 2px; box-shadow: 0 0 0 1px #fff; }
     </style>
 </head>
 <body class="bg-gray-50 h-screen flex flex-col overflow-hidden text-slate-800">
@@ -156,6 +180,7 @@
             order: [], formats: DEFAULT_FORMATS, targetDuration: null,
             cuezEpisodeId: null, cuezEpisodeTitle: null, cuezPartUid: null, cuezPartTitle: null, cuezSendingAt: null,
             producerUser: null, producerName: null, conferenceId: null, conferenceStartedAt: null,
+            kind: 'tv',   // 'social' newsrooms plan a social media bulletin instead (see Social newsrooms)
         };
 
         const IS_CONFIGURED = /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(SUPABASE_URL) && !/YOUR-/.test(SUPABASE_ANON_KEY);
@@ -237,6 +262,7 @@
                 inlineEditingId: null,
                 editingStoryId: null,
                 pendingConflict: null,
+                socialDraft: null,      // the social story editor's unsaved draft
                 pendingScrollToStoryId: null,
                 isSettingsModalOpen: false,
                 settingsTab: 'editorial',
@@ -622,6 +648,7 @@
                 conferenceStartedAt: row.conference_started_at || null,
                 epAlertText: row.ep_alert_text || null,
                 epAlertAt: row.ep_alert_at || null,
+                kind: row.kind === 'social' ? 'social' : 'tv',
             };
         }
         function pitchFromRow(row) {
@@ -670,6 +697,8 @@
                 pitchId: row.pitch_id || null,
                 pitchedBy: row.pitched_by || '',
                 sourceUrl: row.source_url || '',
+                sections: Array.isArray(row.sections) ? row.sections : null,
+                shots: row.shots && typeof row.shots === 'object' ? row.shots : null,
             };
         }
         const STORY_FIELD_MAP = {
@@ -681,6 +710,7 @@
             lockedAt: 'locked_at', rev: 'rev',
             cuezItemUid: 'cuez_item_uid', cuezSentAt: 'cuez_sent_at', cuezSentRev: 'cuez_sent_rev', cuezItemNumber: 'cuez_item_number',
             cuezPendingUid: 'cuez_pending_uid', cuezPendingAt: 'cuez_pending_at', cuezPendingRev: 'cuez_pending_rev', cuezPendingPlan: 'cuez_pending_plan',
+            sections: 'sections', shots: 'shots',
         };
         function storyToRow(data) {
             const row = {};
@@ -1018,7 +1048,9 @@
         async function addStory() {
             if (!canMutate() || !state.currentBulletinId) return;
             const newId = crypto.randomUUID();
-            const newStory = blankStory();
+            const newStory = isSocialRoom()
+                ? blankStory({ format: 'OOV/CLIP', duration: 0, sections: [cleanSection({ title: 'Story', treatment: 'footage' })], shots: storyShots(null) })
+                : blankStory();
             state.storiesMap[newId] = newStory;
             insertStoryIntoOrder(newId);
             state.ui.pendingScrollToStoryId = newId;
@@ -1110,9 +1142,10 @@
             if (!snapshot) return;
             if (!await confirmAction(`Revert "${state.storiesMap[id]?.slug || id}" to its previous version?`, { title: 'Revert story', confirmLabel: 'Revert story' })) return;
             delete state.ui.storySnapshots[id];
-            const { slug, script, format, presenter, reporter, duration, type } = snapshot;
+            const { slug, script, format, presenter, reporter, duration, type, sections, shots } = snapshot;
             stopLockRefresh();
-            await saveStory(id, { slug, script, format, presenter, reporter, duration, type, rev: state.storiesMap[id]?.rev });
+            state.ui.socialDraft = null;
+            await saveStory(id, { slug, script, format, presenter, reporter, duration, type, ...(isSocialRoom() ? { sections, shots } : {}), rev: state.storiesMap[id]?.rev });
         }
 
         // ── Cuez ───────────────────────────────────────────────────────────
@@ -1709,7 +1742,9 @@
         function isLockedByOther(story) { return lockState(story) !== 'free'; }
 
         function insertStoryIntoOrder(id) {
-            const markerIdx = state.meta.order.indexOf('marker-line');
+            let markerIdx = state.meta.order.indexOf('marker-line');
+            // Social newsrooms keep a closing ONCAM item (the outro) last, as the database does.
+            if (markerIdx > 0 && isSocialRoom() && isOncam(state.storiesMap[state.meta.order[markerIdx - 1]]?.format)) markerIdx--;
             if (markerIdx > -1) state.meta.order.splice(markerIdx, 0, id);
             else state.meta.order.push(id, 'marker-line');
         }
@@ -2246,12 +2281,523 @@
                 </div>`;
         }
 
+        // ── Social newsrooms ───────────────────────────────────────────────
+        // A social newsroom (an admin chooses the type when creating it, and it
+        // never changes) makes a short social media bulletin rather than a
+        // programme for Cuez. Each story is planned in sections: what's said,
+        // the picture, on-screen text and any clip with sound. Saving also turns
+        // the sections into an ordinary script ([PICTURE] cue, [STRAP: on-screen
+        // text], the words, [CLIP:m:ss]), so the prompters, reports and EP wall
+        // read it like any other. The story's shots say where the pictures come
+        // from and how they're credited.
+        const SOCIAL_WPM = 180;   // social read pace: 30–40 words is about 10–13 seconds
+        const SOCIAL_TREATMENTS = {
+            presenter: { label: 'Presenter full screen', short: 'Presenter', mini: '<b class="p"></b>' },
+            overlay:   { label: 'Presenter overlay: green screen or vignette over footage/graphic', short: 'Presenter overlay', mini: '<b class="f"></b><i class="ov"></i>' },
+            split:     { label: 'Split: presenter + footage', short: 'Presenter split', mini: '<b class="p"></b><b class="f"></b>' },
+            dual:      { label: 'Split: two shots + voiceover', short: 'Dual footage', mini: '<b class="f"></b><b class="f2"></b>', vo: true },
+            footage:   { label: 'Full footage + voiceover', short: 'Full footage', mini: '<b class="f"></b>', vo: true },
+            graphic:   { label: 'Graphic / still + voiceover', short: 'Graphic', mini: '<b class="g"></b>', vo: true },
+        };
+        const SOCIAL_SOURCES = { pa: 'PA', own: 'Our own', other: 'Other' };
+        const isSocialRoom = () => state.meta.kind === 'social';
+        const isOncam = (format) => (format || '').trim().toUpperCase() === 'ONCAM';
+
+        const socialWords = (t) => (String(t || '').trim().match(/\S+/g) || []).length;
+        function clipSeconds(c) {
+            const m = String(c || '').trim().match(/^(\d{1,2}):(\d{2})$|^(\d{1,3})$/);
+            return !m ? 0 : m[3] !== undefined ? +m[3] : (+m[1]) * 60 + (+m[2]);
+        }
+        const sectionSeconds = (x) => Math.round(socialWords(x.says) * 60 / SOCIAL_WPM) + clipSeconds(x.clip);
+        const approxDuration = (n) => formatDuration(Math.round((n || 0) / 5) * 5);   // an estimate, to the nearest 5 seconds
+        const blankShot = (source) => ({ source, link: '', note: '', credit: source === 'pa' ? 'PA' : '', newsroomReady: false, embargoClear: false });
+        function cleanSection(x = {}) {
+            return { title: String(x.title ?? '').slice(0, 60), says: String(x.says ?? '').slice(0, 2000),
+                treatment: SOCIAL_TREATMENTS[x.treatment] ? x.treatment : 'footage',
+                onscreen: String(x.onscreen ?? '').slice(0, 120), clip: String(x.clip ?? '').slice(0, 8) };
+        }
+        function cleanShot(m, source) {
+            if (!m || typeof m !== 'object') return blankShot(source);
+            return { source: SOCIAL_SOURCES[m.source] ? m.source : source, link: String(m.link ?? '').slice(0, 2000),
+                note: String(m.note ?? '').slice(0, 200), credit: String(m.credit ?? '').slice(0, 120),
+                newsroomReady: !!m.newsroomReady, embargoClear: !!m.embargoClear };
+        }
+        // A story's sections, or one made from its script: a picked pitch starts
+        // with none, and a follow-up's note is in its script.
+        function storySections(s) {
+            if (Array.isArray(s?.sections) && s.sections.length) return s.sections.map(cleanSection);
+            const oncam = isOncam(s?.format);
+            return [cleanSection({ title: oncam ? 'To camera' : 'Story', says: s?.script || '', treatment: oncam ? 'presenter' : 'footage' })];
+        }
+        const storyShots = (s) => ({ a: cleanShot(s?.shots?.a, 'pa'), b: cleanShot(s?.shots?.b, 'own') });
+        const needsMedia = (sections) => sections.some(x => x.treatment !== 'presenter');
+        const usesDual = (sections) => sections.some(x => x.treatment === 'dual');
+        function shotMissing(m, pre) {
+            const out = [];
+            if (!m.link.trim()) out.push(pre + (m.source === 'own' ? 'footage link' : 'link'));
+            if (m.source === 'pa') {
+                if (!m.newsroomReady) out.push(pre + 'Newsroom Ready check');
+                if (!m.embargoClear) out.push(pre + 'embargo check');
+            }
+            if (m.source !== 'own' && !m.credit.trim()) out.push(pre + 'credit');
+            return out;
+        }
+        function socialMedia(sections, shots) {
+            if (!needsMedia(sections)) return { na: true, ready: true, missing: [] };
+            const dual = usesDual(sections);
+            const missing = [...shotMissing(shots.a, dual ? 'shot 1 ' : ''), ...(dual ? shotMissing(shots.b, 'shot 2 ') : [])];
+            return { na: false, ready: !missing.length, missing };
+        }
+        const cueText = (x) => SOCIAL_TREATMENTS[x.treatment].short + (SOCIAL_TREATMENTS[x.treatment].vo ? ' · VO' : '');
+        const noBrackets = (t) => String(t || '').replace(/[[\]]/g, '').trim();
+        function composeSocialScript(sections) {
+            return sections.map(x => {
+                const lines = [`[${cueText(x).toUpperCase()}]`];
+                if (x.onscreen.trim()) lines.push(`[STRAP: ${noBrackets(x.onscreen).replace(/\|/g, '/')}]`);
+                if (x.says.trim()) lines.push(x.says.trim());
+                const c = clipSeconds(x.clip);
+                if (c) lines.push(`[CLIP:${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')} ${noBrackets(x.title).replace(/\|/g, '/') || 'Clip'}]`);
+                return lines.join('\n');
+            }).join('\n\n');
+        }
+
+        // ── Social running order ──
+        function renderSocialRundown() {
+            const fullOrder = state.meta.order || [];
+            const endIdx = fullOrder.indexOf('marker-line');
+            const ids = fullOrder.filter(id => id !== 'marker-line' && state.storiesMap[id] && state.storiesMap[id].type !== 'segment');
+            let total = 0, checked = 0, mediaNeeded = 0, mediaReady = 0, num = 0;
+            const cards = ids.map((id, i) => {
+                const s = state.storiesMap[id];
+                const media = socialMedia(storySections(s), storyShots(s));
+                if (endIdx < 0 || fullOrder.indexOf(id) < endIdx) total += s.duration || 0;
+                if (s.completed === 'checked-ok') checked++;
+                if (!media.na) { mediaNeeded++; if (media.ready) mediaReady++; }
+                const label = isOncam(s.format) ? '' : ++num;
+                const locked = isLockedByOther(s), blocked = lockState(s) === 'other';
+                const mediaText = media.na ? '' : media.ready ? ' · Media ready' : ' · <span class="text-amber-700 font-semibold">Media needed</span>';
+                const lockText = blocked ? ` · <span class="text-red-600 font-bold"><i class="fa-solid fa-lock mr-1"></i>${escapeHTML(s.lockedByName)}</span>`
+                    : locked ? ' · <span class="text-blue-600 font-bold"><i class="fa-solid fa-lock mr-1"></i>You, other tab</span>' : '';
+                const checkText = { 'checked-ok': 'Script checked', 'checked-needs-work': 'Needs work', 'needs-checking': 'Needs checking' }[s.completed] || 'Script draft';
+                return `<div class="social-card flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2 py-2 shadow-sm hover:border-slate-300 transition-colors" data-story-id="${id}" draggable="${locked ? 'false' : 'true'}">
+                    <div class="flex flex-col items-center w-6 shrink-0 ${locked ? 'text-slate-200' : 'text-slate-400 cursor-grab active:cursor-grabbing'}" title="${locked ? 'Being edited' : 'Drag to reorder'}">
+                        <button data-action="move-story-up" data-id="${id}" class="text-[10px] leading-none py-0.5 hover:text-blue-600 disabled:opacity-30" ${i === 0 || locked ? 'disabled' : ''} aria-label="Move ${escapeHTML(s.slug)} up">▲</button>
+                        <i class="fa-solid fa-grip-vertical text-xs" aria-hidden="true"></i>
+                        <button data-action="move-story-down" data-id="${id}" class="text-[10px] leading-none py-0.5 hover:text-blue-600 disabled:opacity-30" ${i === ids.length - 1 || locked ? 'disabled' : ''} aria-label="Move ${escapeHTML(s.slug)} down">▼</button>
+                    </div>
+                    <button data-action="toggle-complete" data-id="${id}" class="text-lg shrink-0 ${checkColour(s.completed)}" title="${checkTitle(s.completed)}" aria-label="${checkTitle(s.completed)}"><i class="fa-solid fa-circle"></i></button>
+                    <button data-action="edit-story" data-id="${id}" class="flex-1 min-w-0 text-left" ${blocked ? 'disabled' : ''} title="${blocked ? `Being edited by ${escapeHTML(s.lockedByName)}` : 'Open'}">
+                        <span class="block font-bold uppercase text-sm tracking-wide text-slate-800 truncate">${label ? `<span class="text-slate-400 font-mono mr-1.5">${label}</span>` : ''}${escapeHTML(s.slug || 'Untitled')}${s.brief ? ` <i class="fa-solid fa-lightbulb ml-1 text-violet-400 text-xs" title="${escapeHTML(`Pitch: ${s.brief}`)}"></i>` : ''}</span>
+                        <span class="block text-xs text-slate-500 truncate">${checkText}${mediaText}${lockText}</span>
+                    </button>
+                    <div class="text-right shrink-0 font-mono text-xs"><div class="text-slate-800">${formatDuration(s.duration)}</div><div class="text-violet-700 font-bold">${escapeHTML(s.format)}</div></div>
+                    <button data-action="delete-story" data-id="${id}" class="p-1.5 text-slate-300 hover:text-red-600 shrink-0" title="Delete from the running order" aria-label="Delete ${escapeHTML(s.slug)}"><i class="fa-solid fa-trash text-xs"></i></button>
+                </div>`;
+            }).join('');
+            const bar = (a, b) => `<div class="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1 mb-3"><div class="h-full bg-emerald-500" style="width:${b ? Math.round(a / b * 100) : 0}%"></div></div>`;
+            return `<div class="max-w-6xl mx-auto p-4 md:p-6 pb-24">
+                <div class="flex flex-wrap gap-3 items-center justify-between mb-4">
+                    <h2 class="text-3xl font-bold text-slate-800"><i class="fa-solid fa-mobile-screen-button mr-3 text-blue-500"></i>Social bulletin</h2>
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <div class="text-sm font-medium text-slate-500" title="Estimated from the words and clip lengths">Approx. runtime <span class="text-slate-800 font-mono text-lg bg-slate-200 px-2 py-1 rounded ml-1" id="social-runtime">≈ ${approxDuration(total)}</span></div>
+                        <button data-action="add-story" title="Add a story (N)" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm"><i class="fa-solid fa-plus mr-2"></i>Add story</button>
+                    </div>
+                </div>
+                ${state.ui.trash.length ? `
+                <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-xl mb-4 text-sm flex-wrap">
+                    <i class="fa-solid fa-trash-arrow-up text-amber-500"></i>
+                    <span class="font-semibold">${state.ui.trash.length} deleted this session</span>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        ${state.ui.trash.map(t => `<button data-action="rescue-story" data-id="${t.id}" ${t.restoring ? 'disabled' : ''} class="bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-800 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"><i class="fa-solid fa-rotate-left mr-1"></i>${escapeHTML(t.story.slug)}${t.restoring ? ' · Restoring…' : ''}</button>`).join('')}
+                    </div>
+                    <button data-action="clear-trash" class="ml-auto text-amber-400 hover:text-amber-700 text-xs font-bold px-2 py-1 rounded transition-colors">Clear</button>
+                </div>` : ''}
+                <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem] items-start">
+                    <div class="flex flex-col gap-2" data-testid="social-rundown">
+                        ${cards || '<div class="text-center text-slate-400 py-10 bg-white border border-dashed border-slate-300 rounded-xl">The running order is empty. Add a story, or pick one at conference.</div>'}
+                        <div data-story-id="marker-line" class="h-10 rounded-xl border border-dashed border-transparent text-xs text-slate-400 flex items-center justify-center" aria-hidden="true">${ids.length ? 'Drop here to move to the end' : ''}</div>
+                    </div>
+                    <aside class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                        <h3 class="font-bold text-slate-800 mb-3">Production readiness</h3>
+                        <div class="flex justify-between text-sm"><span>Scripts checked</span><b class="font-mono">${checked} / ${ids.length}</b></div>${bar(checked, ids.length)}
+                        <div class="flex justify-between text-sm"><span>Media ready</span><b class="font-mono">${mediaReady} / ${mediaNeeded}</b></div>${bar(mediaReady, mediaNeeded)}
+                        <button data-action="production-sheet" class="w-full mt-1 bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg font-semibold text-sm transition-colors"><i class="fa-solid fa-file-lines mr-2"></i>Production sheet</button>
+                        <p class="text-xs text-slate-400 mt-3">For whoever edits in CapCut or Edits: the order, words, pictures, clips and credits.</p>
+                    </aside>
+                </div>
+            </div>`;
+        }
+
+        // ── Social story editor ──
+        // The draft lives in state, so redraws (a section added, a tab changed,
+        // someone else's save arriving) never lose what's been typed.
+        function socialDraftFrom(id, story, prev) {
+            const sections = storySections(story);
+            return { storyId: id, rev: story.rev, slug: story.slug || '', format: story.format || 'OOV/CLIP',
+                reporter: story.reporter || '', presenter: story.presenter || '', sections, shots: storyShots(story),
+                tab: prev?.tab || 'words', sec: Math.min(prev?.sec || 0, sections.length - 1) };
+        }
+        function socialDraft() {
+            const id = state.ui.editingStoryId, story = id && state.storiesMap[id];
+            if (!story) { state.ui.socialDraft = null; return null; }
+            let d = state.ui.socialDraft;
+            // Someone else is editing it: show their saved version as it arrives.
+            if (!d || d.storyId !== id || isLockedByOther(story)) d = state.ui.socialDraft = socialDraftFrom(id, story, d?.storyId === id ? d : null);
+            return d;
+        }
+        const socialSeconds = (d) => d.sections.reduce((a, x) => a + sectionSeconds(x), 0);
+        function socialEstHTML(d) {
+            const w = d.sections.reduce((a, x) => a + socialWords(x.says), 0);
+            const onBrief = w >= 30 && w <= 40;
+            const band = isOncam(d.format) ? `<span class="text-xs text-slate-500">${w} words</span>`
+                : `<span class="text-xs font-semibold rounded px-2 py-0.5 ${onBrief ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${w} words${onBrief ? ' · on brief' : ' · brief says 30–40'}</span>`;
+            return `Est. <b class="font-mono text-slate-800">${formatDuration(socialSeconds(d))}</b> ${band}`;
+        }
+        const socialLabel = (text, hint = '') => `<span class="text-xs font-bold text-slate-600">${text}</span>${hint ? ` <span class="text-xs text-slate-400">· ${hint}</span>` : ''}`;
+        const socialInput = 'w-full max-w-full min-w-0 border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 bg-white disabled:bg-slate-50';
+        function socialWordsTab(d, locked) {
+            const dis = locked ? 'disabled' : '';
+            const media = socialMedia(d.sections, d.shots);
+            return d.sections.map((x, i) => {
+                const vo = SOCIAL_TREATMENTS[x.treatment].vo;
+                return `<div class="sd-section border rounded-xl mb-3 ${i === d.sec ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-200'}" data-sec-i="${i}">
+                    <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
+                        <span class="font-mono font-bold text-slate-400 text-xs">${String(i + 1).padStart(2, '0')}</span>
+                        <input data-sd="title" data-i="${i}" value="${escapeHTML(x.title)}" maxlength="60" placeholder="Section name" aria-label="Section ${i + 1} name" class="flex-1 min-w-0 font-semibold bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded px-1.5 py-0.5 outline-none" ${dis}>
+                        <span id="sd-t-${i}" class="font-mono text-xs text-slate-500">${formatDuration(sectionSeconds(x))}</span>
+                        ${locked ? '' : `<button type="button" data-action="sd-up" data-id="${i}" class="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-30" ${i === 0 ? 'disabled' : ''} aria-label="Move section ${i + 1} up"><i class="fa-solid fa-arrow-up text-xs"></i></button>
+                        <button type="button" data-action="sd-down" data-id="${i}" class="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-30" ${i === d.sections.length - 1 ? 'disabled' : ''} aria-label="Move section ${i + 1} down"><i class="fa-solid fa-arrow-down text-xs"></i></button>
+                        <button type="button" data-action="sd-del" data-id="${i}" class="p-1 text-slate-400 hover:text-red-600 disabled:opacity-30" ${d.sections.length === 1 ? 'disabled' : ''} aria-label="Delete section ${i + 1}"><i class="fa-solid fa-trash text-xs"></i></button>`}
+                    </div>
+                    <div class="p-3 grid gap-3 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
+                        <label class="sm:col-span-2 block min-w-0">${vo ? socialLabel('Voiceover', 'read out of shot; goes to the prompter') : socialLabel('Presenter says', 'to camera; goes to the prompter')}
+                            <textarea data-sd="says" data-i="${i}" rows="3" spellcheck="true" lang="en-GB" class="${socialInput} mt-1 text-base resize-y" ${dis}>${escapeHTML(x.says)}</textarea></label>
+                        <label class="block min-w-0">${socialLabel('Picture treatment')}
+                            <select data-sd="treatment" data-i="${i}" class="${socialInput} mt-1" ${dis}>${Object.entries(SOCIAL_TREATMENTS).map(([k, v]) => `<option value="${k}" ${k === x.treatment ? 'selected' : ''}>${escapeHTML(v.label)}</option>`).join('')}</select></label>
+                        <label class="block min-w-0">${socialLabel('On-screen text', 'burned-in caption')}
+                            <input data-sd="onscreen" data-i="${i}" value="${escapeHTML(x.onscreen)}" maxlength="120" placeholder="e.g. Have your say" class="${socialInput} mt-1" ${dis}></label>
+                        <label class="block min-w-0">${socialLabel('Clip with sound', 'm:ss, after the words; blank if none')}
+                            <input data-sd="clip" data-i="${i}" value="${escapeHTML(x.clip)}" maxlength="8" placeholder="e.g. 0:06" inputmode="numeric" class="${socialInput} mt-1 font-mono" ${dis}></label>
+                    </div>
+                </div>`;
+            }).join('') + (locked ? '' : `<button type="button" data-action="sd-add-sec" class="w-full border border-dashed border-slate-300 rounded-xl py-2 text-blue-600 font-semibold hover:bg-blue-50"><i class="fa-solid fa-plus mr-1.5"></i>Add section</button>`)
+                + `<div class="mt-3" id="sd-media-hint">${socialMediaHint(media)}</div>`;
+        }
+        function socialMediaHint(media) {
+            if (media.na) return '';
+            return media.ready ? '<span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 rounded-lg px-2.5 py-1"><i class="fa-solid fa-circle-check"></i>Media ready</span>'
+                : `<span class="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1"><i class="fa-solid fa-circle-exclamation"></i>Media: ${escapeHTML(media.missing[0])}${media.missing.length > 1 ? ` +${media.missing.length - 1}` : ''}</span>
+                   <button type="button" data-action="sd-tab" data-val="media" class="text-xs text-blue-600 underline ml-1">Media &amp; credits</button>`;
+        }
+        function socialShotHTML(k, m, n, title, locked) {
+            const dis = locked ? 'disabled' : '';
+            const pa = m.source === 'pa';
+            return `<div class="border border-slate-200 rounded-xl p-3 mb-3">
+                ${title ? `<h4 class="text-sm font-bold mb-2"><span class="bg-slate-800 text-white rounded px-1.5 text-xs mr-1.5">${n}</span>${title}</h4>` : ''}
+                <div class="mb-2">${socialLabel('Where is the picture from?')}</div>
+                <div class="inline-flex border border-slate-300 rounded-lg overflow-hidden mb-3" role="group" aria-label="Where shot ${n} is from">
+                    ${Object.entries(SOCIAL_SOURCES).map(([src, label]) => `<button type="button" data-action="sd-source" data-id="${k}" data-val="${src}" aria-pressed="${m.source === src}" ${dis} class="px-3 py-1.5 text-sm font-semibold border-r last:border-r-0 border-slate-300 ${m.source === src ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}">${label}</button>`).join('')}
+                </div>
+                <div class="grid gap-3 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
+                    <label class="block min-w-0">${socialLabel(pa ? 'PA source page for the clip or image' : m.source === 'own' ? 'Link to the footage, or where it is' : 'Link to the original')}
+                        <input data-sd="link" data-shot="${k}" value="${escapeHTML(m.link)}" maxlength="2000" placeholder="${pa ? 'https://explore.pressassociation.com/…' : 'https://…'}" class="${socialInput} mt-1" ${dis}></label>
+                    <label class="block min-w-0">${socialLabel('What it shows', 'for the editor')}
+                        <input data-sd="note" data-shot="${k}" value="${escapeHTML(m.note)}" maxlength="200" placeholder="e.g. Library interior, people reading" class="${socialInput} mt-1" ${dis}></label>
+                    <label class="block min-w-0">${socialLabel('On-screen credit', m.source === 'own' ? 'optional for your own footage' : '')}
+                        <input data-sd="credit" data-shot="${k}" value="${escapeHTML(m.credit)}" maxlength="120" placeholder="${pa ? 'PA, or the Source Restrictions credit' : 'e.g. Courtesy of …'}" class="${socialInput} mt-1" ${dis}></label>
+                </div>
+                ${pa ? `<div class="grid gap-2 mt-3">
+                    <label class="flex gap-2 items-start text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><input type="checkbox" data-sd="newsroomReady" data-shot="${k}" class="mt-0.5" ${m.newsroomReady ? 'checked' : ''} ${dis}><span><b>Newsroom Ready</b>: marked Newsroom Ready in PA Explore</span></label>
+                    <label class="flex gap-2 items-start text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><input type="checkbox" data-sd="embargoClear" data-shot="${k}" class="mt-0.5" ${m.embargoClear ? 'checked' : ''} ${dis}><span><b>No embargo</b>, or it has lifted before we publish</span></label>
+                </div>` : ''}
+            </div>`;
+        }
+        function socialMediaFoot(media) {
+            return media.ready ? '<span class="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 bg-emerald-50 rounded-lg px-2.5 py-1"><i class="fa-solid fa-circle-check"></i>Media ready</span>'
+                : `<span class="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1"><i class="fa-solid fa-circle-exclamation"></i>Still needed: ${escapeHTML(media.missing.join(', '))}</span>`;
+        }
+        function socialMediaTab(d, locked) {
+            const media = socialMedia(d.sections, d.shots);
+            if (media.na) return `<p class="text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2"><i class="fa-solid fa-circle-check mr-1.5"></i>Presenter only: no footage needed.</p>
+                <p class="text-sm text-slate-500 mt-2">Change a section's picture treatment to footage, an overlay, a split screen or a graphic and this tab will ask where the pictures come from.</p>`;
+            const dual = usesDual(d.sections);
+            const anyPA = d.shots.a.source === 'pa' || (dual && d.shots.b.source === 'pa');
+            return socialShotHTML('a', d.shots.a, 1, dual ? 'Shot 1 · top of the dual split, and the footage in other sections' : '', locked)
+                + (dual ? socialShotHTML('b', d.shots.b, 2, 'Shot 2 · bottom of the dual split', locked) : '')
+                + (anyPA ? `<div class="text-sm bg-blue-50 border border-blue-200 text-blue-900 rounded-lg px-3 py-2 mb-3"><b><i class="fa-solid fa-circle-info mr-1"></i>PA rules</b>
+                    <ul class="list-disc pl-5 mt-1"><li>Use the clip only for the story it relates to.</li>
+                    <li>Credit PA on screen, unless <i>Source restrictions</i> in the metadata names someone else.</li>
+                    <li>The link goes in your reflection as the source for the item.</li></ul></div>` : '')
+                + `<div id="sd-media-foot">${socialMediaFoot(media)}</div>`;
+        }
+        function socialReviewTab(id, story, d) {
+            const opts = [['needs-checking', 'Needs checking', 'bg-amber-500'], ['checked-ok', 'Checked OK', 'bg-emerald-600'], ['checked-needs-work', 'Needs work', 'bg-red-600']];
+            const script = escapeHTML(composeSocialScript(d.sections))
+                .replace(/\[STRAP:[^\]]*\]/g, m => `<span class="text-slate-400">${m}</span>`)
+                .replace(/\[(?!STRAP)[^\]]*\]/g, m => `<span class="text-amber-300">${m}</span>`);
+            return `<div class="mb-1">${socialLabel('Editorial check', 'saved straight away')}</div>
+                <div class="inline-flex border border-slate-300 rounded-lg overflow-hidden mb-4" role="group" aria-label="Editorial check">
+                    ${opts.map(([v, l, on]) => `<button type="button" data-action="sd-check" data-id="${id}" data-val="${v}" aria-pressed="${story.completed === v}" class="px-3 py-1.5 text-sm font-semibold border-r last:border-r-0 border-slate-300 ${story.completed === v ? `${on} text-white` : 'bg-white text-slate-700 hover:bg-slate-50'}">${l}</button>`).join('')}
+                </div>
+                <div class="mb-1">${socialLabel('The script this saves', '[cues] show on the prompter; the STRAP (on-screen text) is hidden from it')}</div>
+                <pre id="sd-script" class="bg-slate-900 text-slate-100 rounded-lg p-3 text-sm whitespace-pre-wrap font-mono">${script}</pre>`;
+        }
+        function socialCredit(m, top) {
+            if (m.credit.trim()) return `<div class="sp-credit" style="top:${top}">${escapeHTML(m.credit)}</div>`;
+            return m.source === 'own' ? '' : `<div class="sp-credit missing" style="top:${top}">CREDIT?</div>`;
+        }
+        function socialPlanHTML(d, locked) {
+            const i = Math.min(d.sec, d.sections.length - 1), x = d.sections[i], a = d.shots.a, b = d.shots.b;
+            const who = d.presenter.trim() || 'Presenter';
+            const lbl = (icon, t) => `<span class="sp-lbl"><i class="fa-solid fa-${icon}"></i>${escapeHTML(t)}</span>`;
+            const zones = {
+                presenter: `<div class="sp-zone sp-presenter" style="top:0;bottom:0">${lbl('user', who)}</div>`,
+                overlay: `<div class="sp-zone sp-footage" style="top:0;bottom:0">${lbl('film', a.note || 'Footage or graphic behind')}</div>${socialCredit(a, '8px')}
+                    <div class="sp-overlay"><span><i class="fa-solid fa-user"></i>${escapeHTML(who)}<br><span style="font-weight:400;opacity:.8">cut-out</span></span></div>`,
+                split: `<div class="sp-zone sp-presenter" style="top:0;height:50%">${lbl('user', who)}</div>
+                    <div class="sp-zone sp-footage" style="top:50%;bottom:0;border-top:2px solid #fff">${lbl('film', a.note || 'Footage')}</div>${socialCredit(a, '51%')}`,
+                dual: `<div class="sp-zone sp-footage" style="top:0;height:50%">${lbl('film', a.note || 'Shot 1')}</div>${socialCredit(a, '8px')}
+                    <div class="sp-zone sp-footage2" style="top:50%;bottom:0;border-top:2px solid #fff">${lbl('film', b.note || 'Shot 2')}</div>${socialCredit(b, '51%')}`,
+                footage: `<div class="sp-zone sp-footage" style="top:0;bottom:0">${lbl('film', a.note || 'Footage')}</div>${socialCredit(a, '8px')}`,
+                graphic: `<div class="sp-zone sp-graphic" style="top:0;bottom:0">${lbl('chart-simple', a.note || 'Graphic')}</div>${socialCredit(a, '8px')}`,
+            };
+            return `<h4 class="font-bold text-slate-800">Picture plan <span class="text-xs font-normal text-slate-400">layout preview · 9:16</span></h4>
+                <p class="text-xs text-slate-500 text-center mt-1">Section <b class="text-slate-700">${String(i + 1).padStart(2, '0')}${x.title ? ` · ${escapeHTML(x.title)}` : ''}</b></p>
+                <div class="sp-phone">${zones[x.treatment]}${SOCIAL_TREATMENTS[x.treatment].vo ? '<div class="sp-vo"><i class="fa-solid fa-microphone"></i> VO</div>' : ''}${x.onscreen.trim() ? `<div class="sp-caption">${escapeHTML(x.onscreen)}</div>` : ''}<div class="sp-safe">app buttons &amp; captions area</div></div>
+                <div class="sp-layouts" role="group" aria-label="Picture treatment for this section">${Object.entries(SOCIAL_TREATMENTS).map(([k, v]) =>
+                    `<button type="button" data-action="sd-layout" data-val="${k}" aria-pressed="${k === x.treatment}" class="${k === x.treatment ? 'on' : ''}" ${locked ? 'disabled' : ''}><span class="sp-mini">${v.mini}</span>${escapeHTML(v.short)}</button>`).join('')}</div>
+                <p class="text-xs italic text-slate-500 text-center">What does this picture help the audience understand?</p>`;
+        }
+        // Keep the chosen layout card in view without moving the page.
+        function centreLayoutCard() {
+            const strip = document.querySelector('#sd-plan .sp-layouts'), on = strip?.querySelector('.on');
+            if (on) strip.scrollLeft = on.offsetLeft - (strip.clientWidth - on.offsetWidth) / 2;
+        }
+        function renderSocialEditModal() {
+            const id = state.ui.editingStoryId, story = state.storiesMap[id], d = socialDraft();
+            if (!story || !d) return '';
+            const locked = isLockedByOther(story), dis = locked ? 'disabled' : '';
+            const media = socialMedia(d.sections, d.shots);
+            const formats = [...new Set([...(state.meta.formats || []), 'OOV/CLIP', 'ONCAM', d.format].filter(Boolean))];
+            const names = [...new Set(Object.values(state.storiesMap).flatMap(s => [s.reporter, s.presenter]).filter(Boolean))];
+            const badge = media.na ? '' : media.ready ? ' <span id="sd-media-badge" class="ml-1 text-[10px] bg-emerald-50 text-emerald-700 rounded-full px-1.5">✓</span>'
+                : ` <span id="sd-media-badge" class="ml-1 text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded-full px-1.5">${media.missing.length}</span>`;
+            const tab = (t, label, extra = '') => `<button type="button" data-action="sd-tab" data-val="${t}" aria-pressed="${d.tab === t}" class="px-3 py-2 text-sm font-bold border-b-2 -mb-px whitespace-nowrap ${d.tab === t ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">${label}${extra}</button>`;
+            const body = d.tab === 'media' ? socialMediaTab(d, locked) : d.tab === 'review' ? socialReviewTab(id, story, d) : socialWordsTab(d, locked);
+            setTimeout(centreLayoutCard, 0);
+            return `<div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center sm:p-4 z-[60]">
+                <datalist id="staff-names">${names.map(n => `<option value="${escapeHTML(n)}">`).join('')}</datalist>
+                <div class="bg-white sm:rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col h-full sm:h-auto sm:max-h-full overflow-hidden" data-testid="social-editor">
+                    <div class="px-4 md:px-6 py-3 border-b border-slate-200 flex gap-2 items-center bg-slate-50">
+                        <i class="fa-solid fa-mobile-screen-button text-blue-500" aria-hidden="true"></i>
+                        <input data-sd="slug" value="${escapeHTML(d.slug)}" maxlength="80" aria-label="Slug" spellcheck="true" lang="en-GB" class="flex-1 min-w-0 text-lg font-bold uppercase bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded px-2 py-1 outline-none" ${dis}>
+                        <select data-sd="format" aria-label="Format" class="text-xs font-bold border border-violet-200 rounded px-2 py-1 bg-violet-50 text-violet-700" ${dis}>${formats.map(f => `<option ${f === d.format ? 'selected' : ''}>${escapeHTML(f)}</option>`).join('')}</select>
+                        <button data-action="cancel-edit" class="text-slate-400 hover:text-slate-600 text-2xl px-1" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    ${locked ? renderLockBanner(story) : ''}
+                    ${story.brief || story.pitchedBy || story.sourceUrl ? `<div class="bg-violet-50 border-b border-violet-200 px-4 md:px-6 py-2 text-sm text-violet-900">
+                        <i class="fa-solid fa-lightbulb mr-2 text-violet-400"></i><b>Brief:</b> ${escapeHTML(story.brief || '(no angle given)')}${story.pitchedBy ? ` <span class="text-violet-500">· pitched by ${escapeHTML(story.pitchedBy)}</span>` : ''}${safeWebUrl(story.sourceUrl) ? ` <span class="text-violet-500">·</span> ${sourceLinkHtml(story.sourceUrl, sourceOfUrl(story.sourceUrl), 'font-semibold text-violet-700 hover:text-violet-900 underline')}` : ''}
+                    </div>` : ''}
+                    <div class="flex-1 min-h-0 overflow-y-auto">
+                        <div class="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_20rem]">
+                            <div class="p-4 md:p-6 min-w-0">
+                                <div class="flex flex-wrap gap-x-4 gap-y-2 items-center text-sm text-slate-600 mb-3">
+                                    <label class="flex items-center gap-1.5">Reporter <input data-sd="reporter" list="staff-names" maxlength="60" spellcheck="false" value="${escapeHTML(d.reporter)}" class="border border-slate-300 rounded px-2 py-1 w-36 outline-none focus:border-blue-500" ${dis}></label>
+                                    <label class="flex items-center gap-1.5">Presenter <input data-sd="presenter" list="staff-names" maxlength="60" spellcheck="false" value="${escapeHTML(d.presenter)}" class="border border-slate-300 rounded px-2 py-1 w-36 outline-none focus:border-blue-500" ${dis}></label>
+                                    <span id="sd-est">${socialEstHTML(d)}</span>
+                                </div>
+                                <div class="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto">${tab('words', 'Words + picture')}${tab('media', 'Media &amp; credits', badge)}${tab('review', 'Review')}</div>
+                                <div id="sd-body">${body}</div>
+                            </div>
+                            <aside id="sd-plan" class="p-4 md:p-6 border-t lg:border-t-0 lg:border-l border-slate-200 bg-slate-50/60 min-w-0">${socialPlanHTML(d, locked)}</aside>
+                        </div>
+                    </div>
+                    <div class="px-4 md:px-6 py-3 border-t border-slate-200 bg-slate-50 flex justify-between items-center gap-3 flex-wrap">
+                        <div>${state.ui.storySnapshots[id] && !locked ? `<button data-action="revert-story" data-id="${id}" class="flex items-center gap-2 px-4 py-2 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 font-medium text-sm"><i class="fa-solid fa-clock-rotate-left"></i>Revert to previous version</button>` : ''}</div>
+                        <div class="flex gap-3 items-center flex-wrap justify-end">
+                            <span id="edit-save-error" class="text-sm text-red-600 max-w-xs" style="display:none"></span>
+                            <button data-action="cancel-edit" class="px-5 py-2.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors">${locked ? 'Close' : 'Cancel'}</button>
+                            ${locked ? '' : '<button data-action="sd-save" data-label="Save changes" class="btn-primary">Save changes</button>'}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+        // Typing updates the draft and the live parts (timings, picture plan,
+        // media status) in place, so the text being typed is never redrawn.
+        function socialLiveUpdate(d) {
+            const set = (sel, html) => { const el = document.getElementById(sel); if (el) el.innerHTML = html; };
+            set('sd-est', socialEstHTML(d));
+            d.sections.forEach((x, i) => { const el = document.getElementById(`sd-t-${i}`); if (el) el.textContent = formatDuration(sectionSeconds(x)); });
+            set('sd-plan', socialPlanHTML(d, false));
+            centreLayoutCard();
+            const media = socialMedia(d.sections, d.shots);
+            set('sd-media-hint', socialMediaHint(media));
+            if (!media.na) set('sd-media-foot', socialMediaFoot(media));
+            const badge = document.getElementById('sd-media-badge');
+            if (badge) {
+                badge.textContent = media.ready ? '✓' : String(media.missing.length);
+                badge.className = `ml-1 text-[10px] rounded-full px-1.5 ${media.ready ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800 border border-amber-200'}`;
+            }
+            const script = document.getElementById('sd-script');
+            if (script) script.textContent = composeSocialScript(d.sections);
+        }
+        function onSocialInput(e) {
+            const el = e.target?.closest?.('[data-sd]');
+            const d = state.ui.socialDraft;
+            if (!el || !d || d.storyId !== state.ui.editingStoryId) return;
+            const f = el.dataset.sd, i = el.dataset.i !== undefined ? +el.dataset.i : null, k = el.dataset.shot;
+            const isBox = el.type === 'checkbox', isSelect = el.tagName === 'SELECT';
+            if ((isBox || isSelect) !== (e.type === 'change')) return;   // text on input; boxes and lists on change
+            if (k && d.shots[k]) d.shots[k][f] = isBox ? el.checked : el.value;
+            else if (i !== null && d.sections[i]) {
+                d.sections[i][f] = el.value;
+                if (f === 'treatment') { d.sec = i; redrawSocialEditor(`select[data-sd="treatment"][data-i="${i}"]`); return; }
+            } else if (['slug', 'format', 'reporter', 'presenter'].includes(f)) {
+                d[f] = el.value;
+                if (f === 'format') { redrawSocialEditor('select[data-sd="format"]'); return; }
+            }
+            socialLiveUpdate(d);
+        }
+        // The draft holds everything, so the editor can always be redrawn. The
+        // desk holds back redraws while a text box has focus, so let go of it
+        // first, then put focus back where it was.
+        function redrawSocialEditor(focusSelector) {
+            if (document.activeElement && document.getElementById('modal-container')?.contains(document.activeElement)) document.activeElement.blur();
+            render('modal');
+            if (focusSelector) requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`#modal-container ${focusSelector}`)?.focus()));
+        }
+        function focusSocialSection(i) {
+            const d = state.ui.socialDraft;
+            if (!d || !d.sections[i] || d.sec === i) return;
+            d.sec = i;
+            document.querySelectorAll('#modal-container .sd-section').forEach(el => {
+                const on = +el.dataset.secI === i;
+                el.classList.toggle('border-blue-500', on); el.classList.toggle('ring-1', on); el.classList.toggle('ring-blue-500', on); el.classList.toggle('border-slate-200', !on);
+            });
+            const plan = document.getElementById('sd-plan');
+            if (plan) { plan.innerHTML = socialPlanHTML(d, false); centreLayoutCard(); }
+        }
+        function saveSocialStory() {
+            const d = socialDraft();
+            if (!d) return;
+            const sections = d.sections.map(cleanSection);
+            const shots = { a: cleanShot(d.shots.a, 'pa'), b: cleanShot(d.shots.b, 'own') };
+            saveStory(d.storyId, {
+                slug: d.slug.trim() || 'UNTITLED', format: d.format, reporter: d.reporter.trim(), presenter: d.presenter.trim(),
+                duration: sections.reduce((a, x) => a + sectionSeconds(x), 0), script: composeSocialScript(sections),
+                sections, shots, rev: d.rev,
+            });
+        }
+        async function handleSocialAction({ action, id, val }) {
+            if (action === 'production-sheet') { printProductionSheet(); return true; }
+            if (!action.startsWith('sd-')) return false;
+            const d = socialDraft();
+            if (!d) return true;
+            const story = state.storiesMap[d.storyId];
+            const locked = isLockedByOther(story);
+            const i = id !== null ? +id : null;
+            if (action === 'sd-tab') { d.tab = val; render('modal'); return true; }
+            if (action === 'sd-check') {
+                if (!canMutate() || !story) return true;
+                const next = story.completed === val ? null : val;
+                story.completed = next;
+                render('main', 'modal');
+                try { await DB.setStoryStatus(d.storyId, next); }
+                catch (e) { showError('Check not saved: ' + DB.errorMessage(e)); }
+                return true;
+            }
+            if (locked) return true;
+            if (action === 'sd-save') { saveSocialStory(); return true; }
+            if (action === 'sd-add-sec') {
+                if (d.sections.length >= 20) { showNotice('Sections', 'A story can have up to 20 sections.', 'warn'); return true; }
+                d.sections.push(cleanSection({ treatment: isOncam(d.format) ? 'presenter' : 'footage' }));
+                d.sec = d.sections.length - 1;
+                render('modal');
+                setTimeout(() => document.querySelector(`#modal-container textarea[data-sd="says"][data-i="${d.sec}"]`)?.focus(), 30);
+                return true;
+            }
+            if (action === 'sd-del' && d.sections.length > 1 && d.sections[i]) {
+                d.sections.splice(i, 1);
+                d.sec = Math.min(d.sec, d.sections.length - 1);
+                render('modal'); return true;
+            }
+            if ((action === 'sd-up' || action === 'sd-down') && d.sections[i]) {
+                const j = action === 'sd-up' ? i - 1 : i + 1;
+                if (j < 0 || j >= d.sections.length) return true;
+                [d.sections[i], d.sections[j]] = [d.sections[j], d.sections[i]];
+                d.sec = j;
+                render('modal'); return true;
+            }
+            if (action === 'sd-layout' && SOCIAL_TREATMENTS[val]) { d.sections[d.sec].treatment = val; render('modal'); return true; }
+            if (action === 'sd-source' && d.shots[id] && SOCIAL_SOURCES[val]) {
+                const m = d.shots[id];
+                m.source = val;
+                if (val === 'pa' && !m.credit.trim()) m.credit = 'PA';
+                render('modal'); return true;
+            }
+            return true;
+        }
+
+        // ── Production sheet: everything the editor needs, printed or saved as PDF ──
+        function productionSheetHTML() {
+            const fullOrder = state.meta.order || [];
+            const endIdx = fullOrder.indexOf('marker-line');
+            const ids = (endIdx < 0 ? fullOrder : fullOrder.slice(0, endIdx)).filter(id => state.storiesMap[id] && state.storiesMap[id].type !== 'segment');
+            let total = 0, num = 0;
+            const link = (u) => { const safe = safeWebUrl(u); return safe ? ` · <a href="${escapeHTML(safe)}">${escapeHTML(safe)}</a>` : ''; };
+            const rows = ids.map(id => {
+                const s = state.storiesMap[id], sections = storySections(s), shots = storyShots(s), media = socialMedia(sections, shots);
+                total += s.duration || 0;
+                const used = media.na ? [] : usesDual(sections) ? [['Shot 1: ', shots.a], ['Shot 2: ', shots.b]] : [['', shots.a]];
+                const src = used.map(([k, m]) => `${k}${SOCIAL_SOURCES[m.source]}${m.note ? ` (${escapeHTML(m.note)})` : ''}${link(m.link)}`).join('<br>') || '—';
+                const credit = used.map(([k, m]) => k + (m.credit ? escapeHTML(m.credit) : m.source === 'own' ? '—' : '<span class="miss">MISSING</span>')).join('<br>') || '—';
+                const label = isOncam(s.format) ? '' : ++num;
+                return `<tr class="story"><td>${label}</td><td colspan="2">${escapeHTML(s.slug || 'Untitled')} · ${escapeHTML(s.format)}${s.reporter ? ` · ${escapeHTML(s.reporter)}` : ''}</td><td>${formatDuration(s.duration)}</td><td>${src}</td><td>${credit}</td></tr>`
+                    + sections.map(x => `<tr><td></td><td><b>${escapeHTML(x.title || 'Section')}</b><br>${escapeHTML(SOCIAL_TREATMENTS[x.treatment].label)}</td>
+                        <td>${x.says.trim() ? escapeHTML(x.says) : '<span class="miss">No words yet</span>'}</td>
+                        <td>${formatDuration(sectionSeconds(x))}${clipSeconds(x.clip) ? `<br><i>incl. ${formatDuration(clipSeconds(x.clip))} clip</i>` : ''}</td>
+                        <td colspan="2">${x.onscreen.trim() ? `On screen: <b>${escapeHTML(x.onscreen)}</b>` : ''}</td></tr>`).join('');
+            }).join('');
+            const printed = new Date().toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            const title = `${state.roomDisplayName}: production sheet`;
+            return `<!DOCTYPE html><html lang="en-GB"><head><meta charset="UTF-8"><title>${escapeHTML(title)}</title><style>
+                * { box-sizing: border-box; }
+                body { margin: 0; color: #1b1f27; font: 12.5px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+                h1 { font-size: 20px; margin: 0 0 2px; } .meta { color: #667085; font-size: 12px; margin: 0 0 10px; }
+                table { width: 100%; border-collapse: collapse; } th, td { border-bottom: 1px solid #dfe3ea; padding: 5px 6px; text-align: left; vertical-align: top; }
+                th { background: #f4f6f9; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #667085; }
+                tr.story td { background: #eef1f5; font-weight: 700; } tr { break-inside: avoid; }
+                a { color: #2457d6; word-break: break-all; } .miss { color: #c62828; font-weight: 700; }
+                @page { margin: 12mm; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            </style></head><body>
+                <h1>${escapeHTML(title)}</h1>
+                <p class="meta">Printed ${escapeHTML(printed)} · approx. runtime ≈ ${approxDuration(total)}${state.meta.producerName ? ` · producer ${escapeHTML(state.meta.producerName)}` : ''}</p>
+                <table><thead><tr><th>#</th><th>Section &amp; picture</th><th>Words</th><th>Time</th><th>Source</th><th>Credit</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No stories yet.</td></tr>'}</tbody></table>
+            </body></html>`;
+        }
+        function printProductionSheet() {
+            document.getElementById('print-frame')?.remove();
+            const frame = document.createElement('iframe');
+            frame.id = 'print-frame';
+            frame.setAttribute('aria-hidden', 'true');
+            frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+            frame.onload = () => {
+                const win = frame.contentWindow;
+                win.addEventListener('afterprint', () => setTimeout(() => frame.remove(), 0));
+                win.focus();
+                win.print();
+            };
+            frame.srcdoc = productionSheetHTML();
+            document.body.appendChild(frame);
+        }
+
         function renderMain() {
             if (state.ui.needsJoin) return renderJoinScreen();
             if (!state.localMode && !state.currentBulletinId) {
                 return state.connectionState === 'error' ? '' : `<div class="flex h-full items-center justify-center text-slate-400"><i class="fa-solid fa-circle-notch fa-spin mr-3"></i>Connecting…</div>`;
             }
-            return renderViewBar() + (state.ui.view === 'conference' ? renderConference() : renderNewsroom());
+            return renderViewBar() + (state.ui.view === 'conference' ? renderConference() : isSocialRoom() ? renderSocialRundown() : renderNewsroom());
         }
 
         // Conference / Running order switch, plus who the producer is.
@@ -2270,7 +2816,7 @@
                     producer = `<span class="flex items-center gap-2"><span class="text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded-full"><i class="fa-solid fa-crown mr-1.5"></i>You're producer</span>
                         <button data-action="release-producer" class="text-xs text-slate-500 hover:text-slate-800 underline">Step down</button></span>`;
                 } else if (hasProducer()) {
-                    producer = `<span class="text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-full" title="The producer picks the stories and sends the bulletin to Cuez"><i class="fa-solid fa-crown mr-1.5 text-amber-500"></i>Producer: ${escapeHTML(state.meta.producerName || 'someone')}</span>`;
+                    producer = `<span class="text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-full" title="${isSocialRoom() ? 'The producer picks the stories and runs the bulletin' : 'The producer picks the stories and sends the bulletin to Cuez'}"><i class="fa-solid fa-crown mr-1.5 text-amber-500"></i>Producer: ${escapeHTML(state.meta.producerName || 'someone')}</span>`;
                 } else {
                     producer = `<span class="flex items-center gap-2"><span class="text-xs text-slate-500">No producer yet</span>
                         <button data-action="claim-producer" ${state.ui.pitchBusy ? 'disabled' : ''} class="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-full shadow-sm transition-colors" title="For whoever is leading the bulletin"><i class="fa-solid fa-crown mr-1.5"></i>I'm the producer</button></span>`;
@@ -2279,7 +2825,7 @@
             return `<div class="${state.ui.view === 'conference' ? 'max-w-5xl' : 'max-w-7xl'} mx-auto px-4 md:px-6 pt-4 flex flex-wrap items-center justify-between gap-3">
                 <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                     ${tab('conference', 'fa-comments', 'Conference', open)}
-                    ${tab('rundown', 'fa-bars-staggered', 'Running order', stories)}
+                    ${tab('rundown', isSocialRoom() ? 'fa-mobile-screen-button' : 'fa-bars-staggered', isSocialRoom() ? 'Running order <span class="ml-1 text-[10px] font-bold bg-violet-600 text-white px-1.5 py-0.5 rounded align-middle">SOCIAL</span>' : 'Running order', stories)}
                 </div>
                 ${producer}
             </div>`;
@@ -2636,9 +3182,10 @@
 
         // ── Modals ─────────────────────────────────────────────────────────
         function renderModals() {
+            if (!state.ui.editingStoryId) state.ui.socialDraft = null;
             if (state.ui.isShortcutsModalOpen) return renderShortcutsModal();
             if (state.ui.pendingConflict) return renderConflictModal();
-            if (state.ui.editingStoryId) return renderEditModal();
+            if (state.ui.editingStoryId) return isSocialRoom() && state.storiesMap[state.ui.editingStoryId]?.type !== 'segment' ? renderSocialEditModal() : renderEditModal();
             if (state.ui.join && !state.ui.needsJoin) return renderJoinModal();
             if (state.ui.isSettingsModalOpen) return renderSettingsModal();
             return '';
@@ -2818,7 +3365,7 @@
                         <button data-action="close-settings-modal" class="text-slate-400 hover:text-slate-600 text-2xl"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="flex">
-                        ${tabBtn('editorial', 'Formats', 'fa-pen-nib')}
+                        ${isSocialRoom() ? '' : tabBtn('editorial', 'Formats', 'fa-pen-nib')}
                         ${tabBtn('about', 'About', 'fa-info-circle')}
                         ${state.localMode ? tabBtn('reset', 'Clear', 'fa-right-from-bracket') : ''}
                     </div>
@@ -2895,11 +3442,11 @@
                 const lower = e.key.toLowerCase();
                 if (state.ui.view !== 'rundown') return; // N and B add to the running order, so only there
                 if (lower === 'n') { e.preventDefault(); addStory(); }
-                else if (lower === 'b') { e.preventDefault(); addSegment(); }
+                else if (lower === 'b' && !isSocialRoom()) { e.preventDefault(); addSegment(); }
             });
 
             const handleSettings = async ({ action, val }) => {
-                if (action === 'open-settings-modal')  { state.ui.isSettingsModalOpen = true; state.ui.settingsTab = 'editorial'; render('modal'); return true; }
+                if (action === 'open-settings-modal')  { state.ui.isSettingsModalOpen = true; state.ui.settingsTab = isSocialRoom() ? 'about' : 'editorial'; render('modal'); return true; }
                 if (action === 'close-settings-modal') { state.ui.isSettingsModalOpen = false; render('modal'); return true; }
                 if (action === 'set-settings-tab')     { state.ui.settingsTab = val; render('modal'); return true; }
                 if (action === 'sign-out') { signOutBrowser(); return true; }
@@ -2988,6 +3535,7 @@
                     if (!canMutate()) return true;
                     if (!await ensureMyName()) return true;
                     state.ui.editingStoryId = id;
+                    state.ui.socialDraft = null;
                     lockStory(id);
                     startLockRefresh(id);
                     render('modal');
@@ -3171,9 +3719,17 @@
                 if (await handleConference(ctx)) return;
                 if (await handleCuez(ctx)) return;
                 if (await handleRundown(ctx)) return;
+                if (await handleSocialAction(ctx)) return;
                 await handleEdit(ctx);
             });
 
+            // The social story editor's fields update its draft (see onSocialInput).
+            document.body.addEventListener('input', onSocialInput);
+            document.body.addEventListener('change', onSocialInput);
+            document.body.addEventListener('focusin', e => {
+                const sec = e.target?.closest?.('#modal-container .sd-section');
+                if (sec) focusSocialSection(+sec.dataset.secI);
+            });
             document.body.addEventListener('change', e => {
                 if (e.target.id === 'room-select' && e.target.value !== state.currentBulletinId) openRoom(e.target.value);
                 if (e.target.classList?.contains('picked-format')) setPickedFormat(e.target.dataset.id, e.target.value);

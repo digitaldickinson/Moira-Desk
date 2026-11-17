@@ -66,6 +66,18 @@ Once a producer has claimed the role, they send the bulletin to Cuez. The desk s
 
 **Treat sending as a handover.** Later edits, deletions and reordering in Moira:Desk do not automatically update Cuez. A **Changed** badge means a sent story has since been edited; **Unconfirmed** means its arrival has not been fully confirmed. Read the send message and check with your producer before resending or removing anything.
 
+## Social newsrooms
+
+Some newsrooms make a short social media bulletin instead of a programme for Cuez. Your administrator sets this when the newsroom is created: the **Running order** tab is marked **SOCIAL**, and there's no Cuez send.
+
+A social running order starts with **INTRO** and **OUTRO**. Stories picked at conference, or added with **Add story**, go in above the outro. Drag a story by its handle (press and hold on a phone), or use the ▲ ▼ arrows, to move it; the bin deletes it, and you can rescue it again this session. The coloured dot is the editorial check. **Approx. runtime** is an estimate from the words and clip lengths, to the nearest 5 seconds.
+
+Open a story to plan it in sections. For each section, write what's said, choose the **picture treatment** (presenter, presenter overlay, presenter split, dual footage, full footage or a graphic), add any **on-screen text** and the length of any **clip with sound**. Where the presenter is out of shot, the words are labelled **Voiceover**. The **picture plan** beside the editor shows the 9:16 layout of the section you're working on, with its caption and credit. A word count shows whether a story is within the brief's 30–40 words.
+
+**Media & credits** asks where the pictures come from (PA, your own footage, or elsewhere), a link, what it shows and the on-screen credit. For PA, tick **Newsroom Ready** and **No embargo** once you've checked them in PA Explore. Dual footage has two shots, each with its own source and credit. A story shows **Media ready** once everything is filled in. **Review** sets the editorial check and shows the script the desk saves from your sections: cues in [square brackets] appear on the prompter, and the on-screen text is kept off it.
+
+**Production sheet** prints, or saves as a PDF, everything the person editing in CapCut or Edits needs: the order, each section's words and picture, clip lengths, on-screen text, sources and credits, with any missing credit flagged.
+
 ## For tutors and executive producers
 
 [Open the tutor desk](https://digitaldickinson.github.io/Moira-Desk/tutor.html) and sign in with your staff email and password. You’ll see only the newsrooms your administrator has assigned to you.
@@ -84,7 +96,7 @@ After a session, choose **Review & feedback** on a newsroom’s card to read its
 
 Choose **Report** on a card for one newsroom, or **Report…** in the bottom bar for every ticked newsroom. The report is a shareable page with each newsroom's source mix and pipeline (pitched, promoted, in the running order), the pitches, decisions and EP notes, every follow-up in full (outlet, headline, link, "Page claims" dates and the three answers word for word), the PA pitches with their links, the running order and EP feedback; tick **Include scripts** to add the scripts. Use it for a debrief or to keep a record of the session. Generate the report before starting a new conference, as earlier pitches leave the current board and report.
 
-To hand newsrooms to a new group, tick them and choose **Reset…**. This starts a new conference, frees the producer role, deletes every story and script, removes all members and clears the EP alert. The name, join codes, tutors and Cuez target stay, so old members could rejoin with the same code. Choose **Make a report first** in the dialog if you want a record, as a reset can't be undone.
+To hand newsrooms to a new group, tick them and choose **Reset…**. This starts a new conference, frees the producer role, deletes every story and script, removes all members and clears the EP alert. A social newsroom goes back to just its intro and outro. The name, type (TV or social), join codes, tutors and Cuez target stay, so old members could rejoin with the same code. Choose **Make a report first** in the dialog if you want a record, as a reset can't be undone.
 
 Your administrator manages staff access, starts fresh conferences, resets producer roles, clears running orders, changes join codes and chooses Cuez destinations. Ask them if a newsroom or join code is missing. On a shared computer, sign out of the tutor desk when you finish.
 

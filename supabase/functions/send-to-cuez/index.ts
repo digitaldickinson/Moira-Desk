@@ -800,9 +800,11 @@ async function actionSendBulletin(ctx: Ctx, body: any) {
   const db = ctx.db;
 
   const { data: bulletin, error: bErr } = await db.from("bulletins")
-    .select("id, order_ids, cuez_episode_id, cuez_part_uid, cuez_read_speed, producer_user, producer_name").eq("id", bulletinId).maybeSingle();
+    .select("id, kind, order_ids, cuez_episode_id, cuez_part_uid, cuez_read_speed, producer_user, producer_name").eq("id", bulletinId).maybeSingle();
   if (bErr) throw new HttpError(500, "Could not read the bulletin.", bErr.message);
   if (!bulletin) throw new HttpError(404, "That newsroom doesn't exist.");
+  // Social newsrooms make a social media bulletin, not a programme for Cuez.
+  if (bulletin.kind === "social") throw new HttpError(400, "This is a social newsroom: it doesn't send to Cuez.");
   // Once someone has claimed producer, sending is theirs alone. With no
   // producer (a newsroom not using conference), any member can send. A
   // producer who is no longer a member doesn't count: the database frees the
