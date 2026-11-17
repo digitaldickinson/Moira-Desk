@@ -1214,7 +1214,7 @@
         // student to check before pressing +. Ported from the pa_drop.html lab.
         // The browser hands over what was dragged; its HTML is parsed off-page
         // (never inserted, nothing fetched, no images loaded). Only the slug,
-        // headline and link are kept, never PA's story text.
+        // headline (or PA's one-line summary) and link are kept, never the story.
         const PA_HOST_RE = /(^|\.)(pa\.media|pressassociation\.com)$/i;
         function safeWebUrl(candidate) {
             const raw = String(candidate || '').trim().replace(/[),.;]+$/, '');
@@ -1261,9 +1261,10 @@
             });
             return best?.text || '';
         }
-        // PA's own slug (e.g. "COMMONS Tourism"): p.slug > app-ninjs-slug > span.keywords.
+        // PA's own slug (e.g. "Politics Brand"): app-ninjs-slug holds topic + keywords;
+        // its parent p.slug also holds the "Latest" label, so it's only a fallback.
         function wireSlug(scope, headline) {
-            for (const sel of ['p.slug', 'app-ninjs-slug', '.keywords', '[data-testid*="slug" i]']) {
+            for (const sel of ['app-ninjs-slug', 'p.slug', '.keywords', '[data-testid*="slug" i]']) {
                 for (const el of scope.querySelectorAll(sel)) {
                     const v = spacedText(el);
                     if (v && v.length <= 80 && v.split(/\s+/).length <= 10 && v.toLowerCase() !== headline.toLowerCase()
@@ -1271,6 +1272,13 @@
                 }
             }
             return '';
+        }
+        // First sentence of PA's summary, cut at a word if it's still too long for an angle.
+        function wireSummaryLine(el) {
+            const text = el ? spacedText(el) : '';
+            if (text.length < 18) return '';
+            const first = (text.match(/^.{18,}?[.!?][”"’']?(?=\s+[A-Z“"‘']|$)/) || [text])[0];
+            return first.length <= 220 ? first : first.slice(0, 220).replace(/\s+\S*$/, '') + '…';
         }
         function parseWireHtml(html) {
             const none = { url: '', slug: '', headline: '', paMarkup: false };
@@ -1283,6 +1291,9 @@
                 const pa = doc.querySelector('app-ninjs-article-summary') || doc.querySelector('create-event-brief');
                 const scope = pa || anchor || doc.body;
                 let headline = wireHeadline(scope);
+                // PA Explore's event cards have no separate headline: the line students
+                // see is the one-sentence summary in section.description.
+                if (!headline && pa) headline = wireSummaryLine(pa.querySelector('section.description, .description'));
                 if (!headline && anchor) {
                     const attr = squash(anchor.getAttribute('title') || anchor.getAttribute('aria-label'));
                     if (wireHeadlineOk(attr)) headline = attr;

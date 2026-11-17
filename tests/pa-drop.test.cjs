@@ -139,10 +139,19 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
       'text/html': `<a href="${url}"><app-ninjs-article-summary><div>21:4616 Nov 2026272 wordsShowbizCelebrity</div><p class="slug"><app-ninjs-slug><span class="keywords">SHOWBIZ</span> <span class="keywords">Awards</span></app-ninjs-slug></p></app-ninjs-article-summary></a>`,
       'text/plain': '21:4616 Nov 2026272 wordsShowbizCelebrity' })), [PA_URL]);
     assert.deepEqual(glued, { url: PA_URL, slug: 'SHOWBIZ Awards', headline: '', isPA: true, paMarkup: true, linkOnly: false });
+    // Real PA Explore event-card shape (fictional text): no headline element, so the
+    // one-line summary becomes the angle; the slug leaves out the "Latest" label.
+    const card = await page.evaluate(([url]) => testDesk.parseWireTransfer(testDesk.transfer({
+      'text/html': `<meta http-equiv="Content-Type" content="text/html;charset=UTF-8"><a _ngcontent-x="" href="${url}" target="_self"><create-event-brief layout="wide"><div class="event-brief"><app-ninjs-article-summary showslug="true" class="layout-wide"><div class="article-metadata"><div class="datetime"><app-ninjs-article-timestamp><!----><time datetime="2026-11-17T08:03:24Z"><span class="time">08:03</span><span class="date">17 Nov 2026</span></time></app-ninjs-article-timestamp><app-ninjs-article-wordcount label="words"><span class="word-count">183 words</span></app-ninjs-article-wordcount></div></div><div class="row-control"><div class="container" data-uri="abc"><p class="slug body-1"><app-ninjs-slug><span class="topic">Politics</span><span class="keywords">Levy</span></app-ninjs-slug><!----><app-ninjs-article-summary-label><span class="article-label latest">Latest</span></app-ninjs-article-summary-label></p><app-embargo-notice><!----></app-embargo-notice><section class="description body-1">A council leader has said plans for a visitor levy were “long overdue”. She said the money would go to parks. </section></div></div></app-ninjs-article-summary></div></create-event-brief></a>`,
+      'text/uri-list': url, 'text/plain': url })), [PA_URL]);
+    assert.deepEqual(card, { url: PA_URL, slug: 'Politics Levy', headline: 'A council leader has said plans for a visitor levy were “long overdue”.', isPA: true, paMarkup: true, linkOnly: false });
+    const long = await page.evaluate(([url]) => testDesk.parseWireTransfer(testDesk.transfer({
+      'text/html': `<a href="${url}"><app-ninjs-article-summary><section class="description">${'word '.repeat(80)}end</section></app-ninjs-article-summary></a>` })), [PA_URL]);
+    assert.ok(long.headline.length <= 221 && long.headline.endsWith('word…'), long.headline);
     // Unsafe links are never kept.
     const unsafe = await page.evaluate(() => testDesk.parseWireTransfer(testDesk.transfer({ 'text/uri-list': 'javascript:alert(1)', 'text/html': '<a href="javascript:alert(1)">Click this suspicious headline right now please</a>' })));
     assert.equal(unsafe.url, '');
-    console.log('PASS: non-PA links get no marker; run-together PA text and unsafe links are not used');
+    console.log('PASS: PA event cards give slug and summary line; non-PA links get no marker; run-together text and unsafe links are not used');
 
     // Paste: a PA link attaches without touching typed text; ordinary text pastes normally.
     await page.fill('#pitch-new-slug', 'MY SLUG'); await page.fill('#pitch-new-angle', 'My angle');
