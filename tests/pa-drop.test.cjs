@@ -193,12 +193,12 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     assert.equal(await page.evaluate(() => testDesk.calls.length), before, '+ waits for the lookup');
     await page.evaluate(() => testDesk.releasePreview());
     await page.getByTestId('wire-fetching').waitFor({ state: 'detached' });
-    assert.equal(await page.inputValue('#pitch-new-angle'), '', 'the outlet headline is not our angle');
-    assert.match(await chip.innerText(), /Hundreds of properties hit by power cuts/);
+    assert.equal(await page.inputValue('#pitch-new-angle'), BBC_TITLE, 'the headline fills the empty angle box');
+    assert.doesNotMatch(await chip.innerText(), /Hundreds of properties/, 'not repeated under the fields');
     await page.locator('[data-action="add-pitch"]').click();
     await page.waitForFunction(n => testDesk.calls.length === n + 1, before);
     const { p_bulletin_id: _b, ...followArgs } = await page.evaluate(() => testDesk.calls.at(-1).args);
-    assert.deepEqual(followArgs, { p_slug: 'POWER CUTS', p_angle: '', p_format: '', p_pitched_by: 'Sam', p_source: 'bbc', p_source_url: BBC_URL,
+    assert.deepEqual(followArgs, { p_slug: 'POWER CUTS', p_angle: BBC_TITLE, p_format: '', p_pitched_by: 'Sam', p_source: 'bbc', p_source_url: BBC_URL,
       p_source_title: BBC_TITLE, p_source_description: 'Customers remain without electricity.', p_source_published_at: BBC_PAGE.publishedAt, p_source_modified_at: BBC_PAGE.modifiedAt });
     console.log('PASS: a BBC link is looked up and added as a follow with headline, summary and claimed dates; + waits for the lookup');
 
@@ -259,7 +259,7 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
       testDesk.state.pitchesMap = {
         'f-1': { ...base, id: 'f-1', slug: 'POWER CUTS', position: 0 },
         'f-2': { ...base, id: 'f-2', slug: 'ANSWERED', position: 1, source: 'men', createdBy: 'someone-else', sourcePublishedAt: '2026-11-17T08:46:54.678Z',
-          followWhen: 'Sunday night', followOrigin: 'Electricity North West', angle: 'Second night without power' },
+          followWhen: 'Sunday night', followOrigin: 'Electricity North West', followAngle: 'Second night without power', angle: 'Hundreds hit by power cuts' },
       };
       testDesk.render('main');
     }, BBC_URL);
@@ -273,8 +273,8 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     assert.equal(await f2.getAttribute('data-follow'), 'answered');
     assert.doesNotMatch(await f2.getAttribute('class'), /bg-red-50/);
     assert.match(await f2.getByTestId('follow-page').innerText(), /^Page claims: published 17 Nov 2026, \d\d:46 \/ updated not given$/);
-    assert.equal(await f2.getByTestId('follow-answers').innerText(), 'When: Sunday night · Source: Electricity North West');
-    assert.match(await f2.innerText(), /Second night without power/);
+    assert.equal(await f2.getByTestId('follow-answers').innerText(), 'When: Sunday night · Source: Electricity North West · New: Second night without power');
+    assert.match(await f2.innerText(), /Hundreds hit by power cuts/, 'the angle line shows the headline-based angle');
     assert.equal(await f2.locator('[data-action="follow-answers"]').count(), 0, 'only the pitcher or producer gets the pencil');
     console.log('PASS: follow-up cards are red with page claims until answered, then white with the answers');
 

@@ -53,11 +53,11 @@ await db.query("select claim_producer($1, 'Producer')", [room]);
 await asUser(pitcher);
 const BBC = 'https://www.bbc.co.uk/news/articles/c8752wyv155xo';
 const add = (slug, src, url, title, desc, pub, mod) => value(
-    'select add_pitch($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)', [room, slug, '', '', 'Pitcher', src, url, title, desc, pub, mod]);
+    'select add_pitch($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)', [room, slug, src === 'bbc' ? 'Hundreds hit by power cuts' : '', '', 'Pitcher', src, url, title, desc, pub, mod]);
 const f1 = await add('POWER CUTS', 'bbc', BBC, '  Hundreds of properties\n hit by power cuts ', 'Customers remain without electricity.', '2026-11-17T08:46:54.678Z', 'not a date');
 assert.deepEqual(await row('select source_title, source_description, source_published_at, source_modified_at, follow_when, follow_origin, angle from pitches where id = $1', [f1]), {
     source_title: 'Hundreds of properties hit by power cuts', source_description: 'Customers remain without electricity.',
-    source_published_at: new Date('2026-11-17T08:46:54.678Z'), source_modified_at: null, follow_when: null, follow_origin: null, angle: '' });
+    source_published_at: new Date('2026-11-17T08:46:54.678Z'), source_modified_at: null, follow_when: null, follow_origin: null, angle: 'Hundreds hit by power cuts' });
 const pa = await add('PA STORY', 'pa', 'https://explore.pa.media/x', 'Ignored', 'Ignored', '2026-11-17T08:00:00Z', null);
 assert.deepEqual(await row('select source_title, source_description, source_published_at from pitches where id = $1', [pa]), { source_title: null, source_description: null, source_published_at: null });
 const typed = await value("select add_pitch($1, 'TYPED', 'Own idea', '', 'Pitcher')", [room]);
@@ -65,7 +65,8 @@ console.log('PASS: BBC/MEN page details stored and cleaned; PA and typed pitches
 
 // Answers: pitcher and producer only; blanks allowed before picking.
 await db.query("select set_follow_answers($1, 'Sunday night', '', 'Second night without power')", [f1]);
-assert.deepEqual(await row('select follow_when, follow_origin, angle from pitches where id = $1', [f1]), { follow_when: 'Sunday night', follow_origin: null, angle: 'Second night without power' });
+assert.deepEqual(await row('select follow_when, follow_origin, follow_angle, angle from pitches where id = $1', [f1]),
+    { follow_when: 'Sunday night', follow_origin: null, follow_angle: 'Second night without power', angle: 'Hundreds hit by power cuts' }, 'the headline angle is untouched');
 await db.query("select set_follow_answers($1, 'Sunday night', '', 'Second night without power', '  Power cuts latest  ')", [f1]);
 assert.equal(await value('select slug from pitches where id = $1', [f1]), 'Power cuts latest');
 await assert.rejects(db.query("select set_follow_answers($1, 'Sunday night', '', 'x', '  ')", [f1]), /Give the pitch a slug/);
@@ -91,14 +92,14 @@ console.log('PASS: the gate refuses missing and 2-character answers in pick_pitc
 // Picking with answers: they're saved, the angle is the brief, the script opens with the note.
 await asUser(producer);
 const story = await value("select pick_pitch($1, null, 'Electricity North West [statement]', null)", [f1]);
-assert.deepEqual(await row('select status, follow_when, follow_origin, angle from pitches where id = $1', [f1]),
-    { status: 'picked', follow_when: 'Sunday night', follow_origin: 'Electricity North West [statement]', angle: 'Second night without power' });
+assert.deepEqual(await row('select status, follow_when, follow_origin, follow_angle from pitches where id = $1', [f1]),
+    { status: 'picked', follow_when: 'Sunday night', follow_origin: 'Electricity North West [statement]', follow_angle: 'Second night without power' });
 const s = await row('select brief, script, script_seed, source_url from stories where id = $1', [story]);
 const note = ['[FOLLOW-UP NOTE: delete these lines once the story is written]',
     '[Follow-up to BBC News: "Hundreds of properties hit by power cuts"]',
     '[When it happened: Sunday night]', '[Original source: Electricity North West (statement)]',
     "[What's new / our angle: Second night without power]"].join('\n');
-assert.deepEqual(s, { brief: 'Second night without power', script: note, script_seed: note, source_url: BBC });
+assert.deepEqual(s, { brief: 'Hundreds hit by power cuts', script: note, script_seed: note, source_url: BBC });
 const typedStory = await value('select pick_pitch($1)', [typed]);
 assert.deepEqual(await row('select script, script_seed from stories where id = $1', [typedStory]), { script: '', script_seed: null });
 console.log('PASS: picking saves the answers, uses our angle as the brief and opens the script with the follow note');
@@ -128,8 +129,20 @@ const p = snap[0].pitches.find(x => x.id === f1);
 assert.equal(p.source_title, 'Hundreds of properties hit by power cuts');
 assert.equal(p.follow_when, 'Sunday 16 November');
 assert.equal(p.follow_origin, 'Electricity North West');
+assert.equal(p.follow_angle, 'Second night without power');
+assert.equal(p.angle, 'Hundreds hit by power cuts');
 assert.ok(p.source_published_at && 'source_modified_at' in p);
 console.log('PASS: snapshot includes headline, page dates and answers');
+
+// Re-running the migration copies a third answer an earlier version kept in angle.
+await asUser(pitcher);
+const old = await add('OLD STYLE', 'men', 'https://www.manchestereveningnews.co.uk/news/x-1', 'T', '', null, null);
+await db.exec('set session authorization postgres');
+await db.query("update pitches set angle = 'Our own angle', follow_when = 'Monday' where id = $1", [old]);
+await db.exec(await read('../supabase/migrations/20261118_follow_pitches.sql'));
+assert.equal(await value('select follow_angle from pitches where id = $1', [old]), 'Our own angle');
+assert.equal(await value('select follow_angle from pitches where id = $1', [typed]), null, 'typed pitches untouched');
+console.log('PASS: re-running the migration moves an old-style third answer across');
 
 await db.exec('set session authorization anon');
 await assert.rejects(db.query("select set_follow_answers($1, 'a', 'b', 'c')", [f1]), /permission denied/);

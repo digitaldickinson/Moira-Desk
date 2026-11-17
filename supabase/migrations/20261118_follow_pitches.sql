@@ -5,7 +5,8 @@
 -- at least 3 non-space characters:
 --   follow_when    When did this actually happen?
 --   follow_origin  Who is the original source?
---   angle          What's new, or what's our angle? (becomes the story's brief)
+--   follow_angle   What's new, or what's our angle?
+-- (The pitch's own angle starts as the outlet's headline and is the story's brief.)
 -- pick_pitch enforces this, and a trigger refuses any other route to 'picked'.
 -- The picked story's script starts with a follow-up note in [directions] that the
 -- writer deletes; un-picking still works while the script is just that note.
@@ -19,9 +20,14 @@ alter table pitches add column if not exists source_published_at timestamptz;
 alter table pitches add column if not exists source_modified_at  timestamptz;
 alter table pitches add column if not exists follow_when         text;
 alter table pitches add column if not exists follow_origin       text;
+alter table pitches add column if not exists follow_angle        text;
 -- The script a story started with when picked (the follow-up note), so an
 -- untouched follow-up story can still be dropped back to the pitches.
 alter table stories add column if not exists script_seed text;
+
+-- An earlier version kept the third answer in angle: copy it across once.
+update pitches set follow_angle = angle
+where source in ('bbc', 'men') and follow_angle is null and (follow_when is not null or follow_origin is not null or status = 'picked');
 
 -- Helpers (internal: only called by the functions and trigger below).
 create or replace function is_follow_source(p_source text)
@@ -77,7 +83,7 @@ returns text language sql immutable as $$
       || coalesce(': "' || translate(one_line(v.source_title, 300), '[]', '()') || '"', '') || ']',
     '[When it happened: ' || translate(one_line(v.follow_when, 300), '[]', '()') || ']',
     '[Original source: ' || translate(one_line(v.follow_origin, 300), '[]', '()') || ']',
-    '[What''s new / our angle: ' || translate(one_line(v.angle, 500), '[]', '()') || ']')
+    '[What''s new / our angle: ' || translate(one_line(v.follow_angle, 500), '[]', '()') || ']')
 $$;
 
 -- Belt and braces: whatever the route, a follow-up pitch can't become 'picked'
@@ -89,7 +95,7 @@ declare
 begin
   if new.status = 'picked' and is_follow_source(new.source)
      and (tg_op = 'INSERT' or old.status is distinct from 'picked') then
-    v_missing := follow_missing(new.follow_when, new.follow_origin, new.angle);
+    v_missing := follow_missing(new.follow_when, new.follow_origin, new.follow_angle);
     if v_missing is not null then
       raise exception 'Follow-up pitch needs: %.', v_missing;
     end if;
@@ -155,7 +161,7 @@ declare
   v_producer uuid;
   v_when text := one_line(p_when, 300);
   v_origin text := one_line(p_origin, 300);
-  v_angle text := coalesce(one_line(p_angle, 500), '');
+  v_angle text := one_line(p_angle, 500);
   v_missing text;
 begin
   v := member_pitch(p_pitch_id);
@@ -175,7 +181,7 @@ begin
   if p_slug is not null and trim(p_slug) = '' then
     raise exception 'Give the pitch a slug.';
   end if;
-  update pitches set follow_when = v_when, follow_origin = v_origin, angle = v_angle,
+  update pitches set follow_when = v_when, follow_origin = v_origin, follow_angle = v_angle,
                      slug = coalesce(left(nullif(trim(p_slug), ''), 80), slug)
   where id = p_pitch_id;
 end;
@@ -206,8 +212,8 @@ begin
   if is_follow_source(v.source) then
     if p_follow_when   is not null then v.follow_when   := one_line(p_follow_when, 300); end if;
     if p_follow_origin is not null then v.follow_origin := one_line(p_follow_origin, 300); end if;
-    if p_follow_angle  is not null then v.angle         := coalesce(one_line(p_follow_angle, 500), ''); end if;
-    v_missing := follow_missing(v.follow_when, v.follow_origin, v.angle);
+    if p_follow_angle  is not null then v.follow_angle  := one_line(p_follow_angle, 500); end if;
+    v_missing := follow_missing(v.follow_when, v.follow_origin, v.follow_angle);
     if v_missing is not null then
       raise exception 'Follow-up pitch needs: %.', v_missing;
     end if;
@@ -229,7 +235,7 @@ begin
   end if;
   update bulletins set order_ids = to_jsonb(v_order), updated_at = now() where id = v.bulletin_id;
   update pitches set status = 'picked', story_id = v_story, spike_reason = null, decided_at = now(),
-                     follow_when = v.follow_when, follow_origin = v.follow_origin, angle = v.angle
+                     follow_when = v.follow_when, follow_origin = v.follow_origin, follow_angle = v.follow_angle
   where id = p_pitch_id;
   return v_story;
 end;
@@ -294,7 +300,7 @@ begin
           'source', p.source, 'source_url', p.source_url,
           'source_title', p.source_title, 'source_published_at', p.source_published_at,
           'source_modified_at', p.source_modified_at,
-          'follow_when', p.follow_when, 'follow_origin', p.follow_origin
+          'follow_when', p.follow_when, 'follow_origin', p.follow_origin, 'follow_angle', p.follow_angle
         ) order by p.position)
         from pitches p where p.bulletin_id = b.id and p.conference_id = b.conference_id), '[]'::jsonb),
       'stories', coalesce((

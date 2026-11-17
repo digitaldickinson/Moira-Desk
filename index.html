@@ -632,7 +632,7 @@
                 source: row.source || '', sourceUrl: row.source_url || '',
                 sourceTitle: row.source_title || '', sourceDescription: row.source_description || '',
                 sourcePublishedAt: row.source_published_at || null, sourceModifiedAt: row.source_modified_at || null,
-                followWhen: row.follow_when || '', followOrigin: row.follow_origin || '',
+                followWhen: row.follow_when || '', followOrigin: row.follow_origin || '', followAngle: row.follow_angle || '',
                 storyId: row.story_id || null, position: row.position ?? 0,
                 createdAt: row.created_at || null, decidedAt: row.decided_at || null,
             };
@@ -1246,9 +1246,9 @@
         const FOLLOW_QUESTIONS = [
             { key: 'when', label: 'When did this actually happen?', help: 'Find the event date in the copy, not the page timestamp.', max: 300 },
             { key: 'origin', label: 'Who is the original source?', help: "Not 'BBC' or 'MEN'. Who did they get it from?", max: 300 },
-            { key: 'angle', label: "What's new, or what's our angle?", help: 'This becomes the brief for whoever writes it.', max: 500 },
+            { key: 'angle', label: "What's new, or what's our angle?", help: "What do we add that they haven't already reported?", max: 500 },
         ];
-        const followAnswers = (p) => ({ when: p.followWhen || '', origin: p.followOrigin || '', angle: p.angle || '' });
+        const followAnswers = (p) => ({ when: p.followWhen || '', origin: p.followOrigin || '', angle: p.followAngle || '' });
         const followAnswered = (v) => String(v || '').replace(/\s/g, '').length >= 3;
         const followMissing = (p) => FOLLOW_QUESTIONS.filter(q => !followAnswered(followAnswers(p)[q.key]));
         const claimTime = (t) => t ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'not given';
@@ -1356,13 +1356,15 @@
                 return;
             }
             const slugEl = document.getElementById('pitch-new-slug'), angleEl = document.getElementById('pitch-new-angle');
-            // A BBC/MEN follow-up keeps the outlet's headline apart from our angle,
-            // and always looks the page up for its headline, summary and dates.
+            // A BBC/MEN follow-up always looks the page up for its headline, summary
+            // and dates; the headline goes in the angle box if that's still empty.
             const follow = !!(cap.url && isFollowSource(cap.source));
             if (!follow && (cap.slug || cap.headline)) {   // a link on its own keeps whatever's been typed
                 if (slugEl) slugEl.value = cap.slug;
                 if (angleEl) angleEl.value = cap.headline;
             }
+            // A follow-up's headline starts off the angle, unless one's been typed.
+            if (follow && cap.headline && angleEl && !angleEl.value.trim()) angleEl.value = cap.headline;
             const draft = cap.url || cap.source ? { url: cap.url, source: cap.source || null } : null;
             if (follow) Object.assign(draft, { title: cap.headline || '', fetching: true });
             state.ui.wireDraft = draft;
@@ -1376,7 +1378,7 @@
         }
         function wireNotice(source) {
             if (isFollowSource(source)) {
-                showNotice(WIRE_SOURCES[source].from, 'Add a slug, and your own angle if you have one, then press +. This is a follow-up: use the pencil on its card to answer three questions before the producer can pick it.');
+                showNotice(WIRE_SOURCES[source].from, 'Add a slug, check the angle and your name, then press +. This is a follow-up: use the pencil on its card to answer three questions before the producer can pick it.');
                 document.getElementById('pitch-new-slug')?.focus();
                 return;
             }
@@ -1391,7 +1393,8 @@
             return data;
         }
         // Ask the link-preview function what a BBC/MEN page says about itself:
-        // headline, summary and the dates it claims. Nothing goes in the form.
+        // headline, summary and the dates it claims. The headline fills the angle
+        // box unless the student has typed one meanwhile.
         async function fetchWireHeadline(draft) {
             let data = null;
             try {
@@ -1404,6 +1407,8 @@
                 title: squash(data.title).slice(0, 300) || draft.title, description: squash(data.description).slice(0, 500),
                 publishedAt: data.publishedAt || '', modifiedAt: data.modifiedAt || '',
             });
+            const angleEl = document.getElementById('pitch-new-angle');
+            if (draft.title && angleEl && !angleEl.value.trim()) angleEl.value = draft.title;
             render('main');
             if (data?.title || draft.title) wireNotice(draft.source);
             else showNotice('No headline found', "The link is attached, but the page's details couldn't be fetched. Add a slug and press +, then answer the follow-up questions with the pencil on its card.", 'warn');
@@ -2385,7 +2390,7 @@
             const pending = follow && missing.length > 0;
             const followBlock = follow ? `
                     <div class="text-xs mt-1 ${pending ? 'text-red-800' : 'text-slate-500'}" data-testid="follow-page">${escapeHTML(pageClaims(p.sourcePublishedAt, p.sourceModifiedAt))}</div>
-                    ${pending ? '' : `<div class="text-xs text-slate-600 mt-0.5" data-testid="follow-answers"><span class="font-semibold">When:</span> ${escapeHTML(p.followWhen)} · <span class="font-semibold">Source:</span> ${escapeHTML(p.followOrigin)}</div>`}` : '';
+                    ${pending ? '' : `<div class="text-xs text-slate-600 mt-0.5" data-testid="follow-answers"><span class="font-semibold">When:</span> ${escapeHTML(p.followWhen)} · <span class="font-semibold">Source:</span> ${escapeHTML(p.followOrigin)} · <span class="font-semibold">New:</span> ${escapeHTML(p.followAngle)}</div>`}` : '';
             return `<div class="border ${pending && p.status === 'pitched' ? 'border-red-200 bg-red-50' : tone} rounded-xl p-3 flex gap-3 items-start" data-pitch-id="${p.id}"${follow ? ` data-follow="${pending ? 'pending' : 'answered'}"` : ''}>
                 <div class="text-slate-400 font-mono text-sm w-6 text-right pt-0.5 shrink-0">${n}</div>
                 <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start gap-2">
@@ -2438,8 +2443,7 @@
                     </div>
                     ${wire ? `<div class="mt-2 flex items-center gap-2 text-xs text-slate-500 min-w-0" data-testid="wire-draft">
                             ${sourceBadge(wire.source, 'shrink-0')}
-                            ${wire.title ? `<span class="truncate min-w-0 text-slate-700" title="${escapeHTML(wire.title)}">“${escapeHTML(wire.title)}”</span>` : ''}
-                            <span class="${wire.title ? 'shrink-0' : 'truncate min-w-0'}">${wire.url ? sourceLinkHtml(wire.url, wire.source) : 'From the PA wire (no link came across)'}</span>
+                            <span class="truncate min-w-0">${wire.url ? sourceLinkHtml(wire.url, wire.source) : 'From the PA wire (no link came across)'}</span>
                             ${wire.fetching ? '<span class="shrink-0 text-slate-400" data-testid="wire-fetching" role="status"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching headline…</span>' : ''}
                             <button data-action="clear-wire-draft" class="ml-auto shrink-0 px-2 py-1 rounded text-slate-400 hover:text-red-600 hover:bg-slate-100" title="Don't attach this link"><i class="fa-solid fa-xmark"></i><span class="sr-only">Remove the link</span></button>
                         </div>`

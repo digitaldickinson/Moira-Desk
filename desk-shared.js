@@ -30,7 +30,7 @@ const linkSource = (url) => { const h = webUrl(url) ? new URL(url).hostname : ''
 const sourceLabel = (source) => PITCH_SOURCES[source] ? `${PITCH_SOURCES[source].label} story` : 'Source';
 // BBC News and MEN pitches are follow-ups: three questions answered before picking.
 const isFollow = (p) => p.source === 'bbc' || p.source === 'men';
-const FOLLOW_QUESTIONS = [['follow_when', 'When did this actually happen?'], ['follow_origin', 'Who is the original source?'], ['angle', "What's new, or what's our angle?"]];
+const FOLLOW_QUESTIONS = [['follow_when', 'When did this actually happen?'], ['follow_origin', 'Who is the original source?'], ['follow_angle', "What's new, or what's our angle?"]];
 const answered = (v) => String(v || '').replace(/\s/g, '').length >= 3;
 const claimTime = (t) => t ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'not given';
 const pageClaims = (p) => `Page claims: published ${claimTime(p.source_published_at)} / updated ${claimTime(p.source_modified_at)}`;
@@ -242,7 +242,7 @@ function wallPitch(p, fmtOf) {
   const follow = isFollow(p);
   return `<button class="wall-pitch${picked ? ' picked' : ''}${isNew ? ' new' : ''}${follow ? ' follow' : ''}" data-action="wall-note" data-id="${esc(p.id)}" ${wall.present ? 'disabled' : `title="${p.ep_note ? 'Edit your EP note' : 'Add an EP note'}"`}>
     <span class="slug">${isNew ? '<span class="wall-tag new">NEW</span>' : ''}${picked ? '<span class="wall-tag picked">PICKED</span>' : ''}${sourceTag(p, 'wall-tag')}${esc(p.slug)}${picked && fmtOf[p.story_id] ? ` <span class="pill">${esc(fmtOf[p.story_id])}</span>` : ''}</span>
-    ${p.angle && !follow ? `<span class="angle">${esc(p.angle)}</span>` : ''}
+    ${p.angle ? `<span class="angle">${esc(p.angle)}</span>` : ''}
     ${follow ? followLines(p).map((l, i, all) => `<span class="${i < all.length - FOLLOW_QUESTIONS.length ? 'follow-page' : 'follow-a'}">${l}</span>`).join('') : ''}
     ${p.pitched_by ? `<span class="by">${esc(p.pitched_by)}</span>` : ''}
     ${p.ep_note && !wall.hideNotes ? `<span class="note">EP: ${esc(p.ep_note)}</span>` : ''}
@@ -485,7 +485,7 @@ function reportSection(n, withScripts) {
   }).join('');
   const confRows = m.pitches.map(({ p, outcome: o, format }, i) => `<tr>
       <td class="num">${i + 1}</td>
-      <td><strong>${esc(p.slug)}</strong>${PITCH_SOURCES[p.source] ? ` ${sourceTag(p, 'tag')}` : ''}${format ? ` <span class="tag">${esc(format)}</span>` : ''}${p.angle && !isFollow(p) ? `<div>${esc(p.angle)}</div>` : ''}${isFollow(p) ? followLines(p).map((l) => `<div class="sub">${l}</div>`).join('') : ''}${webUrl(p.source_url) ? `<div class="sub">${sourceLink(p.source_url, p.source)}</div>` : ''}</td>
+      <td><strong>${esc(p.slug)}</strong>${PITCH_SOURCES[p.source] ? ` ${sourceTag(p, 'tag')}` : ''}${format ? ` <span class="tag">${esc(format)}</span>` : ''}${p.angle ? `<div>${esc(p.angle)}</div>` : ''}${isFollow(p) ? followLines(p).map((l) => `<div class="sub">${l}</div>`).join('') : ''}${webUrl(p.source_url) ? `<div class="sub">${sourceLink(p.source_url, p.source)}</div>` : ''}</td>
       <td>${esc(p.pitched_by)}</td>
       <td><span class="${o.tone}">${o.label}</span>${o.extra ? esc(o.extra) : ''}${o.time ? ` <span class="sub">${o.time}</span>` : ''}</td>
       <td>${p.ep_note ? esc(p.ep_note) : ''}</td></tr>`).join('');

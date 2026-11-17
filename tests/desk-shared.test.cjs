@@ -61,7 +61,7 @@ test('EP wall and report mark PA, BBC and MEN pitches and link their stories saf
   assert.match(bbcHtml, /<strong>Power cuts<\/strong> <span class="tag bbc"[^>]*>FOLLOW-UP · BBC<\/span>/);
   // Follow pitches: headline, page claims and the three answers, on the wall and in the report.
   const fol = { ...bbc, id: 'p4', slug: 'Follow', source_title: 'Hundreds hit by <power> cuts', source_published_at: '2026-11-17T08:46:54Z', source_modified_at: null,
-    follow_when: 'Sunday night', follow_origin: 'ab', angle: 'Second night without power' };
+    follow_when: 'Sunday night', follow_origin: 'ab', follow_angle: 'Second night without power', angle: 'Hundreds hit by power cuts' };
   const folCard = ctx.t.wallPitch(fol, {});
   assert.match(folCard, /class="wall-pitch follow"/);
   assert.match(folCard, /BBC: “Hundreds hit by &lt;power&gt; cuts”/);
@@ -69,7 +69,7 @@ test('EP wall and report mark PA, BBC and MEN pitches and link their stories saf
   assert.match(folCard, /When did this actually happen\?<\/b> Sunday night/);
   assert.match(folCard, /Who is the original source\?<\/b> <i>Not answered yet<\/i>/, '2 characters is not an answer');
   assert.match(folCard, /What&#39;s new, or what&#39;s our angle\?<\/b> Second night without power/);
-  assert.equal(folCard.match(/Second night without power/g).length, 1, 'angle not repeated');
+  assert.match(folCard, /<span class="angle">Hundreds hit by power cuts<\/span>/, 'the pitch angle shows as usual');
   const folHtml = ctx.t.reportSection({ id: 'r3', name: 'Room', order: ['marker-line'], pitches: [fol], feedback: [], stories: [] }, false);
   assert.match(folHtml, /<div class="sub"><b>When did this actually happen\?<\/b> Sunday night<\/div>/);
   assert.match(folHtml, /Page claims: published 17 Nov 2026/);
