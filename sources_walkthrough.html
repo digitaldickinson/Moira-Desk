@@ -231,7 +231,7 @@ h1{font-size:clamp(25px,3vw,42px);letter-spacing:-.045em;line-height:1.1;margin:
      <h2 class="moira-title">News conference</h2>
      <p class="moira-subtitle">Anyone can pitch. Sam picks the stories.</p>
      <div class="pitch-form" id="pitchForm" tabindex="-1" aria-label="Pitch box: paste a BBC News or MEN link here">
-      <div class="paste-hint">⌘V / Ctrl+V · PASTE THE LINK HERE</div>
+      <div class="paste-hint" id="pasteHint">⌘V / Ctrl+V · PASTE THE LINK HERE</div>
       <div class="form-fields">
        <div id="slugField" class="mock-input slug">SLUG</div>
        <div id="angleField" class="mock-input">The angle, in a line</div>
@@ -495,6 +495,7 @@ h1{font-size:clamp(25px,3vw,42px);letter-spacing:-.045em;line-height:1.1;margin:
   track = t;
   document.querySelectorAll('[data-track]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.track === t)));
   $('paPanel').hidden = t !== 'pa'; $('fuPanel').hidden = t !== 'fu';
+  $('pasteHint').textContent = t === 'pa' ? '↓ DROP THE STORY HERE' : '⌘V / Ctrl+V · PASTE THE LINK HERE';
   const steps = TRACKS[t];
   $('steps').style.setProperty('--n', steps.length);
   $('steps').innerHTML = steps.map((s, i) => `<button class="step-button" data-step="${i}"><span class="step-dot">${String(i + 1).padStart(2, '0')}</span><span class="step-text">${s.short}</span></button>`).join('');
