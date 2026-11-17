@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Follow-up pitches | Student walkthrough</title>
+<style>
+:root{--ink:#17243b;--muted:#60738c;--line:#dce5f0;--blue:#2362e9;--bg:#f4f7fb;--shadow:0 14px 46px rgba(23,44,73,.09)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer}
+button:focus-visible,.step-button:focus-visible,.address:focus-visible{outline:3px solid #7fa9ff;outline-offset:4px}
+.page{width:min(1500px,calc(100% - 48px));margin:0 auto;padding:30px 0 35px}
+.masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:21px}
+.eyebrow{display:flex;align-items:center;gap:9px;text-transform:uppercase;font-weight:800;font-size:11px;letter-spacing:.15em;color:#315f9b}
+.eyebrow i{width:8px;height:8px;display:block;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 4px #fdf0d5}
+h1{font-size:clamp(25px,3vw,42px);letter-spacing:-.045em;line-height:1.1;margin:11px 0 10px;font-weight:820}
+.intro{color:var(--muted);font-size:15px;line-height:1.55;margin:0;max-width:780px}
+.masthead-right{display:flex;flex-direction:column;align-items:flex-end;gap:9px;white-space:nowrap}
+.pill{border:1px solid #cedded;background:#fff;color:#4a6584;border-radius:999px;font-size:12px;font-weight:750;padding:9px 12px}
+.video-shell{background:#fff;border:1px solid var(--line);border-radius:21px;overflow:hidden;box-shadow:var(--shadow)}
+.player-top{display:flex;align-items:center;justify-content:space-between;padding:15px 22px;border-bottom:1px solid var(--line);gap:12px}
+.player-title{display:flex;align-items:center;gap:9px;font-weight:780;font-size:14px}
+.player-title .live{color:#9a5b00;font-size:10px;background:#fff3d6;padding:5px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.08em}
+.window-note{color:#8495ab;font-size:12px;font-weight:550}
+.step-count{font-variant-numeric:tabular-nums;color:#566d8c;font-size:12px;font-weight:800;white-space:nowrap}
+.stage-outer{overflow-x:auto;background:#e9eff8;overscroll-behavior-x:contain}
+.stage{width:100%;min-width:1100px;height:600px;padding:14px;display:grid;grid-template-columns:1.12fr .88fr;gap:13px;position:relative;isolation:isolate;background:radial-gradient(ellipse at 50% 0%,#f8fbff 0,#e9eff8 85%)}
+.browser{min-width:0;overflow:hidden;position:relative;border:1px solid #d0ddec;border-radius:13px;background:#fff;box-shadow:0 6px 18px rgba(28,58,102,.08);z-index:1}
+.browser-chrome{height:34px;display:flex;align-items:center;gap:12px;background:#f2f5f9;border-bottom:1px solid #e2e8f0;padding:0 11px}
+.dots{display:flex;gap:5px}.dots i{width:8px;height:8px;border-radius:50%;background:#d6dce4}.dots i:first-child{background:#ee7676}.dots i:nth-child(2){background:#f5c45b}.dots i:nth-child(3){background:#67c99a}
+.address{height:23px;background:#fff;border:1px solid #e1e7ee;border-radius:5px;padding:4px 9px;color:#7b8ba0;font-size:10.5px;display:flex;align-items:center;gap:6px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .2s,border-color .2s,box-shadow .2s}
+.address svg{width:10px;height:10px;flex:none}
+.address.selected{background:#dbe7ff;border-color:#2362e9;color:#14336f;box-shadow:0 0 0 4px rgba(35,98,233,.15)}
+.address.selected .url{background:#b9cffb}
+.address.live{cursor:text;user-select:all}
+.copied{position:absolute;top:44px;right:16px;background:#14336f;color:#fff;font-size:11px;font-weight:800;padding:6px 10px;border-radius:8px;opacity:0;transform:translateY(-4px);transition:opacity .25s,transform .25s;z-index:3}
+.copied.show{opacity:1;transform:none}
+.keycap{display:inline-flex;align-items:center;gap:3px;background:#fff;border:1px solid #c9d5e6;border-bottom-width:3px;border-radius:6px;padding:2px 7px;font-size:11px;font-weight:850;color:#2c415e}
+/* Moira */
+.moira-head{height:49px;background:#fff;border-bottom:1px solid #e4eaf2;display:flex;align-items:center;justify-content:space-between;padding:0 19px;gap:8px}
+.moira-logo{font-size:19px;font-weight:850;letter-spacing:-.07em;white-space:nowrap;color:#213046}.moira-logo span{color:#2166ed}.moira-logo small{font-size:19px;display:inline-block;color:#2a67ee;letter-spacing:normal;margin-right:5px}
+.user-chip{font-size:11px;border-radius:14px;border:1px solid #c6ddfc;background:#edf5ff;color:#2956a6;font-weight:800;padding:5px 10px}
+.moira-head-right{display:flex;align-items:center;gap:9px;color:#879bb6;font-size:11px;font-weight:800}
+.moira-head-right span:first-child{background:#f1f4f9;border-radius:6px;padding:8px;color:#3d4f69}
+.moira-body{height:calc(100% - 83px);background:#f8fafc;padding:20px 25px;overflow:hidden;position:relative}
+.subnav{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tabs{display:flex;padding:4px;background:#eef2f8;border:1px solid #dfe8f1;border-radius:10px;gap:3px;width:max-content}
+.tab{font-size:13px;font-weight:760;color:#657b99;padding:8px 12px;border-radius:7px;white-space:nowrap}.tab.active{color:#24314a;background:#fff;box-shadow:0 1px 3px #bac8d8}
+.tab b{font-size:10px;border-radius:10px;background:#e4eaf1;padding:2px 5px;margin-left:4px}
+.producer{font-size:11px;font-weight:750;color:#9e5016;background:#fff6dc;padding:7px 10px;border:1px solid #efc65d;border-radius:20px;white-space:nowrap}
+.moira-title{font-size:24px;letter-spacing:-.055em;font-weight:850;margin:20px 0 4px;white-space:nowrap}
+.moira-subtitle{font-size:12px;color:#72839e;line-height:1.4;margin:0 0 16px;max-width:600px}
+.pitch-form{border-radius:11px;padding:14px 14px 11px;background:#fff;border:1px solid #d9e3ef;box-shadow:0 2px 3px #e5ebf3;position:relative;transition:border-color .3s,box-shadow .3s,background .3s}
+.pitch-form.target{border:2px dashed var(--blue);padding:13px 13px 10px;box-shadow:0 0 0 7px rgba(35,98,233,.12);background:#f6f9ff}
+.pitch-form.filled{border:1px solid #8de4ca;box-shadow:0 0 0 5px #d6fbf0;background:#fbfffd}
+.paste-hint{position:absolute;right:17px;top:-26px;background:#2362ed;border-radius:20px;padding:5px 9px;color:#fff;font-size:10px;font-weight:800;display:none}
+.pitch-form.target .paste-hint{display:block}
+.form-fields{display:grid;grid-template-columns:.9fr 1.9fr .7fr 47px;gap:7px;align-items:center}
+.mock-input{height:42px;display:flex;align-items:center;min-width:0;padding:0 10px;border:1px solid #dce3ed;background:#fff;border-radius:7px;color:#96a2b3;font-size:12px;font-weight:550;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.mock-input.value{color:#263a55;font-weight:770;border-color:#b6e5d7}
+.mock-input.slug.value{text-transform:uppercase}
+.mock-input.typing{border-color:#2362e9;background:#f5f9ff;box-shadow:0 0 0 4px #dce8ff}
+.mock-input.flash{animation:flash 1.1s ease-out}
+@keyframes flash{0%{background:#d6fbf0;border-color:#0d9a6e}100%{background:#fff}}
+.plus{height:42px;display:flex;align-items:center;justify-content:center;border:0;border-radius:7px;background:var(--blue);color:#fff;font-size:27px;line-height:1;position:relative;transition:transform .2s,background .2s}
+.plus.clicked{background:#0d8a62;transform:scale(.94)}
+.plus.pulse::before{content:"";position:absolute;inset:-8px;border-radius:12px;border:3px solid rgba(31,99,241,.38);animation:ring .85s ease-in-out infinite alternate;pointer-events:none}
+@keyframes ring{from{transform:scale(.92);opacity:.2}to{transform:scale(1.13);opacity:1}}
+.chip-row{display:flex;align-items:center;gap:8px;font-size:11px;color:#72839e;margin-top:9px;min-height:20px}
+.chip-row .hint{color:#8196b2}
+.src-badge{display:inline-block;font-size:9px;font-weight:850;letter-spacing:.04em;line-height:1;padding:3px 5px;border-radius:4px;background:#000;color:#fff;text-transform:uppercase;white-space:nowrap}
+.story-link{color:#2866ec;font-weight:750;white-space:nowrap}
+.fetching{color:#8a9ab0;font-weight:700;white-space:nowrap}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid #b7c6db;border-top-color:#2362e9;border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:4px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.section-label{font-size:10.5px;font-weight:870;color:#74839b;letter-spacing:.12em;text-transform:uppercase;margin:20px 0 9px}
+.placeholder-card{height:76px;background:linear-gradient(100deg,#f0f3f8,#fafbfd);border:1px solid #e9edf4;border-radius:10px}
+.pitch-card{padding:12px 14px;border-radius:10px;display:none;gap:10px;align-items:flex-start;border:1px solid #d9e4ef;background:#fff;transition:background .6s,border-color .6s,box-shadow .6s}
+.pitch-card.show{display:flex;animation:rise .5s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.pitch-card.pending{background:#fef2f2;border-color:#fecaca}
+.pitch-card.ready{box-shadow:0 2px 14px rgba(12,131,96,.12);border-color:#6bdcb8}
+.pc-main{flex:1;min-width:0}
+.pc-top{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:850;text-transform:uppercase}
+.pc-num{color:#9aadc3}
+.pc-angle{font-size:12px;color:#344761;line-height:1.4;margin:4px 0 4px 22px}
+.pc-meta{font-size:11px;color:#8394ac;margin-left:22px;line-height:1.5}
+.pc-meta a{color:#2866ec;text-decoration:none;font-weight:750}
+.pc-claims{font-size:11px;margin-left:22px;color:#991b1b}
+.pitch-card.ready .pc-claims{color:#8394ac}
+.pc-answers{font-size:11px;margin:3px 0 0 22px;color:#475569;display:none}
+.pitch-card.ready .pc-answers{display:block}
+.pc-actions{display:flex;align-items:center;gap:6px;flex:none}
+.pending-chip{font-size:11px;font-weight:800;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;padding:6px 10px;border-radius:8px}
+.pick{font-size:11px;font-weight:800;background:#059669;color:#fff;border:0;padding:7px 11px;border-radius:8px;display:none}
+.spike{font-size:11px;font-weight:800;background:#e2e8f0;color:#334155;border:0;padding:7px 10px;border-radius:8px}
+.pitch-card.ready .pick{display:inline-block}.pitch-card.ready .pending-chip{display:none}
+.pencil{width:26px;height:26px;display:grid;place-items:center;border-radius:6px;color:#dc2626;font-size:13px;position:relative}
+.pitch-card.ready .pencil{color:#94a3b8}
+.pencil.pulse::before{content:"";position:absolute;inset:-5px;border-radius:9px;border:3px solid rgba(220,38,38,.35);animation:ring .85s ease-in-out infinite alternate}
+/* Questions dialog */
+.dialog-scrim{position:absolute;inset:0;background:rgba(15,23,42,.38);display:none;align-items:center;justify-content:center;z-index:6}
+.dialog-scrim.show{display:flex;animation:fade .3s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.dialog{width:min(470px,92%);background:#fff;border-radius:14px;box-shadow:0 24px 64px #0f172a44;overflow:hidden}
+.dialog-head{padding:12px 16px;border-bottom:1px solid #e2e8f0;font-weight:800;font-size:14px;display:flex;justify-content:space-between}
+.dialog-body{padding:12px 16px;display:grid;gap:8px;font-size:11px}
+.dialog-body .msg{color:#475569;line-height:1.45;margin:0}
+.dialog-body label{font-weight:800;color:#1e293b;font-size:11.5px;display:block}
+.dialog-body .help{color:#64748b;margin:1px 0 3px}
+.dialog-body .field{height:28px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;padding:0 8px;display:flex;align-items:center;color:#1e293b;font-weight:600;overflow:hidden;white-space:nowrap}
+.dialog-body .field.typing{outline:2px solid #2563eb;outline-offset:1px}
+.dialog-foot{padding:9px 16px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:7px}
+.dialog-foot span{font-size:11px;font-weight:700;padding:6px 12px;border-radius:7px;background:#f1f5f9;color:#475569}
+.dialog-foot span.save{background:#2563eb;color:#fff;position:relative}
+.dialog-foot span.save.pulse::before{content:"";position:absolute;inset:-5px;border-radius:10px;border:3px solid rgba(37,99,235,.35);animation:ring .85s ease-in-out infinite alternate}
+/* Outlet page (illustration) */
+.outlet-head{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid #e5e7eb}
+.outlet-name{font-weight:900;font-size:15px;letter-spacing:-.02em;color:#111827}
+.outlet-name small{font-weight:600;color:#9ca3af;font-size:10px;margin-left:6px;letter-spacing:0}
+.outlet-nav{display:flex;gap:14px;font-size:11px;color:#4b5563}
+.outlet-body{padding:22px 26px;transition:background .3s}
+.outlet-body.selected{background:#f6f9ff;outline:2px solid #82adff;outline-offset:-8px;border-radius:12px}
+.kicker{font-size:11px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:.06em}
+.outlet-h{font-size:24px;line-height:1.2;font-weight:850;letter-spacing:-.025em;margin:8px 0 10px;color:#111827}
+.outlet-date{font-size:11px;color:#6b7280;margin-bottom:14px}
+.outlet-img{height:150px;border-radius:8px;background:linear-gradient(135deg,#cbd5e1,#e2e8f0 60%,#f1f5f9);margin-bottom:14px;display:grid;place-items:center;color:#94a3b8;font-size:11px;font-weight:700}
+.outlet-p{height:9px;border-radius:5px;background:#e5e7eb;margin:9px 0}
+.outlet-p.short{width:62%}
+/* Story editor (running order) */
+.editor{position:absolute;inset:0;background:#f8fafc;z-index:7;display:none;flex-direction:column;padding:16px 22px;gap:10px}
+.editor.show{display:flex;animation:fade .35s}
+.ed-head{display:flex;align-items:center;gap:10px}
+.ed-slug{font-size:18px;font-weight:850;letter-spacing:-.02em;text-transform:uppercase}
+.ed-fmt{font-size:10px;font-weight:800;font-family:ui-monospace,monospace;border:1px solid #cbd5e1;border-radius:4px;padding:2px 6px;color:#475569;background:#fff}
+.ed-save{margin-left:auto;font-size:11px;font-weight:800;background:#2563eb;color:#fff;border-radius:7px;padding:6px 12px}
+.brief{font-size:11.5px;line-height:1.45;color:#5b21b6;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:8px 11px}
+.brief b{color:#4c1d95}.brief .lnk{color:#6d28d9;font-weight:800;text-decoration:underline}
+.script-box{flex:1;min-height:0;background:#fff;border:1px solid #cbd5e1;border-radius:9px;padding:12px 14px;font:12.5px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;color:#1e293b;overflow:hidden;white-space:pre-wrap}
+.script-box .dir{color:#b45309;background:#fffbeb;border-radius:3px;transition:background .3s,opacity .3s}
+.script-box.selecting .dir{background:#bfdbfe;color:#1e3a8a}
+.script-box .caret{display:inline-block;width:2px;height:15px;background:#2563eb;vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.ed-note{font-size:11px;color:#64748b;line-height:1.45}
+.ed-note b{color:#b45309}
+.tab.ro-active{color:#24314a;background:#fff;box-shadow:0 1px 3px #bac8d8}
+/* PA Explore (illustration) */
+.pa-head{height:52px;background:#fff;border-bottom:1px solid #dde2e7;display:flex;align-items:center;justify-content:space-between;padding:0 17px;gap:10px}
+.pa-brand{display:flex;align-items:center;gap:7px}.press-association{font-family:Arial,sans-serif;color:#08090a;font-weight:950;font-size:10px;line-height:.91;letter-spacing:-.05em}.explore{font-size:16px;font-weight:900;letter-spacing:-.035em;color:#fff;background:#124eff;padding:7px 8px}
+.pa-menu{font-size:12px;color:#212833;display:flex;gap:18px;align-items:center}.pa-menu b{border-bottom:2px solid #222;padding:8px 0}
+.pa-body{display:grid;grid-template-columns:112px minmax(0,1fr);height:calc(100% - 86px)}
+.pa-sidebar{border-right:1px solid #dde1e7;padding:14px 10px 0 15px;display:flex;flex-direction:column;gap:15px;font-size:10.5px;color:#20242d;white-space:nowrap}
+.pa-cats{height:44px;border-bottom:1px solid #dce1e8;display:flex;font-size:11px;color:#192330}.pa-cats span{padding:15px 12px;white-space:nowrap}.pa-cats span.active{background:#eaf0ff;border-bottom:3px solid #1655fe;font-weight:800}
+.news-list{padding:10px 20px 0}
+.story-item{display:grid;grid-template-columns:62px 1fr;gap:13px;border-bottom:1px solid #d5d9de;min-height:116px;padding:15px 6px 13px;position:relative;cursor:grab;transition:background .22s,outline .22s,transform .2s}
+.story-item.selected{background:#f3f7ff;outline:2px solid #82adff;outline-offset:-2px;border-radius:8px}
+.story-item.held{background:#eaf3ff;outline:3px solid #2466ed;outline-offset:-3px;transform:scale(.985)}
+.story-time{color:#848a91;font-size:10px;line-height:1.4;font-variant-numeric:tabular-nums}
+.story-slug{font-size:11px;color:#252b35;margin-bottom:6px}
+.story-lead{font-size:12.5px;color:#0d141e;line-height:1.38;font-weight:700}
+.story-item:not(:first-child) .story-lead{font-weight:500;font-size:11.5px;color:#303641}
+.drag-ghost{position:absolute;z-index:9;width:290px;padding:12px 14px;border:2px solid #2d6fff;border-radius:11px;background:rgba(255,255,255,.97);box-shadow:0 20px 44px rgba(21,53,104,.25);opacity:0;pointer-events:none;transform:rotate(-2deg) scale(.94)}
+.drag-ghost .g-top{display:flex;gap:8px;align-items:center;color:#2760c4;font-size:10px;font-weight:850;margin-bottom:5px}
+.drag-ghost .g-text{font-size:11.5px;line-height:1.38;font-weight:700;color:#1a2d49}
+.src-badge.pa{background:#0284c7}
+.track-switch{display:flex;padding:3px;background:#eef2f8;border:1px solid #dfe8f1;border-radius:10px;gap:3px}
+.track-switch button{border:0;background:transparent;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:800;color:#5c7290;display:flex;align-items:center;gap:7px}
+.track-switch button[aria-pressed="true"]{background:#fff;color:#1d2e4a;box-shadow:0 1px 3px #bac8d8}
+.compare{margin-top:22px;background:#fff;border:1px solid var(--line);border-radius:21px;box-shadow:var(--shadow);padding:22px 24px}
+.compare h2{margin:0 0 4px;font-size:22px;letter-spacing:-.03em}
+.compare>p{margin:0 0 16px;color:var(--muted);font-size:14px;line-height:1.5}
+.compare-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.col{border:1px solid var(--line);border-radius:14px;padding:16px 16px 12px}
+.col h3{display:flex;align-items:center;gap:8px;margin:0 0 4px;font-size:16px}
+.col .what{margin:0 0 10px;color:#475569;font-size:13px;line-height:1.45}
+.col dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:12.5px;line-height:1.4}
+.col dt{color:#64748b;font-weight:700;white-space:nowrap}.col dd{margin:0;color:#1e293b}
+.col.pa{border-top:4px solid #0284c7}.col.fu{border-top:4px solid #000}.col.other{border-top:4px solid #94a3b8}
+.plain-tag{font-size:9px;font-weight:850;padding:3px 5px;border-radius:4px;border:1px solid #cbd5e1;color:#475569;text-transform:uppercase}
+@media(max-width:1000px){.compare-grid{grid-template-columns:1fr}.track-switch{order:3;width:100%}.player-top{flex-wrap:wrap}}
+/* Pointer */
+.pointer{position:absolute;z-index:15;width:27px;height:34px;top:43%;left:80%;pointer-events:none;filter:drop-shadow(1px 3px 2px rgba(11,31,60,.32));transition:left .65s cubic-bezier(.2,.72,.2,1),top .65s cubic-bezier(.2,.72,.2,1)}
+.pointer svg{width:100%;height:100%}
+.click-ring{position:absolute;z-index:14;width:19px;height:19px;border:2px solid #3173ee;border-radius:50%;pointer-events:none;opacity:0;transform:translate(-50%,-50%) scale(.4)}
+.click-ring.go{animation:clickwave .72s ease-out forwards}
+@keyframes clickwave{0%{opacity:.9;transform:translate(-50%,-50%) scale(.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(3)}}
+.keys{position:absolute;z-index:16;display:none;gap:4px;padding:6px 8px;background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(21,53,104,.2);pointer-events:none}
+.keys.show{display:flex}
+/* Steps */
+.step-description{display:flex;align-items:center;gap:16px;padding:20px 23px 19px;border-top:1px solid var(--line);min-height:116px;background:#fff}
+.step-index{flex:none;width:51px;height:51px;background:#fff3d6;color:#9a5b00;font-size:19px;font-weight:850;border-radius:14px;display:grid;place-items:center}
+.step-copy{flex:1;min-width:0}.step-copy h2{margin:0 0 5px;letter-spacing:-.025em;font-size:20px;line-height:1.2}.step-copy p{margin:0;color:#60728c;font-size:13px;line-height:1.5}
+.step-action{display:flex;gap:9px;align-items:center}
+.control{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;background:#fff;color:#2c415e;border:1px solid #d7e1ee;border-radius:9px;font-size:12px;font-weight:800;white-space:nowrap}
+.control:hover{background:#f3f7ff}.control.primary{color:#fff;background:#1e62eb;border-color:#1e62eb;min-width:91px}.control.primary:hover{background:#174fcb}.control svg{width:15px;height:15px}
+.steps{display:grid;grid-template-columns:repeat(var(--n,8),1fr);gap:8px;background:#f8fafe;border-top:1px solid #edf1f7;padding:13px 20px 16px}
+.step-button{border:1px solid transparent;border-radius:9px;padding:10px 9px;text-align:left;background:transparent;color:#7d8fa7;display:flex;align-items:center;gap:9px;min-width:0}
+.step-button:hover{background:#fff;color:#3e587b}.step-button.current{background:#fff;color:#9a5b00;border-color:#f3d48c;box-shadow:0 2px 10px rgba(25,80,150,.07)}
+.step-button.done .step-dot{background:#e4f5ed;color:#128a6a;border-color:#c6eadc}
+.step-dot{font-size:11px;font-weight:900;border:1px solid #dce4ef;border-radius:7px;background:#fff;width:26px;height:26px;display:grid;place-items:center;flex:none}
+.step-button.current .step-dot{border-color:#f3d48c;background:#fff3d6;color:#9a5b00}
+.step-text{font-size:11px;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.footbar{display:flex;justify-content:space-between;gap:20px;padding:17px 1px;color:#7486a0;font-size:12px;line-height:1.45}
+.footbar b{color:#3c5675}.footbar span:last-child{text-align:right}
+@media(max-width:1000px){.page{width:calc(100% - 22px);padding-top:18px}.masthead-right,.window-note{display:none}.stage{width:1100px}.step-description{flex-wrap:wrap}.step-action{width:100%;justify-content:flex-end}.steps{grid-template-columns:repeat(4,1fr)}.footbar{flex-direction:column;gap:5px}.footbar span:last-child{text-align:left}}
+@media(max-width:600px){.page{width:calc(100% - 14px)}.step-description{padding:15px;gap:11px}.step-copy h2{font-size:17px}.step-copy p{font-size:12px}.step-index{width:41px;height:41px;font-size:16px}.control{font-size:11px;padding:9px}.steps{grid-template-columns:repeat(2,1fr);padding:9px;gap:3px}.intro{font-size:13px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="masthead">
+ <div>
+  <div class="eyebrow"><i></i> Student quick guide · Moira:Desk</div>
+  <h1>Bringing a story into conference</h1>
+  <p class="intro">Moira:Desk treats sources differently. <b>PA</b> is wire copy written for newsrooms like ours to use: drag it in and it's ready to pitch. A <b>BBC News</b> or <b>MEN</b> story is someone else's published journalism: paste its link and pitch it as a <b>follow-up</b>, answering three questions before the producer can pick it. Choose a source, then watch, step through, or try it yourself.</p>
+ </div>
+ <div class="masthead-right"><span class="pill">PA: drag the headline</span><span class="pill">BBC / MEN: paste the link</span></div>
+</header>
+<section class="video-shell" aria-label="Illustrated follow-up pitch workflow">
+ <div class="player-top"><div class="player-title"><span class="live">Demo</span> <span>Moira:Desk sources</span></div><div class="track-switch" role="group" aria-label="Choose a source"><button type="button" data-track="pa" aria-pressed="true"><span class="src-badge pa">PA</span> PA wire</button><button type="button" data-track="fu" aria-pressed="false"><span class="src-badge">Follow-up · BBC</span> BBC / MEN</button></div><span class="window-note">Illustration · not connected to Moira:Desk, PA or any news site</span><span class="step-count" id="stepCount">Step 1 of 8</span></div>
+ <div class="stage-outer">
+  <div class="stage" id="stage">
+   <section class="browser" aria-label="Illustration of the Moira:Desk news conference">
+    <div class="browser-chrome"><span class="dots"><i></i><i></i><i></i></span><span class="address"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9z"/></svg> digitaldickinson.github.io / Moira-Desk</span></div>
+    <div class="moira-head"><div style="display:flex;align-items:center;gap:13px"><span class="moira-logo"><small>▣</small>Moira:<span>Desk</span></span><span class="user-chip">● Alex</span></div><div class="moira-head-right"><span>Newsday Green</span><span>⚙</span></div></div>
+    <div class="moira-body">
+     <div class="subnav"><div class="tabs"><div class="tab active" id="confTab">🗨 &nbsp;Conference <b id="confCount">0</b></div><div class="tab" id="roTab">☰ &nbsp;Running order <b>3</b></div></div><span class="producer" id="producerChip">♛ Producer: Sam</span></div>
+     <h2 class="moira-title">News conference</h2>
+     <p class="moira-subtitle">Anyone can pitch. Sam picks the stories.</p>
+     <div class="pitch-form" id="pitchForm" tabindex="-1" aria-label="Pitch box: paste a BBC News or MEN link here">
+      <div class="paste-hint">⌘V / Ctrl+V · PASTE THE LINK HERE</div>
+      <div class="form-fields">
+       <div id="slugField" class="mock-input slug">SLUG</div>
+       <div id="angleField" class="mock-input">The angle, in a line</div>
+       <div id="byField" class="mock-input">Pitched by</div>
+       <div class="plus" id="plusButton" aria-hidden="true">+</div>
+      </div>
+      <div class="chip-row" id="chipRow"><span class="hint">↪ Drag a headline from PA Explore onto this box, or paste a BBC News or MEN link into it, to fill in the details.</span></div>
+     </div>
+     <div class="section-label" id="pitchedLabel">Pitched</div>
+     <div class="placeholder-card" id="placeholder"></div>
+     <div class="pitch-card" id="card">
+      <div class="pc-main">
+       <div class="pc-top"><span class="pc-num">1</span><span>Power cuts</span><span class="src-badge">Follow-up · BBC</span></div>
+       <div class="pc-angle" id="cardAngle">Hundreds of properties hit by power cuts after cable incident</div>
+       <div class="pc-meta">Pitched by Alex · <a href="#" onclick="return false">BBC story ↗</a></div>
+       <div class="pc-claims">Page claims: published 17 Nov 2026, 08:46 / updated 17 Nov 2026, 08:46</div>
+       <div class="pc-answers"><b>When:</b> Sunday night, from about 10pm · <b>Source:</b> Electricity North West · <b>New:</b> Which Salford streets are still without power</div>
+      </div>
+      <div class="pc-actions"><span class="pending-chip">⏳ Pending</span><span class="pick">✓ Pick</span><span class="spike">⊘ Spike</span><span class="pencil" id="pencil">✎</span></div>
+     </div>
+     <div class="pitch-card" id="paCard">
+      <div class="pc-main">
+       <div class="pc-top"><span class="pc-num">1</span><span>Politics Neets</span><span class="src-badge pa">PA</span></div>
+       <div class="pc-angle">Labour MPs must back youth welfare reforms to prevent a 'lost generation', Alan Milburn has said.</div>
+       <div class="pc-meta">Pitched by Alex · <a href="#" onclick="return false">PA story ↗</a></div>
+      </div>
+      <div class="pc-actions"><span class="pick" style="display:inline-block" id="paPick">✓ Pick</span><span class="spike">⊘ Spike</span><span class="pencil" style="color:#94a3b8">✎</span></div>
+     </div>
+     <div class="editor" id="editor" aria-label="Illustration of the story editor">
+      <div class="ed-head"><span class="ed-slug">Power cuts</span><span class="ed-fmt">READ</span><span style="font-size:11px;color:#64748b">Reporter: Alex</span><span class="ed-save">Save</span></div>
+      <div class="brief">💡 <b>Pitch:</b> Hundreds of properties hit by power cuts after cable incident · pitched by Alex · <span class="lnk">BBC story ↗</span></div>
+      <div class="script-box" id="scriptBox"></div>
+      <div class="ed-note" id="edNote">Lines in <b>[square brackets]</b> are directions: they're never read out.</div>
+     </div>
+     <div class="dialog-scrim" id="dialog">
+      <div class="dialog">
+       <div class="dialog-head">Follow-up questions <span style="color:#94a3b8">×</span></div>
+       <div class="dialog-body">
+        <p class="msg">"POWER CUTS" is a follow-up to a BBC News story. The producer can pick it once all three questions are answered.</p>
+        <div><label>When did this actually happen?</label><p class="help">Find the event date in the copy, not the page timestamp.</p><div class="field" id="q1"></div></div>
+        <div><label>Who is the original source?</label><p class="help">Not 'BBC' or 'MEN'. Who did they get it from?</p><div class="field" id="q2"></div></div>
+        <div><label>What's new, or what's our angle?</label><p class="help">What do we add that they haven't already reported?</p><div class="field" id="q3"></div></div>
+       </div>
+       <div class="dialog-foot"><span>Cancel</span><span class="save" id="saveBtn">Save</span></div>
+      </div>
+     </div>
+    </div>
+   </section>
+   <section class="browser" id="paPanel" aria-label="Illustration of the PA Explore newswire">
+    <div class="browser-chrome"><span class="dots"><i></i><i></i><i></i></span><span class="address"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9z"/></svg> explore.pressassociation.com / create</span></div>
+    <div class="pa-head"><div class="pa-brand"><div class="press-association">PRESS<br>ASSOC<br>IATION</div><span class="explore">EXPLORE</span></div><div class="pa-menu"><b>Create</b><span>Collections</span><span>Experts</span></div><span style="color:#1757ff;font-size:18px">⌕</span></div>
+    <div class="pa-body">
+     <aside class="pa-sidebar"><span>Live Schedule</span><span>Live Video</span><span>Videos</span><span>Images</span><span>Embargoes</span><span>Diary</span></aside>
+     <div><div class="pa-cats"><span>All Content</span><span class="active">News</span><span>Entertainment</span><span>Finance</span></div>
+      <div class="news-list">
+       <div class="story-item" id="paStory" draggable="true" tabindex="0" role="button" aria-label="Drag this PA story onto the pitch box">
+        <div class="story-time">08:42<br>17 Nov 2026<br><br>1054 words</div>
+        <div><div class="story-slug">Politics Neets <span style="color:#6b7280">Latest</span></div><div class="story-lead">Labour MPs must back youth welfare reforms to prevent a 'lost generation', Alan Milburn has said.</div></div>
+       </div>
+       <div class="story-item" style="cursor:default"><div class="story-time">08:34<br>17 Nov 2026</div><div><div class="story-slug">Politics Statements</div><div class="story-lead">Here are the written ministerial statements due to be made in the Commons on Tuesday.</div></div></div>
+       <div class="story-item" style="cursor:default"><div class="story-time">08:25<br>17 Nov 2026</div><div><div class="story-slug">Economy Unemployment</div><div class="story-lead">Britain's unemployment rate has fallen again unexpectedly as vacancies tumble further.</div></div></div>
+      </div></div>
+    </div>
+   </section>
+   <section class="browser" id="fuPanel" hidden aria-label="Illustration of a BBC News article page">
+    <div class="browser-chrome"><span class="dots"><i></i><i></i><i></i></span><span class="address live" id="address" tabindex="0" title="Click, copy, then paste into the pitch box"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9z"/></svg><span class="url" id="url">https://www.bbc.co.uk/news/articles/c8752wyv155xo</span></span></div>
+    <div class="copied" id="copied">✓ Link copied</div>
+    <div class="outlet-head"><span class="outlet-name">BBC News<small>illustration</small></span><span class="outlet-nav"><span>Home</span><span>UK</span><span>England</span><span>Local</span></span></div>
+    <div class="outlet-body" id="outletBody">
+     <div class="kicker">Manchester</div>
+     <div class="outlet-h">Hundreds of properties hit by power cuts after cable incident</div>
+     <div class="outlet-date">17 November 2026 · Updated a few minutes ago</div>
+     <div class="outlet-img">Picture</div>
+     <div class="outlet-p"></div><div class="outlet-p"></div><div class="outlet-p short"></div><div class="outlet-p"></div><div class="outlet-p short"></div>
+    </div>
+   </section>
+   <div class="drag-ghost" id="ghost" aria-hidden="true"><div class="g-top"><span class="src-badge pa">PA</span> Politics Neets</div><div class="g-text">Labour MPs must back youth welfare reforms to prevent a 'lost generation', Alan Milburn has said.</div></div>
+   <div class="pointer" id="pointer" aria-hidden="true"><svg viewBox="0 0 30 38"><path d="M2 1 L2 29 L9 23 L15 35 L21 32 L15 20 L26 20 Z" fill="#fff" stroke="#173b70" stroke-width="2.4" stroke-linejoin="round"/></svg></div>
+   <div class="click-ring" id="ring" aria-hidden="true"></div>
+   <div class="keys" id="keys" aria-hidden="true"></div>
+  </div>
+ </div>
+ <div class="step-description" aria-live="polite"><div class="step-index" id="stepIndex">01</div><div class="step-copy"><h2 id="stepTitle"></h2><p id="stepText"></p></div><div class="step-action"><button class="control" id="prev" aria-label="Previous step"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="m15 18-6-6 6-6"/></svg> Back</button><button class="control primary" id="play" aria-label="Pause animation"><span id="playSym">Ⅱ</span> <span id="playLabel">Pause</span></button><button class="control" id="next">Next <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="m9 18 6-6-6-6"/></svg></button><button class="control" id="restart" aria-label="Replay from the beginning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></div></div>
+ <div class="steps" id="steps" aria-label="Jump to a step"></div>
+</section>
+<section class="compare" aria-labelledby="compare-title">
+ <h2 id="compare-title">Three kinds of source</h2>
+ <p>How you bring a story in tells the newsroom, and your EP, where it came from. The EP wall and the report count every pitch by source.</p>
+ <div class="compare-grid">
+  <div class="col pa"><h3><span class="src-badge pa">PA</span> PA wire</h3><p class="what">Agency copy written for newsrooms to use, under our PA licence.</p>
+   <dl><dt>Add it</dt><dd>Drag the headline from PA Explore onto the pitch box</dd><dt>Fills in</dt><dd>PA's slug, the headline line and the link</dd><dt>Marked</dt><dd>PA badge</dd><dt>Questions</dt><dd>None</dd><dt>Producer</dt><dd>Can pick it straight away</dd><dt>In the script</dt><dd>Starts empty; the PA link sits beside the pitch brief</dd><dt>Counts as</dt><dd>Wire</dd></dl></div>
+  <div class="col fu"><h3><span class="src-badge">Follow-up · BBC</span> BBC News / MEN</h3><p class="what">Someone else's published journalism. We can follow it up, but we need to know where it really came from.</p>
+   <dl><dt>Add it</dt><dd>Copy the link, paste it into the pitch box</dd><dt>Fills in</dt><dd>The headline and the link; you add the slug</dd><dt>Marked</dt><dd>FOLLOW-UP badge; the card stays red until answered</dd><dt>Questions</dt><dd>When it actually happened · the original source · what's new or our angle</dd><dt>Producer</dt><dd>Sees Pending until all three are answered</dd><dt>In the script</dt><dd>Starts with your three answers as [prompts]; delete them as you write</dd><dt>Counts as</dt><dd>Follow-up</dd></dl></div>
+  <div class="col other"><h3><span class="plain-tag">Source</span> Any other link</h3><p class="what">A link from anywhere else, kept with the pitch so the newsroom can check it.</p>
+   <dl><dt>Add it</dt><dd>Drag the link onto the pitch box (pasting it just types the address)</dd><dt>Fills in</dt><dd>The link, plus the link's text if you drag it from a page; you type the slug</dd><dt>Marked</dt><dd>A plain "Source" link</dd><dt>Questions</dt><dd>None</dd><dt>Producer</dt><dd>Can pick it straight away</dd><dt>In the script</dt><dd>Starts empty; the link sits beside the pitch brief</dd><dt>Counts as</dt><dd>Original, like a typed-in pitch</dd></dl></div>
+ </div>
+</section>
+<footer class="footbar"><span><b>Remember:</b> PA, drag it in. BBC or MEN, paste the link, answer the three questions with the <b>pencil</b>, and delete the [prompts] from the script once it's written. Whatever the source, check the slug, angle and your name before you press <b>+</b>.</span><span>Illustration only · nothing here is sent anywhere · try it: drag the PA story, or copy the BBC link and paste it into the pitch box</span></footer>
+</div>
+<script>
+(() => {
+ 'use strict';
+ const $ = (id) => document.getElementById(id);
+ const stage = $('stage'), pointer = $('pointer'), ring = $('ring'), keys = $('keys'), ghost = $('ghost');
+ const form = $('pitchForm'), slug = $('slugField'), angle = $('angleField'), by = $('byField'), plus = $('plusButton');
+ const editor = $('editor'), scriptBox = $('scriptBox');
+ const chip = $('chipRow'), card = $('card'), paCard = $('paCard'), placeholder = $('placeholder'), pencil = $('pencil'), dialog = $('dialog');
+ const address = $('address'), copied = $('copied'), outlet = $('outletBody'), paStory = $('paStory');
+ const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+ const HEADLINE = 'Hundreds of properties hit by power cuts after cable incident';
+ const PA_SLUG = 'Politics Neets';
+ const PA_LINE = "Labour MPs must back youth welfare reforms to prevent a 'lost generation', Alan Milburn has said.";
+ const ANSWERS = ['Sunday night, from about 10pm', 'Electricity North West', 'Which Salford streets are still without power'];
+ // The follow-up note exactly as Moira:Desk writes it at the top of the script.
+ const NOTE = ['[FOLLOW-UP NOTE: delete these lines once the story is written]', `[Follow-up to BBC News: "${HEADLINE}"]`,
+  `[When it happened: ${ANSWERS[0]}]`, `[Original source: ${ANSWERS[1]}]`, `[What's new / our angle: ${ANSWERS[2]}]`];
+ const SCRIPT = 'Hundreds of homes in Salford face a second night without power after a cable fault on Sunday.';
+ const HINT = '<span class="hint">↪ Drag a headline from PA Explore onto this box, or paste a BBC News or MEN link into it, to fill in the details.</span>';
+ const fuChip = (fetching) => `<span class="src-badge">Follow-up · BBC</span><span class="story-link">BBC story ↗</span>${fetching ? '<span class="fetching"><span class="spin"></span>Fetching headline…</span>' : ''}<span style="margin-left:auto;color:#94a3b8">✕</span>`;
+ const paChip = '<span class="src-badge pa">PA</span><span class="story-link">PA story ↗</span><span style="margin-left:auto;color:#94a3b8">✕</span>';
+
+ let timers = [];
+ const later = (ms, fn) => timers.push(setTimeout(fn, reduce ? 0 : ms));
+ const clearTimers = () => { timers.forEach(t => { clearTimeout(t); clearInterval(t); }); timers = []; };
+ function at(el, x = .5, y = .5) { const a = el.getBoundingClientRect(), b = stage.getBoundingClientRect(); return { x: a.left - b.left + a.width * x, y: a.top - b.top + a.height * y }; }
+ function cursor(el, x, y, instant) { const p = at(el, x, y); pointer.style.transition = instant ? 'none' : ''; pointer.style.left = (p.x - 4) + 'px'; pointer.style.top = (p.y - 3) + 'px'; }
+ function click(el) { const p = at(el); ring.style.left = p.x + 'px'; ring.style.top = p.y + 'px'; ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go'); }
+ function showKeys(el, combo) { keys.innerHTML = combo.map(k => `<span class="keycap">${k}</span>`).join('<span style="font-weight:800;color:#64748b">+</span>'); const p = at(el, .5, 0); keys.style.left = (p.x - 40) + 'px'; keys.style.top = (p.y - 44) + 'px'; keys.classList.add('show'); }
+ function type(el, text, ms, done) {
+  if (reduce) { el.textContent = text; done && done(); return; }
+  let i = 0; el.textContent = ''; el.classList.add('typing');
+  const t = setInterval(() => { el.textContent = text.slice(0, ++i); if (i >= text.length) { clearInterval(t); el.classList.remove('typing'); done && done(); } }, ms);
+  timers.push(t);
+ }
+ function setField(el, text, ph) { el.textContent = text || ph; el.classList.toggle('value', !!text); }
+ function fill(slugText, angleText, byText) { setField(slug, slugText, 'SLUG'); setField(angle, angleText, 'The angle, in a line'); setField(by, byText, 'Pitched by'); }
+ function showCard(which) {
+  card.classList.toggle('show', which === 'fu-pending' || which === 'fu-ready'); card.classList.toggle('pending', which === 'fu-pending'); card.classList.toggle('ready', which === 'fu-ready');
+  paCard.classList.toggle('show', which === 'pa'); paCard.classList.toggle('ready', which === 'pa');
+  placeholder.style.display = which ? 'none' : 'block';
+  $('confCount').textContent = which ? '1' : '0'; $('pitchedLabel').textContent = which ? 'Pitched 1' : 'Pitched';
+ }
+ function reset() {
+  [address, outlet].forEach(e => e.classList.remove('selected')); paStory.classList.remove('selected', 'held');
+  copied.classList.remove('show'); keys.classList.remove('show'); ghost.style.cssText = '';
+  form.classList.remove('target', 'filled'); plus.classList.remove('pulse', 'clicked'); pencil.classList.remove('pulse');
+  [slug, angle, by].forEach(e => e.classList.remove('typing', 'flash'));
+  dialog.classList.remove('show'); $('saveBtn').classList.remove('pulse');
+  ['q1', 'q2', 'q3'].forEach(q => { $(q).textContent = ''; $(q).classList.remove('typing'); });
+  fill('', '', ''); chip.innerHTML = HINT; showCard(null);
+  editor.classList.remove('show'); $('confTab').classList.add('active'); $('roTab').classList.remove('ro-active');
+  scriptBox.classList.remove('selecting'); scriptBox.innerHTML = '';
+ }
+ const noteHtml = () => NOTE.map(l => `<span class="dir">${l}</span>`).join('\n');
+ function openEditor() { editor.classList.add('show'); $('confTab').classList.remove('active'); $('roTab').classList.add('ro-active'); }
+ function pressPlus(animate, then) {
+  form.classList.add('filled'); plus.classList.add('pulse'); cursor(plus, .5, .5, true);
+  if (!animate) { then(); return; }
+  later(800, () => { click(plus); plus.classList.add('clicked'); });
+  later(1250, then);
+ }
+
+ // ── PA: drag the headline; slug, line and link fill in; no questions ──
+ const PA = [
+  { short: 'Find the story', title: 'Find a story in PA Explore', text: 'Keep PA Explore and Moira:Desk open side by side and choose the wire story you want to pitch.', dur: 3000,
+    run() { paStory.classList.add('selected'); cursor(paStory, .7, .4, true); } },
+  { short: 'Click & hold', title: 'Click and hold the headline', text: 'Press and hold on the story in PA Explore to start dragging it.', dur: 2400,
+    run() { paStory.classList.add('selected', 'held'); cursor(paStory, .7, .4, true); later(200, () => click(paStory)); } },
+  { short: 'Drag across', title: 'Drag it onto the pitch box', text: 'Move the story across to the news conference pitch box and let go.', dur: 3400,
+    run(animate) {
+     paStory.classList.add('selected'); form.classList.add('target');
+     const from = at(paStory, .6, .4), to = at(form, .55, .5);
+     cursor(paStory, .6, .4, true);
+     if (!animate || reduce) { cursor(form, .55, .5, true); return; }
+     Object.assign(ghost.style, { left: (from.x - 145) + 'px', top: (from.y - 25) + 'px', opacity: '1', transition: 'none' });
+     later(300, () => {
+      ghost.style.transition = 'left 1.5s cubic-bezier(.19,.75,.18,1), top 1.5s cubic-bezier(.19,.75,.18,1), transform 1.5s';
+      Object.assign(ghost.style, { left: (to.x - 145) + 'px', top: (to.y - 25) + 'px', transform: 'rotate(0) scale(1)' });
+      pointer.style.transition = 'left 1.5s cubic-bezier(.19,.75,.18,1), top 1.5s cubic-bezier(.19,.75,.18,1)';
+      pointer.style.left = (to.x - 4) + 'px'; pointer.style.top = (to.y - 3) + 'px';
+     });
+     later(1900, () => { ghost.style.transition = 'opacity .25s'; ghost.style.opacity = '0'; form.classList.remove('target'); click(form); });
+    } },
+  { short: 'Check it', title: 'The slug, headline and link fill in', text: "PA's own slug and the story's headline line arrive with a PA badge and the PA link. Check them and rewrite the angle if you like.", dur: 3600,
+    run(animate) { form.classList.add('filled'); fill(PA_SLUG, PA_LINE, ''); chip.innerHTML = paChip; cursor(angle, .5, .55, true);
+     if (animate) [slug, angle].forEach(e => e.classList.add('flash')); } },
+  { short: 'Your name', title: 'Check your name in Pitched by', text: 'Make sure your name is in Pitched by, so the newsroom knows who is proposing the story.', dur: 3000,
+    run(animate) { form.classList.add('filled'); fill(PA_SLUG, PA_LINE, ''); chip.innerHTML = paChip; cursor(by, .4, .55, true);
+     if (animate) type(by, 'Alex', 170, () => by.classList.add('value')); else setField(by, 'Alex'); } },
+  { short: 'Press +', title: 'Press + to pitch it', text: 'The pitch appears with its PA badge and link. There are no questions to answer: PA is wire copy we can use.', dur: 3600,
+    run(animate) { fill(PA_SLUG, PA_LINE, 'Alex'); chip.innerHTML = paChip;
+     pressPlus(animate, () => { fill('', '', 'Alex'); chip.innerHTML = HINT; form.classList.remove('filled'); plus.classList.remove('pulse', 'clicked'); showCard('pa'); cursor(paCard, .55, .5); }); } },
+  { short: 'Pick', title: 'The producer can pick it straight away', text: 'A PA pitch is ready for the running order as soon as it is pitched. On the EP wall and in the report it counts as Wire.', dur: 3800,
+    run(animate) { fill('', '', 'Alex'); showCard('pa'); cursor($('paPick'), .5, .55, true); if (animate) later(600, () => click($('paPick'))); } },
+ ];
+
+ // ── BBC / MEN: paste the link; headline fills in; three questions ──
+ const FU = [
+  { short: 'Find it', title: 'Find the story', text: 'Open the BBC News or Manchester Evening News story you want to follow up, alongside Moira:Desk.', dur: 3000,
+    run() { outlet.classList.add('selected'); cursor(outlet.querySelector('.outlet-h'), .4, .6, true); } },
+  { short: 'Copy link', title: 'Copy its link', text: 'Click the address bar and copy the link: ⌘C on a Mac, Ctrl+C on Windows. You can also right-click a link on the site and choose Copy link.', dur: 3300,
+    run() { cursor(address, .55, .5, true); later(500, () => { click(address); address.classList.add('selected'); }); later(1200, () => showKeys(address, ['⌘ / Ctrl', 'C'])); later(1700, () => copied.classList.add('show')); } },
+  { short: 'Paste it', title: 'Paste it into the pitch box', text: 'Click the pitch box and paste (⌘V or Ctrl+V). The link attaches straight away and Moira:Desk fetches the story details.', dur: 3600,
+    run(animate) {
+     chip.innerHTML = '<span class="hint">↪ Paste a BBC News or MEN link into this box.</span>'; form.classList.add('target');
+     if (!animate) { chip.innerHTML = fuChip(true); cursor(form, .5, .45, true); return; }
+     cursor(address, .55, .5, true); later(250, () => cursor(form, .5, .45));
+     later(1050, () => { click(form); showKeys(form, ['⌘ / Ctrl', 'V']); });
+     later(1650, () => { keys.classList.remove('show'); chip.innerHTML = fuChip(true); });
+    } },
+  { short: 'Angle', title: 'The headline fills the angle', text: "The story's headline goes into the angle box, marked FOLLOW-UP · BBC. Rewrite it into your own angle if you like.", dur: 3300,
+    run(animate) { form.classList.add('filled'); cursor(angle, .5, .55, true);
+     if (!animate) { chip.innerHTML = fuChip(false); fill('', HEADLINE, ''); return; }
+     chip.innerHTML = fuChip(true); later(700, () => { chip.innerHTML = fuChip(false); fill('', HEADLINE, ''); angle.classList.add('flash'); }); } },
+  { short: 'Slug & name', title: 'Add a slug and your name', text: 'Type a short slug and check your name is in Pitched by.', dur: 3600,
+    run(animate) { form.classList.add('filled'); chip.innerHTML = fuChip(false); fill('', HEADLINE, ''); cursor(slug, .4, .55, true);
+     if (!animate) { fill('Power cuts', HEADLINE, 'Alex'); return; }
+     type(slug, 'Power cuts', 110, () => { slug.classList.add('value'); cursor(by, .4, .55); later(500, () => type(by, 'Alex', 160, () => by.classList.add('value'))); }); } },
+  { short: 'Press +', title: 'Press + to pitch it', text: "The card appears in red with the dates the page claims. Those are the site's own dates, not necessarily when the story happened.", dur: 3700,
+    run(animate) { fill('Power cuts', HEADLINE, 'Alex'); chip.innerHTML = fuChip(false);
+     pressPlus(animate, () => { fill('', '', 'Alex'); chip.innerHTML = HINT; form.classList.remove('filled'); plus.classList.remove('pulse', 'clicked'); showCard('fu-pending'); cursor(card, .55, .5); }); } },
+  { short: 'Answer ✎', title: 'Answer the three questions', text: "Click the pencil on your card and answer: when it actually happened, who the original source is, and what's new or our angle. Each answer needs a few words.", dur: 7800,
+    run(animate) {
+     fill('', '', 'Alex'); showCard('fu-pending'); cursor(pencil, .5, .5, true); pencil.classList.add('pulse');
+     if (!animate || reduce) { dialog.classList.add('show'); ANSWERS.forEach((t, i) => { $('q' + (i + 1)).textContent = t; }); return; }
+     later(700, () => { click(pencil); pencil.classList.remove('pulse'); dialog.classList.add('show'); cursor($('q1'), .2, .5); });
+     const next = (i) => { if (i > 2) { later(300, () => { cursor($('saveBtn'), .5, .5); $('saveBtn').classList.add('pulse'); }); return; }
+      const q = $('q' + (i + 1)); later(250, () => { cursor(q, .15, .5); type(q, ANSWERS[i], 38, () => next(i + 1)); }); };
+     later(1100, () => next(0));
+    } },
+  { short: 'Ready', title: 'Ready for the producer', text: 'The card turns white and shows your answers. The producer, who saw Pending until now, can pick it. It counts as a Follow-up on the EP wall and in the report.', dur: 4600,
+    run(animate) {
+     fill('', '', 'Alex');
+     if (!animate) { showCard('fu-ready'); cursor(card.querySelector('.pick'), .5, .55, true); return; }
+     showCard('fu-pending'); dialog.classList.add('show'); ANSWERS.forEach((t, i) => { $('q' + (i + 1)).textContent = t; }); cursor($('saveBtn'), .5, .5, true);
+     later(500, () => click($('saveBtn'))); later(900, () => { dialog.classList.remove('show'); showCard('fu-ready'); });
+     later(1500, () => cursor(card.querySelector('.pick'), .5, .55)); later(2300, () => click(card.querySelector('.pick')));
+    } },
+  { short: 'In script', title: 'Your answers become prompts in the script', text: 'Once picked, the story opens with your angle as the pitch brief and the BBC link beside it. The script starts with your three answers as prompts in [square brackets], so whoever writes it knows where the story came from.', dur: 5200,
+    run(animate) {
+     fill('', '', 'Alex'); showCard('fu-ready'); openEditor(); cursor(scriptBox, .5, .25, true);
+     if (!animate || reduce) { scriptBox.innerHTML = noteHtml() + '\n<span class="caret"></span>'; return; }
+     let i = 0; const lines = () => NOTE.slice(0, i).map(l => `<span class="dir">${l}</span>`).join('\n');
+     const t = setInterval(() => { i++; scriptBox.innerHTML = lines() + (i >= NOTE.length ? '\n<span class="caret"></span>' : ''); if (i >= NOTE.length) clearInterval(t); }, 420);
+     timers.push(t);
+    } },
+  { short: 'Delete', title: 'Delete the prompts as you write', text: "Use the prompts to check your facts and source, then delete them once the story is written. If they're left in, they go to Cuez as production instructions, not words to read, but the prompter still shows them.", dur: 6000,
+    run(animate) {
+     fill('', '', 'Alex'); showCard('fu-ready'); openEditor(); scriptBox.innerHTML = noteHtml() + '\n<span class="caret"></span>'; cursor(scriptBox, .05, .06, true);
+     if (!animate || reduce) { scriptBox.innerHTML = SCRIPT + '<span class="caret"></span>'; return; }
+     later(500, () => { cursor(scriptBox, .7, .32); scriptBox.classList.add('selecting'); });
+     later(1300, () => showKeys(scriptBox, ['Delete']));
+     later(1800, () => { keys.classList.remove('show'); scriptBox.classList.remove('selecting'); scriptBox.innerHTML = '<span class="caret"></span>'; cursor(scriptBox, .05, .06); });
+     later(2200, () => { let i = 0; const t = setInterval(() => { scriptBox.innerHTML = SCRIPT.slice(0, ++i) + '<span class="caret"></span>'; if (i >= SCRIPT.length) clearInterval(t); }, 32); timers.push(t); });
+    } },
+ ];
+
+ const TRACKS = { pa: PA, fu: FU };
+ let track = 'pa', step = 0, playing = true, practicing = false;
+ function setTrack(t) {
+  track = t;
+  document.querySelectorAll('[data-track]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.track === t)));
+  $('paPanel').hidden = t !== 'pa'; $('fuPanel').hidden = t !== 'fu';
+  const steps = TRACKS[t];
+  $('steps').style.setProperty('--n', steps.length);
+  $('steps').innerHTML = steps.map((s, i) => `<button class="step-button" data-step="${i}"><span class="step-dot">${String(i + 1).padStart(2, '0')}</span><span class="step-text">${s.short}</span></button>`).join('');
+ }
+ function show(n, animate = true) {
+  clearTimers(); reset();
+  const steps = TRACKS[track];
+  step = (n + steps.length) % steps.length;
+  steps[step].run(animate);
+  render();
+  if (playing && !practicing) timers.push(setTimeout(() => show(step + 1), steps[step].dur));
+ }
+ function render() {
+  const steps = TRACKS[track];
+  $('stepIndex').textContent = String(step + 1).padStart(2, '0');
+  $('stepCount').textContent = `${track === 'pa' ? 'PA wire' : 'BBC / MEN follow-up'} · Step ${step + 1} of ${steps.length}`;
+  $('stepTitle').textContent = steps[step].title; $('stepText').textContent = steps[step].text;
+  document.querySelectorAll('.step-button').forEach((b, i) => { b.classList.toggle('current', i === step); b.classList.toggle('done', i < step); if (i === step) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current'); });
+  $('playSym').textContent = playing ? 'Ⅱ' : '▶'; $('playLabel').textContent = playing ? 'Pause' : 'Play';
+  $('play').setAttribute('aria-label', playing ? 'Pause animation' : 'Play animation');
+ }
+ const stop = () => { playing = false; };
+ document.querySelectorAll('[data-track]').forEach(b => b.addEventListener('click', () => { practicing = false; playing = true; setTrack(b.dataset.track); show(0); }));
+ $('prev').addEventListener('click', () => { stop(); show(step - 1); });
+ $('next').addEventListener('click', () => { stop(); show(step + 1); });
+ $('play').addEventListener('click', () => { playing = !playing; practicing = false; if (playing) show(step); else { clearTimers(); render(); } });
+ $('restart').addEventListener('click', () => { playing = true; practicing = false; show(0); });
+ $('steps').addEventListener('click', (e) => { const b = e.target.closest('[data-step]'); if (b) { stop(); show(Number(b.dataset.step)); } });
+ document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); stop(); show(step + 1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); stop(); show(step - 1); }
+  else if (e.code === 'Space' && !(document.activeElement instanceof HTMLButtonElement)) { e.preventDefault(); $('play').click(); }
+ });
+
+ // Try it. Nothing is fetched or sent anywhere.
+ // PA: the story really can be dragged onto the pitch box.
+ paStory.addEventListener('dragstart', (e) => { practicing = true; stop(); clearTimers(); reset(); render(); paStory.classList.add('held'); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', PA_LINE); });
+ paStory.addEventListener('dragend', () => paStory.classList.remove('held'));
+ paStory.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); stop(); show(3); } });
+ form.addEventListener('dragover', (e) => { if (track !== 'pa') return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; form.classList.add('target'); });
+ form.addEventListener('dragleave', (e) => { if (!form.contains(e.relatedTarget)) form.classList.remove('target'); });
+ form.addEventListener('drop', (e) => { if (track !== 'pa') return; e.preventDefault(); practicing = false; stop(); show(3); });
+ // BBC: the address can be copied, and pasting a BBC News or MEN link moves the demo on.
+ address.addEventListener('focus', () => { practicing = true; stop(); clearTimers(); reset(); address.classList.add('selected'); render(); const r = document.createRange(); r.selectNodeContents($('url')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
+ address.addEventListener('copy', () => { copied.classList.add('show'); form.classList.add('target'); chip.innerHTML = '<span class="hint">↪ Now click here and paste (⌘V or Ctrl+V).</span>'; });
+ form.addEventListener('click', () => form.focus());
+ document.addEventListener('paste', (e) => {
+  const text = (e.clipboardData && e.clipboardData.getData('text/plain') || '').trim();
+  if (!/^https?:\/\/(www\.)?(bbc\.(co\.uk|com)|manchestereveningnews\.co\.uk)\//i.test(text)) return;
+  e.preventDefault(); practicing = false; stop(); if (track !== 'fu') setTrack('fu'); show(2);
+  later(1800, () => show(3));
+ });
+ let resizeTimer; addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => show(step, false), 180); });
+ setTrack('pa'); show(0);
+})();
+</script>
+</body>
+</html>
