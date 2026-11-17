@@ -91,8 +91,8 @@ document.head.insertAdjacentHTML('beforeend', `<style id="desk-shared-style">
   .wall-tag.picked { background: #126b43; }
   .wall-tag.new { background: #2563eb; }
   .wall-tag.pa { background: #075985; }
-  .wall-tag.bbc { background: #0f172a; }
-  .wall-tag.men { background: #991b1b; }
+  .wall-tag.bbc { background: #000; color: #fff; }
+  .wall-tag.men { background: #ffd400; color: #000; }
   .wall-pitch .note { margin-top: .4em; font-size: .85em; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: .3em .5em; }
   .spiked-toggle { width: 100%; text-align: left; font-size: .85em; white-space: normal; color: var(--muted); background: transparent; border: 1px dashed var(--line); border-radius: 8px; padding: .4em .7em; }
   .spiked-list { list-style: none; margin: 0; padding: 0 .3em; display: grid; gap: .25em; font-size: .85em; color: var(--muted); }
