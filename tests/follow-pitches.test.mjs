@@ -66,6 +66,10 @@ console.log('PASS: BBC/MEN page details stored and cleaned; PA and typed pitches
 // Answers: pitcher and producer only; blanks allowed before picking.
 await db.query("select set_follow_answers($1, 'Sunday night', '', 'Second night without power')", [f1]);
 assert.deepEqual(await row('select follow_when, follow_origin, angle from pitches where id = $1', [f1]), { follow_when: 'Sunday night', follow_origin: null, angle: 'Second night without power' });
+await db.query("select set_follow_answers($1, 'Sunday night', '', 'Second night without power', '  Power cuts latest  ')", [f1]);
+assert.equal(await value('select slug from pitches where id = $1', [f1]), 'Power cuts latest');
+await assert.rejects(db.query("select set_follow_answers($1, 'Sunday night', '', 'x', '  ')", [f1]), /Give the pitch a slug/);
+await db.query("select set_follow_answers($1, 'Sunday night', '', 'Second night without power', 'POWER CUTS')", [f1]);
 await asUser(other);
 await assert.rejects(db.query("select set_follow_answers($1, 'x', 'y', 'z')", [f1]), /Only whoever added this pitch, or the producer/);
 await asUser(pitcher);
@@ -74,12 +78,12 @@ console.log('PASS: follow answers saved by the pitcher; others and non-follow pi
 
 // The gate: 0- and 2-character answers refused, by pick_pitch and by the trigger.
 await asUser(producer);
-await assert.rejects(db.query('select pick_pitch($1)', [f1]), /Follow pitch needs: who the original source is\./);
+await assert.rejects(db.query('select pick_pitch($1)', [f1]), /Follow-up pitch needs: who the original source is\./);
 await assert.rejects(db.query("select pick_pitch($1, null, ' a b ', null)", [f1]), /who the original source is/, '2 characters is not enough');
 await assert.rejects(db.query("select pick_pitch($1, '  ', 'Electricity North West', 'ok')", [f1]), /when it actually happened, what's new, or our angle/);
 assert.equal(await value('select status from pitches where id = $1', [f1]), 'pitched');
 await db.exec('set session authorization postgres');
-await assert.rejects(db.query("update pitches set status = 'picked' where id = $1", [f1]), /Follow pitch needs: who the original source is/, 'trigger blocks a direct update');
+await assert.rejects(db.query("update pitches set status = 'picked' where id = $1", [f1]), /Follow-up pitch needs: who the original source is/, 'trigger blocks a direct update');
 await asUser(pitcher);
 await assert.rejects(db.query('select pick_pitch($1)', [f1]), /producer/i, 'students cannot pick');
 console.log('PASS: the gate refuses missing and 2-character answers in pick_pitch and by trigger');
@@ -90,8 +94,8 @@ const story = await value("select pick_pitch($1, null, 'Electricity North West [
 assert.deepEqual(await row('select status, follow_when, follow_origin, angle from pitches where id = $1', [f1]),
     { status: 'picked', follow_when: 'Sunday night', follow_origin: 'Electricity North West [statement]', angle: 'Second night without power' });
 const s = await row('select brief, script, script_seed, source_url from stories where id = $1', [story]);
-const note = ['[FOLLOW NOTE: delete these lines once the story is written]',
-    '[Following BBC News: "Hundreds of properties hit by power cuts"]',
+const note = ['[FOLLOW-UP NOTE: delete these lines once the story is written]',
+    '[Follow-up to BBC News: "Hundreds of properties hit by power cuts"]',
     '[When it happened: Sunday night]', '[Original source: Electricity North West (statement)]',
     "[What's new / our angle: Second night without power]"].join('\n');
 assert.deepEqual(s, { brief: 'Second night without power', script: note, script_seed: note, source_url: BBC });

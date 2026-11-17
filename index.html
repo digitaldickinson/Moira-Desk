@@ -1239,7 +1239,7 @@
         };
         const LINK_PREVIEW_FUNCTION = 'link-preview';
         const sourceOfUrl = (url) => { try { const h = new URL(url).hostname; return Object.keys(WIRE_SOURCES).find(k => WIRE_SOURCES[k].hosts.test(h)) || null; } catch { return null; } };
-        // BBC News and MEN pitches are follows of someone else's journalism: the
+        // BBC News and MEN pitches are follow-ups to someone else's journalism: the
         // producer answers three questions before one can be picked.
         const isFollowSource = (source) => !!WIRE_SOURCES[source]?.lookup;
         const isFollowPitch = (p) => isFollowSource(p?.source);
@@ -1254,7 +1254,7 @@
         const claimTime = (t) => t ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'not given';
         const pageClaims = (published, modified) => `Page claims: published ${claimTime(published)} / updated ${claimTime(modified)}`;
         const sourceBadge = (source, cls = '') => WIRE_SOURCES[source]
-            ? `<span class="src-badge ${source}${cls ? ` ${cls}` : ''}" title="${isFollowSource(source) ? `${WIRE_SOURCES[source].title}: a follow, with three questions to answer before it's picked` : WIRE_SOURCES[source].title}">${isFollowSource(source) ? 'Follow · ' : ''}${WIRE_SOURCES[source].label}</span>` : '';
+            ? `<span class="src-badge ${source}${cls ? ` ${cls}` : ''}" title="${isFollowSource(source) ? `${WIRE_SOURCES[source].title}: a follow-up, with three questions to answer before it's picked` : WIRE_SOURCES[source].title}">${isFollowSource(source) ? 'Follow-up · ' : ''}${WIRE_SOURCES[source].label}</span>` : '';
         const squash = (s) => String(s || '').replace(/\s+/g, ' ').trim();
         const ownText = (el) => squash([...(el?.childNodes || [])].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join(' '));
         // Text nodes joined with spaces: PA's markup often puts words in separate spans.
@@ -1356,7 +1356,7 @@
                 return;
             }
             const slugEl = document.getElementById('pitch-new-slug'), angleEl = document.getElementById('pitch-new-angle');
-            // A BBC/MEN follow keeps the outlet's headline apart from our angle,
+            // A BBC/MEN follow-up keeps the outlet's headline apart from our angle,
             // and always looks the page up for its headline, summary and dates.
             const follow = !!(cap.url && isFollowSource(cap.source));
             if (!follow && (cap.slug || cap.headline)) {   // a link on its own keeps whatever's been typed
@@ -1376,7 +1376,7 @@
         }
         function wireNotice(source) {
             if (isFollowSource(source)) {
-                showNotice(WIRE_SOURCES[source].from, 'Add a slug, and your own angle if you have one, then press +. This is a follow: the producer answers three questions before picking it.');
+                showNotice(WIRE_SOURCES[source].from, 'Add a slug, and your own angle if you have one, then press +. This is a follow-up: use the pencil on its card to answer three questions before the producer can pick it.');
                 document.getElementById('pitch-new-slug')?.focus();
                 return;
             }
@@ -1406,7 +1406,7 @@
             });
             render('main');
             if (data?.title || draft.title) wireNotice(draft.source);
-            else showNotice('No headline found', "The link is attached, but the page's details couldn't be fetched. Add a slug and press +. The producer answers three follow questions before picking it.", 'warn');
+            else showNotice('No headline found', "The link is attached, but the page's details couldn't be fetched. Add a slug and press +, then answer the follow-up questions with the pencil on its card.", 'warn');
         }
         function sourceLinkHtml(url, source, cls = 'text-blue-600 hover:text-blue-800 hover:underline') {
             const safe = safeWebUrl(url);
@@ -1457,32 +1457,25 @@
             await conferenceAction('spike_pitch', { p_pitch_id: id, p_reason: reason });
         }
 
-        // The follow questions, asked in a dialog: when picking (all three needed)
-        // or to answer/edit them on the card (blanks allowed until it's picked).
-        function askFollowQuestions(p, picking) {
+        // The pencil on a follow-up card asks its three questions (and lets the slug
+        // be fixed). Blanks can wait; the card stays red and the producer sees
+        // "Pending" until all three have at least 3 characters.
+        function askFollowQuestions(p) {
             const outlet = WIRE_SOURCES[p.source]?.from.replace(/^From (the )?/, '') || 'another outlet';
-            const intro = picking
-                ? `"${p.slug}" follows a ${outlet} story. Agree these as a newsroom before it goes into the running order.`
-                : `"${p.slug}" follows a ${outlet} story.`;
             const page = `${p.sourceTitle ? `\n\n${outlet}: "${p.sourceTitle}"` : ''}\n${pageClaims(p.sourcePublishedAt, p.sourceModifiedAt)}`;
             const values = followAnswers(p);
-            return deskDialog({ title: picking ? 'Pick a follow' : 'Follow questions', message: intro + page,
-                confirmLabel: picking ? 'Pick' : 'Save answers',
-                fields: FOLLOW_QUESTIONS.map(q => ({ ...q, value: values[q.key] })), requireAll: picking || p.status === 'picked' });
-        }
-        async function pickFollowPitch(id) {
-            const p = state.pitchesMap[id];
-            if (!p) return;
-            const a = await askFollowQuestions(p, true);
-            if (!a) return;
-            await conferenceAction('pick_pitch', { p_pitch_id: id, p_follow_when: a.when, p_follow_origin: a.origin, p_follow_angle: a.angle });
+            return deskDialog({ title: 'Follow-up questions', confirmLabel: 'Save',
+                message: `"${p.slug}" is a follow-up to a ${outlet} story. The producer can pick it once all three questions are answered.${page}`,
+                fields: [{ key: 'slug', label: 'Slug', value: p.slug, max: 80, required: true },
+                    ...FOLLOW_QUESTIONS.map(q => ({ ...q, value: values[q.key], min: 3 }))],
+                requireAll: p.status === 'picked' });
         }
         async function editFollowAnswers(id) {
             const p = state.pitchesMap[id];
             if (!p) return;
-            const a = await askFollowQuestions(p, false);
+            const a = await askFollowQuestions(p);
             if (!a) return;
-            await conferenceAction('set_follow_answers', { p_pitch_id: id, p_when: a.when, p_origin: a.origin, p_angle: a.angle });
+            await conferenceAction('set_follow_answers', { p_pitch_id: id, p_when: a.when, p_origin: a.origin, p_angle: a.angle, p_slug: a.slug });
         }
 
         async function unpickPitch(id) {
@@ -1593,8 +1586,9 @@
         // Keep it separate from renderModals so background updates cannot erase it.
         let activeDeskDialog = null;
         const deferredDialogRender = new Set();
-        // fields: several short answers, returned as { key: value }. With requireAll,
-        // each needs at least 3 non-space characters (the follow questions).
+        // fields: several short answers, returned as { key: value }. A field with
+        // required (or every field, with requireAll) can't be blank; one with min
+        // needs at least that many non-space characters once anything is typed.
         function deskDialog({ title, message, confirmLabel = 'Continue', danger = false, input = null, fields = null, requireAll = false }) {
             if (activeDeskDialog) return Promise.resolve(null);
             const previousFocus = document.activeElement;
@@ -1655,13 +1649,17 @@
                         error.textContent = 'Please enter your name.'; error.hidden = false; field.focus(); return;
                     }
                     if (multi.length) {
-                        const short = requireAll ? multi.filter(el => el.value.replace(/\s/g, '').length < 3) : [];
-                        multi.forEach(el => {
-                            const error = el.parentElement.querySelector('.desk-dialog-error');
-                            error.hidden = !short.includes(el);
-                            error.textContent = error.hidden ? '' : el.value.trim() ? 'Needs at least 3 characters.' : 'Needs an answer.';
+                        const problems = multi.map((el, i) => {
+                            const n = el.value.replace(/\s/g, '').length, f = fields[i], min = f.min || 1;
+                            return !n ? (requireAll || f.required ? 'Needs an answer.' : '') : n < min ? `Needs at least ${min} characters.` : '';
                         });
-                        if (short.length) { short[0].focus(); return; }
+                        multi.forEach((el, i) => {
+                            const error = el.parentElement.querySelector('.desk-dialog-error');
+                            error.hidden = !problems[i];
+                            error.textContent = problems[i];
+                        });
+                        const bad = multi.find((el, i) => problems[i]);
+                        if (bad) { bad.focus(); return; }
                         finish(Object.fromEntries(multi.map(el => [el.dataset.field, el.value.trim()])));
                         return;
                     }
@@ -2357,9 +2355,13 @@
             const story = p.storyId ? state.storiesMap[p.storyId] : null;
             let actions = '';
             if (p.status === 'pitched') {
-                actions = (producer ? `<button data-action="pick-pitch" data-id="${p.id}" ${busy} class="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg transition-colors" title="Add to the running order"><i class="fa-solid fa-check mr-1"></i>Pick</button>
+                const followUp = isFollowPitch(p), waiting = followUp && followMissing(p).length > 0;
+                actions = (producer ? (waiting
+                    ? `<span class="text-xs font-bold bg-red-100 text-red-800 border border-red-200 px-3 py-1.5 rounded-lg cursor-help" data-testid="follow-pending" title="A follow-up: it can be picked once the pencil's three questions are answered"><i class="fa-solid fa-hourglass-half mr-1"></i>Pending</span>`
+                    : `<button data-action="pick-pitch" data-id="${p.id}" ${busy} class="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg transition-colors" title="Add to the running order"><i class="fa-solid fa-check mr-1"></i>Pick</button>`)
+                    + `
                     <button data-action="spike-pitch" data-id="${p.id}" ${busy} class="text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-lg transition-colors"><i class="fa-solid fa-ban mr-1"></i>Spike</button>` : '')
-                    + (mine ? `<button data-action="edit-pitch" data-id="${p.id}" class="p-1.5 text-slate-400 hover:text-blue-600" title="Edit pitch"><i class="fa-solid fa-pen text-xs"></i></button>
+                    + (mine ? `<button data-action="${followUp ? 'follow-answers' : 'edit-pitch'}" data-id="${p.id}" class="p-1.5 ${waiting ? 'text-red-600 hover:text-red-800' : 'text-slate-400 hover:text-blue-600'}" title="${followUp ? 'Answer the follow-up questions' : 'Edit pitch'}"><i class="fa-solid fa-pen text-xs"></i></button>
                     <button data-action="delete-pitch" data-id="${p.id}" class="p-1.5 text-slate-400 hover:text-red-600" title="Remove pitch"><i class="fa-solid fa-trash text-xs"></i></button>` : '');
             } else if (p.status === 'picked') {
                 const fmts = [...new Set([...(state.meta.formats || DEFAULT_FORMATS), story?.format].filter(Boolean))];
@@ -2379,26 +2381,19 @@
             }
             const tone = p.status === 'picked' ? 'border-emerald-200 bg-emerald-50/40' : p.status === 'spiked' ? 'border-slate-200 bg-slate-50 opacity-75' : 'border-slate-200 bg-white';
             const follow = isFollowPitch(p);
-            const canAnswer = follow && p.status !== 'spiked' && (producer || (!!supabaseUser && p.createdBy === supabaseUser.id));
             const missing = follow ? followMissing(p) : [];
-            const answers = followAnswers(p);
+            const pending = follow && missing.length > 0;
             const followBlock = follow ? `
-                    <div class="mt-2 text-xs text-slate-500" data-testid="follow-page">${p.sourceTitle ? `<div class="text-slate-600"><span class="font-semibold">${escapeHTML(WIRE_SOURCES[p.source].label)}:</span> “${escapeHTML(p.sourceTitle)}”</div>` : ''}
-                        <div>${escapeHTML(pageClaims(p.sourcePublishedAt, p.sourceModifiedAt))}</div></div>
-                    <dl class="mt-2 grid gap-1 text-sm border-l-2 border-amber-300 pl-3" data-testid="follow-answers">
-                        ${FOLLOW_QUESTIONS.map(q => `<div><dt class="text-[11px] font-semibold text-slate-500">${escapeHTML(q.label)}</dt>
-                            <dd class="${followAnswered(answers[q.key]) ? 'text-slate-800' : 'text-slate-400 italic'}">${followAnswered(answers[q.key]) ? escapeHTML(answers[q.key]) : 'Not answered yet'}</dd></div>`).join('')}
-                    </dl>
-                    ${p.status === 'pitched' && missing.length ? `<div class="mt-1.5 text-xs text-amber-800" data-testid="follow-gate"><i class="fa-solid fa-circle-info mr-1"></i>Can't go in the running order until it has ${missing.length === 3 ? 'all three answers' : `an answer to: ${missing.map(q => q.label.replace(/\?$/, '')).join('; ')}`}.${producer ? ' Pick asks for them.' : ''}</div>` : ''}
-                    ${canAnswer ? `<button data-action="follow-answers" data-id="${p.id}" class="mt-1.5 text-xs font-semibold text-amber-800 hover:text-amber-950 underline">${missing.length === 3 ? 'Answer the follow questions' : 'Edit answers'}</button>` : ''}` : '';
-            return `<div class="border ${tone}${follow ? ' border-l-4 border-l-amber-400' : ''} rounded-xl p-3 flex gap-3 items-start" data-pitch-id="${p.id}"${follow ? ' data-follow="true"' : ''}>
+                    <div class="text-xs mt-1 ${pending ? 'text-red-800' : 'text-slate-500'}" data-testid="follow-page">${escapeHTML(pageClaims(p.sourcePublishedAt, p.sourceModifiedAt))}</div>
+                    ${pending ? '' : `<div class="text-xs text-slate-600 mt-0.5" data-testid="follow-answers"><span class="font-semibold">When:</span> ${escapeHTML(p.followWhen)} · <span class="font-semibold">Source:</span> ${escapeHTML(p.followOrigin)}</div>`}` : '';
+            return `<div class="border ${pending && p.status === 'pitched' ? 'border-red-200 bg-red-50' : tone} rounded-xl p-3 flex gap-3 items-start" data-pitch-id="${p.id}"${follow ? ` data-follow="${pending ? 'pending' : 'answered'}"` : ''}>
                 <div class="text-slate-400 font-mono text-sm w-6 text-right pt-0.5 shrink-0">${n}</div>
                 <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start gap-2">
                 <div class="flex-1 min-w-0">
                     <div class="font-bold uppercase tracking-wide text-slate-800 ${p.status === 'spiked' ? 'line-through decoration-slate-400' : ''}">${escapeHTML(p.slug)}
                         ${sourceBadge(p.source, 'ml-1.5')}
                         ${story && !producer && story.format ? `<span class="ml-2 align-middle bg-slate-100 border px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-slate-600">${escapeHTML(story.format)}</span>` : ''}</div>
-                    ${p.angle && !follow ? `<div class="text-sm text-slate-600 mt-0.5">${escapeHTML(p.angle)}</div>` : ''}
+                    ${p.angle ? `<div class="text-sm text-slate-600 mt-0.5">${escapeHTML(p.angle)}</div>` : ''}
                     <div class="text-xs text-slate-400 mt-1">${p.pitchedBy ? `Pitched by ${escapeHTML(p.pitchedBy)}` : 'Pitched'}${safeWebUrl(p.sourceUrl) ? ` · ${sourceLinkHtml(p.sourceUrl, p.source)}` : ''}${p.status === 'spiked' && p.spikeReason ? ` · <span class="text-slate-600">Spiked: ${escapeHTML(p.spikeReason)}</span>` : p.status === 'spiked' ? ' · Spiked' : ''}</div>
                     ${story && !producer ? `<div class="text-xs text-blue-700 mt-1">Reporter: ${escapeHTML(story.reporter || 'Unassigned')}</div>` : ''}
                     ${followBlock}
@@ -2966,7 +2961,7 @@
                 if (action === 'cancel-pitch-edit') { state.ui.editingPitchId = null; render('main'); return true; }
                 if (action === 'save-pitch-edit')   { savePitchEdit(id); return true; }
                 if (action === 'delete-pitch')      { deletePitch(id); return true; }
-                if (action === 'pick-pitch')        { if (isFollowPitch(state.pitchesMap[id])) pickFollowPitch(id); else conferenceAction('pick_pitch', { p_pitch_id: id }); return true; }
+                if (action === 'pick-pitch')        { conferenceAction('pick_pitch', { p_pitch_id: id }); return true; }
                 if (action === 'follow-answers')    { editFollowAnswers(id); return true; }
                 if (action === 'unpick-pitch')      { unpickPitch(id); return true; }
                 if (action === 'spike-pitch')       { spikePitch(id); return true; }

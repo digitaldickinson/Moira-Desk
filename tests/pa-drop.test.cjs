@@ -184,7 +184,7 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     assert.equal(await page.evaluate(url => testDesk.paste('#pitch-new-angle', { 'text/plain': url }), BBC_URL), true);
     await page.getByTestId('wire-fetching').waitFor();
     const chip = page.getByTestId('wire-draft');
-    assert.equal(await chip.locator('.src-badge.bbc').textContent(), 'Follow · BBC');
+    assert.equal(await chip.locator('.src-badge.bbc').textContent(), 'Follow-up · BBC');
     assert.deepEqual(await page.evaluate(() => testDesk.previewCalls), [{ bulletinId: 'bulletin-local', url: BBC_URL }]);
     const before = await page.evaluate(() => testDesk.calls.length);
     await page.fill('#pitch-new-slug', 'POWER CUTS');
@@ -251,65 +251,65 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     assert.equal(await badCard.locator('.src-badge').count(), 0);
     console.log('PASS: pitch cards show the PA badge and link; unsafe stored links are dropped');
 
-    // Follow cards: label, page claims and the three answers on show; the gate
-    // message until answered; Pick asks the questions and refuses short answers.
+    // Follow-up cards: compact and light red until the pencil's three questions
+    // are answered; the producer sees Pending instead of Pick until then.
     await page.evaluate(url => {
-      const base = { status: 'pitched', conferenceId: 'conference-a', angle: '', pitchedBy: 'Sam', createdBy: 'someone-else', source: 'bbc', sourceUrl: url,
-        sourceTitle: 'Hundreds of properties hit by power cuts', sourcePublishedAt: '2026-11-17T08:46:54.678Z', sourceModifiedAt: null };
+      const base = { status: 'pitched', conferenceId: 'conference-a', angle: '', pitchedBy: 'Sam', createdBy: 'test-user', source: 'bbc', sourceUrl: url,
+        sourceTitle: 'Hundreds of properties hit by power cuts', sourcePublishedAt: null, sourceModifiedAt: null };
       testDesk.state.pitchesMap = {
         'f-1': { ...base, id: 'f-1', slug: 'POWER CUTS', position: 0 },
-        'f-2': { ...base, id: 'f-2', slug: 'ANSWERED', position: 1, source: 'men', followWhen: 'Sunday night', followOrigin: 'Electricity North West', angle: 'Second night without power' },
+        'f-2': { ...base, id: 'f-2', slug: 'ANSWERED', position: 1, source: 'men', createdBy: 'someone-else', sourcePublishedAt: '2026-11-17T08:46:54.678Z',
+          followWhen: 'Sunday night', followOrigin: 'Electricity North West', angle: 'Second night without power' },
       };
       testDesk.render('main');
     }, BBC_URL);
-    const f1 = page.locator('[data-pitch-id="f-1"]');
+    const f1 = page.locator('[data-pitch-id="f-1"]'), f2 = page.locator('[data-pitch-id="f-2"]');
     await f1.waitFor();
-    assert.equal(await f1.getAttribute('data-follow'), 'true');
-    assert.equal(await f1.locator('.src-badge.bbc').textContent(), 'Follow · BBC');
-    assert.match(await f1.getByTestId('follow-page').innerText(), /BBC: “Hundreds of properties hit by power cuts”\s+Page claims: published 17 Nov 2026, \d\d:46 \/ updated not given/);
-    assert.equal(await f1.getByText('Not answered yet').count(), 3);
-    assert.match(await f1.getByTestId('follow-gate').innerText(), /Can't go in the running order until it has all three answers\./);
-    assert.equal(await f1.locator('[data-action="follow-answers"]').count(), 0, 'only the pitcher or producer can answer');
-    const f2 = page.locator('[data-pitch-id="f-2"]');
-    assert.match(await f2.getByTestId('follow-answers').innerText(), /Sunday night[\s\S]*Electricity North West[\s\S]*Second night without power/);
-    assert.equal(await f2.getByTestId('follow-gate').count(), 0);
-    console.log('PASS: follow cards show the label, page claims and answers for the whole room');
+    assert.equal(await f1.getAttribute('data-follow'), 'pending');
+    assert.match(await f1.getAttribute('class'), /bg-red-50/);
+    assert.equal(await f1.locator('.src-badge.bbc').textContent(), 'Follow-up · BBC');
+    assert.equal(await f1.getByTestId('follow-page').innerText(), 'Page claims: published not given / updated not given');
+    assert.equal(await f1.getByTestId('follow-answers').count(), 0);
+    assert.equal(await f2.getAttribute('data-follow'), 'answered');
+    assert.doesNotMatch(await f2.getAttribute('class'), /bg-red-50/);
+    assert.match(await f2.getByTestId('follow-page').innerText(), /^Page claims: published 17 Nov 2026, \d\d:46 \/ updated not given$/);
+    assert.equal(await f2.getByTestId('follow-answers').innerText(), 'When: Sunday night · Source: Electricity North West');
+    assert.match(await f2.innerText(), /Second night without power/);
+    assert.equal(await f2.locator('[data-action="follow-answers"]').count(), 0, 'only the pitcher or producer gets the pencil');
+    console.log('PASS: follow-up cards are red with page claims until answered, then white with the answers');
 
-    await page.evaluate(() => { testDesk.state.meta.producerUser = 'test-user'; testDesk.render('main'); });
-    await f1.locator('[data-action="pick-pitch"]').waitFor();
-    assert.match(await f1.getByTestId('follow-gate').innerText(), /Pick asks for them\./);
-    const callsBefore = await page.evaluate(() => testDesk.calls.length);
-    await f1.locator('[data-action="pick-pitch"]').click();
+    // The pencil asks the questions (and the slug); blanks can wait, 1-2 characters can't.
+    await f1.locator('[data-action="follow-answers"]').click();
     const dlg = page.locator('dialog.desk-dialog');
     await dlg.waitFor();
-    assert.match(await dlg.innerText(), /Pick a follow[\s\S]*follows a BBC News story[\s\S]*Page claims: published/);
+    assert.match(await dlg.innerText(), /Follow-up questions[\s\S]*is a follow-up to a BBC News story[\s\S]*Page claims: published not given/);
     assert.match(await dlg.innerText(), /Find the event date in the copy, not the page timestamp\.[\s\S]*Not 'BBC' or 'MEN'\. Who did they get it from\?/);
-    await dlg.locator('[data-field="when"]').fill('Sunday night');
+    assert.equal(await dlg.locator('[data-field="slug"]').inputValue(), 'POWER CUTS');
+    const callsBefore = await page.evaluate(() => testDesk.calls.length);
+    await dlg.locator('[data-field="slug"]').fill('');
     await dlg.locator('[data-field="origin"]').fill(' a b ');
     await dlg.locator('button[type="submit"]').click();
     await dlg.getByText('Needs at least 3 characters.').waitFor();
     await dlg.getByText('Needs an answer.').waitFor();
-    assert.equal(await page.evaluate(() => testDesk.calls.length), callsBefore, 'nothing sent with short answers');
+    assert.equal(await page.evaluate(() => testDesk.calls.length), callsBefore, 'nothing sent');
+    await dlg.locator('[data-field="slug"]').fill('POWER CUTS LATEST');
     await dlg.locator('[data-field="origin"]').fill('Electricity North West');
-    await dlg.locator('[data-field="angle"]').fill('Second night without power');
     await dlg.locator('button[type="submit"]').click();
     await page.waitForFunction(n => testDesk.calls.length === n + 1, callsBefore);
-    assert.deepEqual(await page.evaluate(() => testDesk.calls.at(-1)), { name: 'pick_pitch', args: {
-      p_pitch_id: 'f-1', p_follow_when: 'Sunday night', p_follow_origin: 'Electricity North West', p_follow_angle: 'Second night without power' } });
-    // A plain pitch still picks straight away.
-    await page.evaluate(() => { testDesk.state.pitchesMap['t-1'] = { id: 't-1', status: 'pitched', conferenceId: 'conference-a', slug: 'TYPED', angle: 'x', pitchedBy: 'Sam', source: '', sourceUrl: '', position: 2 }; testDesk.render('main'); });
-    await page.locator('[data-pitch-id="t-1"] [data-action="pick-pitch"]').click();
+    assert.deepEqual(await page.evaluate(() => testDesk.calls.at(-1)), { name: 'set_follow_answers', args: {
+      p_pitch_id: 'f-1', p_when: '', p_origin: 'Electricity North West', p_angle: '', p_slug: 'POWER CUTS LATEST' } });
+
+    // Producer: Pending until answered, then an ordinary Pick.
+    await page.evaluate(() => { testDesk.state.meta.producerUser = 'test-user'; testDesk.render('main'); });
+    await f1.getByTestId('follow-pending').waitFor();
+    assert.equal(await f1.locator('[data-action="pick-pitch"]').count(), 0, 'no Pick while pending');
+    assert.equal(await f1.locator('[data-action="follow-answers"]').count(), 1, 'the producer can answer too');
+    assert.equal(await f2.getByTestId('follow-pending').count(), 0);
+    await f2.locator('[data-action="pick-pitch"]').click();
     await page.waitForFunction(n => testDesk.calls.length === n + 2, callsBefore);
-    assert.deepEqual(await page.evaluate(() => testDesk.calls.at(-1)), { name: 'pick_pitch', args: { p_pitch_id: 't-1' } });
-    // Answers can be saved from the card, blanks allowed before picking.
-    await f1.locator('[data-action="follow-answers"]').click();
-    await dlg.waitFor();
-    await dlg.locator('[data-field="when"]').fill('Sunday');
-    await dlg.locator('button[type="submit"]').click();
-    await page.waitForFunction(n => testDesk.calls.length === n + 3, callsBefore);
-    assert.deepEqual(await page.evaluate(() => testDesk.calls.at(-1)), { name: 'set_follow_answers', args: { p_pitch_id: 'f-1', p_when: 'Sunday', p_origin: '', p_angle: '' } });
+    assert.deepEqual(await page.evaluate(() => testDesk.calls.at(-1)), { name: 'pick_pitch', args: { p_pitch_id: 'f-2' } });
     await page.evaluate(() => { testDesk.state.meta.producerUser = 'producer-user'; testDesk.render('main'); });
-    console.log('PASS: Pick on a follow asks the three questions, refuses short answers and sends them; plain picks unchanged');
+    console.log('PASS: the pencil asks the questions and slug; the producer sees Pending until answered, then Pick');
 
     // Stray drops elsewhere can't navigate away; text fields still accept drops.
     const stray = await page.evaluate(url => testDesk.drop('h2', { 'text/uri-list': url }), PA_URL);

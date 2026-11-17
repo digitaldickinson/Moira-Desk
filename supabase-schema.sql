@@ -132,7 +132,7 @@ alter table pitches add constraint pitches_source_check check (source is null or
 alter table pitches drop constraint if exists pitches_source_url_check;
 alter table pitches add constraint pitches_source_url_check
   check (source_url is null or (source_url ~* '^https?://[^[:space:]]+$' and length(source_url) <= 2000));
--- Follow pitches (BBC News / MEN): what the page says about itself, never its
+-- Follow-up pitches (BBC News / MEN): what the page says about itself, never its
 -- story text, and two of the three questions answered before picking (the
 -- third, "what's new or our angle", is the angle).
 alter table pitches add column if not exists source_title        text;
@@ -151,8 +151,8 @@ alter table stories add column if not exists source_url  text;
 alter table stories drop constraint if exists stories_source_url_check;
 alter table stories add constraint stories_source_url_check
   check (source_url is null or (source_url ~* '^https?://[^[:space:]]+$' and length(source_url) <= 2000));
--- The script a story started with when picked (the follow note), so an
--- untouched follow story can still be dropped back to the pitches.
+-- The script a story started with when picked (the follow-up note), so an
+-- untouched follow-up story can still be dropped back to the pitches.
 alter table stories add column if not exists script_seed text;
 
 -- One join code per newsroom, stored only as a hash.
@@ -812,21 +812,21 @@ exception when others then
 end;
 $$;
 
--- The note that opens a picked follow story's script. Every line is a
+-- The note that opens a picked follow-up story's script. Every line is a
 -- [direction], so if it's left in it goes to Cuez as instructions, not as
 -- words to read. Square brackets in the answers become round ones.
 create or replace function follow_note(v pitches)
 returns text language sql immutable as $$
   select concat_ws(E'\n',
-    '[FOLLOW NOTE: delete these lines once the story is written]',
-    '[Following ' || case v.source when 'bbc' then 'BBC News' else 'Manchester Evening News' end
+    '[FOLLOW-UP NOTE: delete these lines once the story is written]',
+    '[Follow-up to ' || case v.source when 'bbc' then 'BBC News' else 'Manchester Evening News' end
       || coalesce(': "' || translate(one_line(v.source_title, 300), '[]', '()') || '"', '') || ']',
     '[When it happened: ' || translate(one_line(v.follow_when, 300), '[]', '()') || ']',
     '[Original source: ' || translate(one_line(v.follow_origin, 300), '[]', '()') || ']',
     '[What''s new / our angle: ' || translate(one_line(v.angle, 500), '[]', '()') || ']')
 $$;
 
--- Belt and braces: whatever the route, a follow pitch can't become 'picked'
+-- Belt and braces: whatever the route, a follow-up pitch can't become 'picked'
 -- with its questions unanswered.
 create or replace function pitches_follow_gate()
 returns trigger language plpgsql as $$
@@ -837,7 +837,7 @@ begin
      and (tg_op = 'INSERT' or old.status is distinct from 'picked') then
     v_missing := follow_missing(new.follow_when, new.follow_origin, new.angle);
     if v_missing is not null then
-      raise exception 'Follow pitch needs: %.', v_missing;
+      raise exception 'Follow-up pitch needs: %.', v_missing;
     end if;
   end if;
   return new;
@@ -893,9 +893,11 @@ begin
 end;
 $$;
 
--- Whoever added a follow pitch, or the producer, answers its three questions.
+-- Whoever added a follow-up pitch, or the producer, answers its three questions
+-- (from the pencil on its card), and can fix its slug at the same time.
 -- Blanks are fine until it's picked; a picked one must stay fully answered.
-create or replace function set_follow_answers(p_pitch_id uuid, p_when text, p_origin text, p_angle text)
+drop function if exists set_follow_answers(uuid, text, text, text);
+create or replace function set_follow_answers(p_pitch_id uuid, p_when text, p_origin text, p_angle text, p_slug text default null)
 returns void language plpgsql security definer set search_path = public as $$
 declare
   v pitches;
@@ -907,19 +909,24 @@ declare
 begin
   v := member_pitch(p_pitch_id);
   if not is_follow_source(v.source) then
-    raise exception 'Only BBC News and MEN pitches have follow questions.';
+    raise exception 'Only BBC News and MEN pitches have follow-up questions.';
   end if;
   select producer_user into v_producer from bulletins where id = v.bulletin_id;
   if v.created_by is distinct from auth.uid() and v_producer is distinct from auth.uid() then
-    raise exception 'Only whoever added this pitch, or the producer, can answer its follow questions.';
+    raise exception 'Only whoever added this pitch, or the producer, can answer its follow-up questions.';
   end if;
   if v.status = 'picked' then
     v_missing := follow_missing(v_when, v_origin, v_angle);
     if v_missing is not null then
-      raise exception 'Follow pitch needs: %.', v_missing;
+      raise exception 'Follow-up pitch needs: %.', v_missing;
     end if;
   end if;
-  update pitches set follow_when = v_when, follow_origin = v_origin, angle = v_angle where id = p_pitch_id;
+  if p_slug is not null and trim(p_slug) = '' then
+    raise exception 'Give the pitch a slug.';
+  end if;
+  update pitches set follow_when = v_when, follow_origin = v_origin, angle = v_angle,
+                     slug = coalesce(left(nullif(trim(p_slug), ''), 80), slug)
+  where id = p_pitch_id;
 end;
 $$;
 
@@ -991,7 +998,7 @@ begin
     if p_follow_angle  is not null then v.angle         := coalesce(one_line(p_follow_angle, 500), ''); end if;
     v_missing := follow_missing(v.follow_when, v.follow_origin, v.angle);
     if v_missing is not null then
-      raise exception 'Follow pitch needs: %.', v_missing;
+      raise exception 'Follow-up pitch needs: %.', v_missing;
     end if;
     v_note := follow_note(v);
   end if;
@@ -1620,7 +1627,7 @@ revoke execute on function
   safe_timestamptz(text), follow_note(pitches), pitches_follow_gate(),
   claim_producer(text, text), release_producer(text), add_pitch(text, text, text, text, text, text, text, text, text, text, text),
   update_pitch(uuid, text, text, text, text), delete_pitch(uuid), pick_pitch(uuid, text, text, text), unpick_pitch(uuid),
-  set_follow_answers(uuid, text, text, text),
+  set_follow_answers(uuid, text, text, text, text),
   spike_pitch(uuid, text), unspike_pitch(uuid), set_story_format(uuid, text), set_story_reporter(uuid, text),
   start_conference(text), clear_producer(text), set_pitch_note(uuid, text), admin_conference(text[], boolean),
   is_admin(), require_admin(), random_code(),
@@ -1641,7 +1648,7 @@ grant execute on function
   mark_story_not_sent(uuid),
   claim_producer(text, text), release_producer(text), add_pitch(text, text, text, text, text, text, text, text, text, text, text),
   update_pitch(uuid, text, text, text, text), delete_pitch(uuid), pick_pitch(uuid, text, text, text), unpick_pitch(uuid),
-  set_follow_answers(uuid, text, text, text),
+  set_follow_answers(uuid, text, text, text, text),
   spike_pitch(uuid, text), unspike_pitch(uuid), set_story_format(uuid, text), set_story_reporter(uuid, text)
 to authenticated;
 

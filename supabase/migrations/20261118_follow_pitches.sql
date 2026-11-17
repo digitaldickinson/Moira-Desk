@@ -1,5 +1,5 @@
--- Follow pitches: a pitch from a BBC News or Manchester Evening News link is
--- a "follow" of someone else's journalism. It keeps what the page says about
+-- Follow-up pitches: a pitch from a BBC News or Manchester Evening News link is
+-- a "follow-up" to someone else's journalism. It keeps what the page says about
 -- itself (headline, summary, the dates it claims) but never its story text.
 -- Before the producer can pick it, three questions must be answered, each with
 -- at least 3 non-space characters:
@@ -7,7 +7,7 @@
 --   follow_origin  Who is the original source?
 --   angle          What's new, or what's our angle? (becomes the story's brief)
 -- pick_pitch enforces this, and a trigger refuses any other route to 'picked'.
--- The picked story's script starts with a follow note in [directions] that the
+-- The picked story's script starts with a follow-up note in [directions] that the
 -- writer deletes; un-picking still works while the script is just that note.
 -- Needs 20261117_pitch_source.sql and 20261117_pitch_source_sites.sql first.
 -- Safe to run more than once.
@@ -19,8 +19,8 @@ alter table pitches add column if not exists source_published_at timestamptz;
 alter table pitches add column if not exists source_modified_at  timestamptz;
 alter table pitches add column if not exists follow_when         text;
 alter table pitches add column if not exists follow_origin       text;
--- The script a story started with when picked (the follow note), so an
--- untouched follow story can still be dropped back to the pitches.
+-- The script a story started with when picked (the follow-up note), so an
+-- untouched follow-up story can still be dropped back to the pitches.
 alter table stories add column if not exists script_seed text;
 
 -- Helpers (internal: only called by the functions and trigger below).
@@ -66,21 +66,21 @@ exception when others then
 end;
 $$;
 
--- The note that opens a picked follow story's script. Every line is a
+-- The note that opens a picked follow-up story's script. Every line is a
 -- [direction], so if it's left in it goes to Cuez as instructions, not as
 -- words to read. Square brackets in the answers become round ones.
 create or replace function follow_note(v pitches)
 returns text language sql immutable as $$
   select concat_ws(E'\n',
-    '[FOLLOW NOTE: delete these lines once the story is written]',
-    '[Following ' || case v.source when 'bbc' then 'BBC News' else 'Manchester Evening News' end
+    '[FOLLOW-UP NOTE: delete these lines once the story is written]',
+    '[Follow-up to ' || case v.source when 'bbc' then 'BBC News' else 'Manchester Evening News' end
       || coalesce(': "' || translate(one_line(v.source_title, 300), '[]', '()') || '"', '') || ']',
     '[When it happened: ' || translate(one_line(v.follow_when, 300), '[]', '()') || ']',
     '[Original source: ' || translate(one_line(v.follow_origin, 300), '[]', '()') || ']',
     '[What''s new / our angle: ' || translate(one_line(v.angle, 500), '[]', '()') || ']')
 $$;
 
--- Belt and braces: whatever the route, a follow pitch can't become 'picked'
+-- Belt and braces: whatever the route, a follow-up pitch can't become 'picked'
 -- with its questions unanswered.
 create or replace function pitches_follow_gate()
 returns trigger language plpgsql as $$
@@ -91,7 +91,7 @@ begin
      and (tg_op = 'INSERT' or old.status is distinct from 'picked') then
     v_missing := follow_missing(new.follow_when, new.follow_origin, new.angle);
     if v_missing is not null then
-      raise exception 'Follow pitch needs: %.', v_missing;
+      raise exception 'Follow-up pitch needs: %.', v_missing;
     end if;
   end if;
   return new;
@@ -144,9 +144,11 @@ begin
 end;
 $$;
 
--- Whoever added a follow pitch, or the producer, answers its three questions.
+-- Whoever added a follow-up pitch, or the producer, answers its three questions
+-- (from the pencil on its card), and can fix its slug at the same time.
 -- Blanks are fine until it's picked; a picked one must stay fully answered.
-create or replace function set_follow_answers(p_pitch_id uuid, p_when text, p_origin text, p_angle text)
+drop function if exists set_follow_answers(uuid, text, text, text);
+create or replace function set_follow_answers(p_pitch_id uuid, p_when text, p_origin text, p_angle text, p_slug text default null)
 returns void language plpgsql security definer set search_path = public as $$
 declare
   v pitches;
@@ -158,26 +160,31 @@ declare
 begin
   v := member_pitch(p_pitch_id);
   if not is_follow_source(v.source) then
-    raise exception 'Only BBC News and MEN pitches have follow questions.';
+    raise exception 'Only BBC News and MEN pitches have follow-up questions.';
   end if;
   select producer_user into v_producer from bulletins where id = v.bulletin_id;
   if v.created_by is distinct from auth.uid() and v_producer is distinct from auth.uid() then
-    raise exception 'Only whoever added this pitch, or the producer, can answer its follow questions.';
+    raise exception 'Only whoever added this pitch, or the producer, can answer its follow-up questions.';
   end if;
   if v.status = 'picked' then
     v_missing := follow_missing(v_when, v_origin, v_angle);
     if v_missing is not null then
-      raise exception 'Follow pitch needs: %.', v_missing;
+      raise exception 'Follow-up pitch needs: %.', v_missing;
     end if;
   end if;
-  update pitches set follow_when = v_when, follow_origin = v_origin, angle = v_angle where id = p_pitch_id;
+  if p_slug is not null and trim(p_slug) = '' then
+    raise exception 'Give the pitch a slug.';
+  end if;
+  update pitches set follow_when = v_when, follow_origin = v_origin, angle = v_angle,
+                     slug = coalesce(left(nullif(trim(p_slug), ''), 80), slug)
+  where id = p_pitch_id;
 end;
 $$;
 
 -- Producer picks a pitch: it becomes a story at the end of the running order
 -- (above END OF PROGRAMME), carrying the pitch as its brief and its source link.
--- A follow pitch takes its three answers here (null keeps the saved answer),
--- must have all three, and its story's script starts with the follow note.
+-- A follow-up pitch takes its three answers here (null keeps the saved answer),
+-- must have all three, and its story's script starts with the follow-up note.
 drop function if exists pick_pitch(uuid);
 create or replace function pick_pitch(p_pitch_id uuid, p_follow_when text default null,
                                       p_follow_origin text default null, p_follow_angle text default null)
@@ -202,7 +209,7 @@ begin
     if p_follow_angle  is not null then v.angle         := coalesce(one_line(p_follow_angle, 500), ''); end if;
     v_missing := follow_missing(v.follow_when, v.follow_origin, v.angle);
     if v_missing is not null then
-      raise exception 'Follow pitch needs: %.', v_missing;
+      raise exception 'Follow-up pitch needs: %.', v_missing;
     end if;
     v_note := follow_note(v);
   end if;
@@ -229,7 +236,7 @@ end;
 $$;
 
 -- Undo a pick, removing its story, but only while nobody has written it yet
--- (and it hasn't gone to Cuez). A script that's still just the follow note it
+-- (and it hasn't gone to Cuez). A script that's still just the follow-up note it
 -- started with counts as unwritten. A story deleted from the running order
 -- already can always be un-picked.
 create or replace function unpick_pitch(p_pitch_id uuid)
@@ -267,7 +274,7 @@ begin
 end;
 $$;
 
--- Everything the EP wall and the report need, now with follow pitch details.
+-- Everything the EP wall and the report need, now with follow-up pitch details.
 create or replace function conference_snapshot(p_newsroom_ids text[], p_scripts boolean default false)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 begin
@@ -314,11 +321,11 @@ $$;
 revoke execute on function is_follow_source(text), follow_answered(text), follow_missing(text, text, text),
   one_line(text, int), safe_timestamptz(text), follow_note(pitches), pitches_follow_gate(),
   add_pitch(text, text, text, text, text, text, text, text, text, text, text),
-  set_follow_answers(uuid, text, text, text), pick_pitch(uuid, text, text, text), unpick_pitch(uuid),
+  set_follow_answers(uuid, text, text, text, text), pick_pitch(uuid, text, text, text), unpick_pitch(uuid),
   conference_snapshot(text[], boolean)
   from public, anon, authenticated;
 grant execute on function add_pitch(text, text, text, text, text, text, text, text, text, text, text),
-  set_follow_answers(uuid, text, text, text), pick_pitch(uuid, text, text, text), unpick_pitch(uuid)
+  set_follow_answers(uuid, text, text, text, text), pick_pitch(uuid, text, text, text), unpick_pitch(uuid)
   to authenticated;
 notify pgrst, 'reload schema';
 commit;

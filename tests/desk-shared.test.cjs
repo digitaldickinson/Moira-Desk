@@ -53,12 +53,12 @@ test('EP wall and report mark PA, BBC and MEN pitches and link their stories saf
   assert.doesNotMatch(html, /javascript:/);
   const bbcUrl = 'https://www.bbc.co.uk/news/articles/c8752wyv155xo';
   const bbc = { id: 'p3', slug: 'Power cuts', angle: 'Cable incident', status: 'pitched', pitched_by: 'Jo', source: 'bbc', source_url: bbcUrl };
-  assert.match(ctx.t.wallPitch(bbc, {}), /<span class="wall-tag bbc"[^>]*>FOLLOW · BBC<\/span>Power cuts/);
-  assert.match(ctx.t.wallPitch({ ...bbc, source: 'men' }, {}), /<span class="wall-tag men"[^>]*>FOLLOW · MEN<\/span>/);
+  assert.match(ctx.t.wallPitch(bbc, {}), /<span class="wall-tag bbc"[^>]*>FOLLOW-UP · BBC<\/span>Power cuts/);
+  assert.match(ctx.t.wallPitch({ ...bbc, source: 'men' }, {}), /<span class="wall-tag men"[^>]*>FOLLOW-UP · MEN<\/span>/);
   const bbcHtml = ctx.t.reportSection({ id: 'r2', name: 'Room', order: ['s2', 'marker-line'], pitches: [bbc], feedback: [],
     stories: [{ id: 's2', slug: 'POWER CUTS', format: 'READ', duration: 20, brief: 'Cable incident', source_url: bbcUrl }] }, false);
   assert.equal(bbcHtml.match(/>BBC story ↗<\/a>/g)?.length, 2, 'BBC links labelled in both rows');
-  assert.match(bbcHtml, /<strong>Power cuts<\/strong> <span class="tag bbc"[^>]*>FOLLOW · BBC<\/span>/);
+  assert.match(bbcHtml, /<strong>Power cuts<\/strong> <span class="tag bbc"[^>]*>FOLLOW-UP · BBC<\/span>/);
   // Follow pitches: headline, page claims and the three answers, on the wall and in the report.
   const fol = { ...bbc, id: 'p4', slug: 'Follow', source_title: 'Hundreds hit by <power> cuts', source_published_at: '2026-11-17T08:46:54Z', source_modified_at: null,
     follow_when: 'Sunday night', follow_origin: 'ab', angle: 'Second night without power' };

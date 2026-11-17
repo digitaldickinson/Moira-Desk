@@ -28,14 +28,14 @@ const PITCH_SOURCES = {
 };
 const linkSource = (url) => { const h = webUrl(url) ? new URL(url).hostname : ''; return Object.keys(PITCH_SOURCES).find((k) => PITCH_SOURCES[k].hosts.test(h)) || null; };
 const sourceLabel = (source) => PITCH_SOURCES[source] ? `${PITCH_SOURCES[source].label} story` : 'Source';
-// BBC News and MEN pitches are follows: three questions answered before picking.
+// BBC News and MEN pitches are follow-ups: three questions answered before picking.
 const isFollow = (p) => p.source === 'bbc' || p.source === 'men';
 const FOLLOW_QUESTIONS = [['follow_when', 'When did this actually happen?'], ['follow_origin', 'Who is the original source?'], ['angle', "What's new, or what's our angle?"]];
 const answered = (v) => String(v || '').replace(/\s/g, '').length >= 3;
 const claimTime = (t) => t ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'not given';
 const pageClaims = (p) => `Page claims: published ${claimTime(p.source_published_at)} / updated ${claimTime(p.source_modified_at)}`;
-const sourceTag = (p, cls) => PITCH_SOURCES[p.source] ? `<span class="${cls} ${p.source}" title="${PITCH_SOURCES[p.source].title}">${isFollow(p) ? 'FOLLOW · ' : ''}${PITCH_SOURCES[p.source].label}</span>` : '';
-// The follow details as lines: outlet headline, page claims, then each answer.
+const sourceTag = (p, cls) => PITCH_SOURCES[p.source] ? `<span class="${cls} ${p.source}" title="${PITCH_SOURCES[p.source].title}">${isFollow(p) ? 'FOLLOW-UP · ' : ''}${PITCH_SOURCES[p.source].label}</span>` : '';
+// The follow-up details as lines: outlet headline, page claims, then each answer.
 const followLines = (p) => [
   ...(p.source_title ? [`${PITCH_SOURCES[p.source].label}: “${esc(p.source_title)}”`] : []), esc(pageClaims(p)),
   ...FOLLOW_QUESTIONS.map(([k, q]) => `<b>${esc(q)}</b> ${answered(p[k]) ? esc(p[k]) : '<i>Not answered yet</i>'}`)];
