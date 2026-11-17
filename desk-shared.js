@@ -90,7 +90,7 @@ document.head.insertAdjacentHTML('beforeend', `<style id="desk-shared-style">
   .wall-tag { display: inline-block; font-size: .68em; font-weight: 800; letter-spacing: .06em; color: #fff; border-radius: 4px; padding: .1em .45em; margin-right: .4em; vertical-align: .12em; }
   .wall-tag.picked { background: #126b43; }
   .wall-tag.new { background: #2563eb; }
-  .wall-tag.pa { background: #075985; }
+  .wall-tag.pa { background: #0284c7; }
   .wall-tag.bbc { background: #000; color: #fff; }
   .wall-tag.men { background: #ffd400; color: #000; }
   .wall-pitch .note { margin-top: .4em; font-size: .85em; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: .3em .5em; }
