@@ -20,7 +20,8 @@ await db.exec(`
 `);
 const baseline = process.env.MOIRA_BASELINE_SCHEMA ? await readFile(process.env.MOIRA_BASELINE_SCHEMA, 'utf8') : await read('../supabase-schema.sql');
 await db.exec(baseline.replace('create extension if not exists pgcrypto;', ''));
-for (const f of ['20261117_pitch_source.sql', '20261117_pitch_source_sites.sql', '20261118_follow_pitches.sql', '20261118_follow_pitches.sql']) {
+for (const f of ['20261117_pitch_source.sql', '20261117_pitch_source_sites.sql', '20261118_follow_pitches.sql', '20261118_follow_pitches.sql',
+    '20261119_source_mix.sql', '20261119_source_mix.sql']) {
     await db.exec(await read(`../supabase/migrations/${f}`));
 }
 for (const fn of ['add_pitch', 'pick_pitch']) {
@@ -58,10 +59,18 @@ const f1 = await add('POWER CUTS', 'bbc', BBC, '  Hundreds of properties\n hit b
 assert.deepEqual(await row('select source_title, source_description, source_published_at, source_modified_at, follow_when, follow_origin, angle from pitches where id = $1', [f1]), {
     source_title: 'Hundreds of properties hit by power cuts', source_description: 'Customers remain without electricity.',
     source_published_at: new Date('2026-11-17T08:46:54.678Z'), source_modified_at: null, follow_when: null, follow_origin: null, angle: 'Hundreds hit by power cuts' });
-const pa = await add('PA STORY', 'pa', 'https://explore.pa.media/x', 'Ignored', 'Ignored', '2026-11-17T08:00:00Z', null);
-assert.deepEqual(await row('select source_title, source_description, source_published_at from pitches where id = $1', [pa]), { source_title: null, source_description: null, source_published_at: null });
+const pa = await add('PA STORY', 'pa', 'https://explore.pa.media/x', '  PA   headline ', 'Ignored', '2026-11-17T08:00:00Z', null);
+assert.deepEqual(await row('select source_title, source_description, source_published_at from pitches where id = $1', [pa]), { source_title: 'PA headline', source_description: null, source_published_at: null },
+    'a PA drop keeps its headline, nothing else');
 const typed = await value("select add_pitch($1, 'TYPED', 'Own idea', '', 'Pitcher')", [room]);
-console.log('PASS: BBC/MEN page details stored and cleaned; PA and typed pitches unchanged');
+// Every pitch has a source type, worked out from how it was added.
+const otherLink = await value("select add_pitch($1, 'OTHER', '', '', 'Pitcher', null, 'https://news.example.org/x')", [room]);
+assert.deepEqual((await db.query('select id, source_type from pitches where id = any($1)', [[f1, pa, typed, otherLink]])).rows.map(r => [r.id, r.source_type]).sort(),
+    [[f1, 'follow'], [pa, 'wire'], [typed, 'original'], [otherLink, 'original']].sort());
+await db.exec('set session authorization postgres');
+await assert.rejects(db.query("update pitches set source_type = 'wire' where id = $1", [typed]), /generated column|can only be updated to DEFAULT/);
+await asUser(pitcher);
+console.log('PASS: BBC/MEN page details stored and cleaned; PA keeps its headline; every pitch has a source type');
 
 // Answers: pitcher and producer only; blanks allowed before picking.
 await db.query("select set_follow_answers($1, 'Sunday night', '', 'Second night without power')", [f1]);
@@ -131,6 +140,7 @@ assert.equal(p.follow_when, 'Sunday 16 November');
 assert.equal(p.follow_origin, 'Electricity North West');
 assert.equal(p.follow_angle, 'Second night without power');
 assert.equal(p.angle, 'Hundreds hit by power cuts');
+assert.deepEqual(snap[0].pitches.map(x => x.source_type).sort(), ['follow', 'original', 'original', 'wire']);
 assert.ok(p.source_published_at && 'source_modified_at' in p);
 console.log('PASS: snapshot includes headline, page dates and answers');
 

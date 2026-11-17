@@ -116,11 +116,16 @@ const conference = (id, name) => ({
    assert.ok(doc.includes(JSON.stringify(text).slice(1, -1)), `PDF includes ${text}`);
   }
   assert.ok(doc.indexOf('SCRIPTS') > doc.indexOf('RUNNING ORDER'), 'scripts come after the running order');
-  assert.equal(doc.split('"link":"https://explore.pa.media/story/bridge-1"').length - 1, 2, 'PA link in the conference and running order');
+  assert.equal(doc.split('"link":"https://explore.pa.media/story/bridge-1"').length - 1, 3, 'PA link in the conference, the wire list and the running order');
   assert.ok(doc.includes('PA story: https://explore.pa.media/story/bridge-1') && doc.includes('"text":"  PA"'), 'PA pitch marked');
   assert.ok(doc.includes('"text":"  FOLLOW-UP · BBC"') && doc.includes('BBC: “Hundreds hit by power cuts”') && doc.includes('Page claims: published 17 Nov 2026'), 'follow pitch marked with page claims');
-  assert.ok(doc.includes('"text":"When did this actually happen? ","bold":true},"Sunday night"') && doc.includes('{"text":"Not answered yet","italics":true}'), 'follow answers listed');
-  assert.ok(doc.includes('"What\'s new, or what\'s our angle? ","bold":true},"Second night without power"') && doc.includes('"Hundreds hit by power cuts"'), 'angle and third answer both shown');
+  for (const t of ['Source mix: Original (declared) 1 · Wire 1 · Follow-up 1', 'Counts are based on how pitches were added. Typed-in pitches count as original.',
+    'Follow-ups: 1 · with all three answers: 0 · promoted: 0', 'Pipeline: 3 pitched → 1 promoted → 1 in the running order',
+    'FOLLOW-UP PITCHES', 'WIRE PITCHES', 'Status: Not promoted', '  · Promoted · in the running order'])
+    assert.ok(doc.includes(t), `PDF includes ${t}`);
+  assert.ok(doc.includes('"text":"When did this actually happen?","bold":true') && doc.includes('{"text":"Sunday night"}') && doc.includes('{"text":"— not answered —","color":"#667085"}'), 'follow-up answers listed, blanks shown');
+  assert.ok(doc.includes('"link":"https://www.bbc.co.uk/news/articles/c8752wyv155xo"'), 'follow-up link');
+  assert.ok(doc.includes('"Hundreds hit by power cuts"') && doc.includes('{"text":"Second night without power"}'), 'angle and third answer both shown');
   for (const text of ['EP FEEDBACK', 'The bulletin as a whole', 'Good pace, lead buried.', '“The bridge shuts tonight.”', 'Attribute this.', 'Dropped (removed from the running order)'])
    assert.ok(doc.includes(text), `PDF feedback includes ${text}`);
   assert.ok(doc.indexOf('RUNNING ORDER') < doc.indexOf('EP FEEDBACK') && doc.indexOf('EP FEEDBACK') < doc.indexOf('SCRIPTS'), 'feedback sits between the running order and scripts');

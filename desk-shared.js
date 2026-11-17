@@ -35,10 +35,31 @@ const answered = (v) => String(v || '').replace(/\s/g, '').length >= 3;
 const claimTime = (t) => t ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'not given';
 const pageClaims = (p) => `Page claims: published ${claimTime(p.source_published_at)} / updated ${claimTime(p.source_modified_at)}`;
 const sourceTag = (p, cls) => PITCH_SOURCES[p.source] ? `<span class="${cls} ${p.source}" title="${PITCH_SOURCES[p.source].title}">${isFollow(p) ? 'FOLLOW-UP · ' : ''}${PITCH_SOURCES[p.source].label}</span>` : '';
-// The follow-up details as lines: outlet headline, page claims, then each answer.
-const followLines = (p) => [
-  ...(p.source_title ? [`${PITCH_SOURCES[p.source].label}: “${esc(p.source_title)}”`] : []), esc(pageClaims(p)),
-  ...FOLLOW_QUESTIONS.map(([k, q]) => `<b>${esc(q)}</b> ${answered(p[k]) ? esc(p[k]) : '<i>Not answered yet</i>'}`)];
+const followComplete = (p) => FOLLOW_QUESTIONS.every(([k]) => answered(p[k]));
+
+// Source mix: how a set of pitches was sourced and how far they got. One
+// function for the EP wall, the report and the admin PDF (and a future
+// Moira:Conference), so their counts always agree. Pure: it takes snapshot
+// rows and touches no page. order is the bulletin's running order (ids).
+const SOURCE_TYPES = [['original', 'Original'], ['wire', 'Wire'], ['follow', 'Follow-up']];
+const pitchSourceType = (p) => p.source_type || (p.source === 'pa' ? 'wire' : isFollow(p) ? 'follow' : 'original');
+function sourceMix(pitches, order) {
+  const inOrder = new Set(Array.isArray(order) ? order.map(String) : []);
+  const m = { original: 0, wire: 0, follow: 0, pitched: 0, promoted: 0, inRunningOrder: 0, followAnswered: 0, followPromoted: 0 };
+  for (const p of pitches || []) {
+    const type = pitchSourceType(p), promoted = p.status === 'picked';
+    m[type]++; m.pitched++;
+    if (promoted) m.promoted++;
+    if (promoted && p.story_id && inOrder.has(String(p.story_id))) m.inRunningOrder++;
+    if (type === 'follow') { if (followComplete(p)) m.followAnswered++; if (promoted) m.followPromoted++; }
+  }
+  return m;
+}
+// Several newsrooms' mixes added together (the wall's total).
+const addMix = (mixes) => mixes.reduce((a, m) => Object.fromEntries(Object.keys(m).map((k) => [k, (a[k] || 0) + m[k]])), {});
+const mixLine = (m, originalLabel = 'Original') => SOURCE_TYPES.map(([k, label]) => `${k === 'original' ? originalLabel : label} ${m[k] || 0}`).join(' · ');
+const MIX_NOTE = 'Counts are based on how pitches were added. Typed-in pitches count as original.';
+const gateBadge = (p) => followComplete(p) ? '<span class="wall-gate ready">Ready</span>' : '<span class="wall-gate missing">Answers missing</span>';
 const sourceLink = (url, source) => webUrl(url) ? `<a href="${esc(webUrl(url))}" target="_blank" rel="noopener noreferrer">${sourceLabel(source)} ↗</a>` : '';
 const CHECKED = { 'needs-checking': 'Needs checking', 'checked-ok': 'Checked OK', 'checked-needs-work': 'Needs work' };
 const dur = (s) => { s = Math.max(0, Number(s) || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -105,9 +126,24 @@ document.head.insertAdjacentHTML('beforeend', `<style id="desk-shared-style">
   .wall-tag.bbc { background: #000; color: #fff; }
   .wall-tag.men { background: #ffd400; color: #000; }
   .wall-pitch.follow { border-left: 4px solid #f59e0b; }
-  .wall-pitch .follow-page { color: var(--muted); font-size: .78em; margin-top: 3px; }
-  .wall-pitch .follow-a { font-size: .85em; margin-top: 3px; }
-  .wall-pitch .follow-a i { color: var(--muted); }
+  .wall-gate { display: inline-block; font-size: .68em; font-weight: 800; letter-spacing: .04em; border-radius: 4px; padding: .1em .45em; margin-right: .4em; vertical-align: .12em; text-transform: none; }
+  .wall-gate.missing { background: #fee2e2; color: #991b1b; }
+  .wall-gate.ready { background: #dcfce7; color: #166534; }
+  .wall-mix { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .col-head .mix, .focus-title .mix { display: block; font-variant-numeric: tabular-nums; }
+  /* Follow-up close-up: readable across a room; any click or Esc closes it */
+  .wall-closeup { position: absolute; inset: 0; z-index: 5; background: rgb(0 0 0 / .55); display: flex; align-items: center; justify-content: center; padding: 2vh 2vw; cursor: pointer; }
+  .closeup-card { background: var(--panel); color: var(--ink); border-radius: 16px; width: min(1200px, 100%); max-height: 100%; overflow: auto; padding: 1em 1.4em 1.2em; font-size: 1.7em; line-height: 1.3; cursor: default; }
+  .closeup-head { display: flex; align-items: center; gap: .4em; flex-wrap: wrap; font-size: .75em; }
+  .closeup-head .spacer { flex: 1; }
+  .closeup-head button { font-size: max(14px, .7em); }
+  .closeup-card h2 { margin: .25em 0 .1em; font-size: 1.25em; color: var(--ink); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; }
+  .closeup-card .headline { margin: 0; overflow-wrap: anywhere; }
+  .closeup-card .claims { margin: .2em 0 .6em; color: var(--muted); font-size: .7em; }
+  .closeup-card dl { margin: 0; display: grid; gap: .45em; }
+  .closeup-card dt { color: var(--muted); font-size: .62em; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+  .closeup-card dd { margin: 0; overflow-wrap: anywhere; }
+  .closeup-card dd.missing { color: var(--muted); font-style: italic; }
   .wall-pitch .note { margin-top: .4em; font-size: .85em; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: .3em .5em; }
   .spiked-toggle { width: 100%; text-align: left; font-size: .85em; white-space: normal; color: var(--muted); background: transparent; border: 1px dashed var(--line); border-radius: 8px; padding: .4em .7em; }
   .spiked-list { list-style: none; margin: 0; padding: 0 .3em; display: grid; gap: .25em; font-size: .85em; color: var(--muted); }
@@ -144,7 +180,7 @@ async function openWall(ids) {
   document.body.appendChild(el);
   // Display state lives here, not in the page: renderWall() rebuilds the screen after every poll.
   const w = wall = { ids, data: null, sig: '', el, zoom, error: null, updated: null,
-    present: false, focus: null, hideNotes: false, openSpiked: new Set(), firstSeen: new Map(), primed: false };
+    present: false, focus: null, closeup: null, hideNotes: false, openSpiked: new Set(), firstSeen: new Map(), primed: false };
   el.style.setProperty('--zoom', zoom);
   renderWall();
   el.requestFullscreen?.().catch(() => {});
@@ -206,15 +242,19 @@ function renderWall() {
     data.forEach((n) => n.pitches.forEach((p) => { if (!w.firstSeen.has(p.id)) w.firstSeen.set(p.id, w.primed ? now : 0); }));
     w.primed = true;
     if (w.focus && !data.some((n) => n.id === w.focus)) w.focus = null;
+    if (w.closeup && !data.some((n) => n.pitches.some((p) => p.id === w.closeup))) w.closeup = null;
   }
   const scroll = {};
   w.el.querySelectorAll('.list[data-id]').forEach((l) => { scroll[l.dataset.id] = l.scrollTop; });
   const status = w.error ? `<span style="color:var(--err)">Can't refresh: ${esc(w.error)}</span>` : null;
+  // Source mix across every newsroom on the wall; counts only.
+  const mix = w.data && !w.error ? `<span class="wall-mix" data-testid="wall-mix">${mixLine(addMix(data.map((n) => sourceMix(n.pitches, n.order))))}</span>` : '';
   const bar = w.present
-    ? `<div class="wall-strip"><span>Conference · ${status || (w.updated ? `Live · ${shortTime(w.updated)}` : 'Loading…')}</span><span class="spacer"></span>
+    ? `<div class="wall-strip"><span>Conference · ${status || (w.updated ? `Live · ${shortTime(w.updated)}` : 'Loading…')}</span>${mix}<span class="spacer"></span>
         <button data-action="wall-present">Show controls</button></div>`
     : `<div class="wall-bar">
       <h1>Conference</h1>
+      ${mix}
       <span class="muted">${status || (w.updated ? `Live · updated ${w.updated.toLocaleTimeString('en-GB')}` : 'Loading…')}</span>
       <span class="spacer"></span>
       <button data-action="wall-hide-notes" aria-pressed="${w.hideNotes}">${w.hideNotes ? 'Notes hidden' : 'Hide notes'}</button>
@@ -226,7 +266,8 @@ function renderWall() {
   const focused = w.focus && data.find((n) => n.id === w.focus);
   const body = !w.data ? '<div class="wall-cols"><div class="empty">Loading…</div></div>'
     : focused ? renderWallFocus(focused, data) : `<div class="wall-cols">${data.map(renderWallCol).join('')}</div>`;
-  keepFocus(w.el, () => { w.el.querySelector('.wall-view').innerHTML = bar + body; });
+  const closeupPitch = w.closeup && data.flatMap((n) => n.pitches).find((p) => p.id === w.closeup);
+  keepFocus(w.el, () => { w.el.querySelector('.wall-view').innerHTML = bar + body + (closeupPitch ? renderWallCloseup(closeupPitch) : ''); });
   w.el.querySelectorAll('.list[data-id]').forEach((l) => { if (scroll[l.dataset.id]) l.scrollTop = scroll[l.dataset.id]; });
 }
 
@@ -236,17 +277,43 @@ function wallSplit(n) {
 }
 const wallMeta = (n, g) => `${n.producer_name ? `Producer: ${esc(n.producer_name)}` : 'No producer yet'} · ${g.undecided.length} undecided · ${g.picked.length} picked`;
 
-// The whole card opens the note dialog, except in Present mode.
+// The whole card opens the note dialog, except in Present mode. A follow-up
+// card opens its close-up instead (in Present mode too), which has the note button.
 function wallPitch(p, fmtOf) {
   const seen = wall.firstSeen.get(p.id), isNew = seen > 0 && Date.now() - seen < 30000, picked = p.status === 'picked';
   const follow = isFollow(p);
-  return `<button class="wall-pitch${picked ? ' picked' : ''}${isNew ? ' new' : ''}${follow ? ' follow' : ''}" data-action="wall-note" data-id="${esc(p.id)}" ${wall.present ? 'disabled' : `title="${p.ep_note ? 'Edit your EP note' : 'Add an EP note'}"`}>
-    <span class="slug">${isNew ? '<span class="wall-tag new">NEW</span>' : ''}${picked ? '<span class="wall-tag picked">PICKED</span>' : ''}${sourceTag(p, 'wall-tag')}${esc(p.slug)}${picked && fmtOf[p.story_id] ? ` <span class="pill">${esc(fmtOf[p.story_id])}</span>` : ''}</span>
+  const click = follow ? `data-action="wall-followup" title="Show the follow-up answers"`
+    : `data-action="wall-note" ${wall.present ? 'disabled' : `title="${p.ep_note ? 'Edit your EP note' : 'Add an EP note'}"`}`;
+  return `<button class="wall-pitch${picked ? ' picked' : ''}${isNew ? ' new' : ''}${follow ? ' follow' : ''}" ${click} data-id="${esc(p.id)}">
+    <span class="slug">${isNew ? '<span class="wall-tag new">NEW</span>' : ''}${picked ? '<span class="wall-tag picked">PICKED</span>' : ''}${sourceTag(p, 'wall-tag')}${follow ? gateBadge(p) : ''}${esc(p.slug)}${picked && fmtOf[p.story_id] ? ` <span class="pill">${esc(fmtOf[p.story_id])}</span>` : ''}</span>
     ${p.angle ? `<span class="angle">${esc(p.angle)}</span>` : ''}
-    ${follow ? followLines(p).map((l, i, all) => `<span class="${i < all.length - FOLLOW_QUESTIONS.length ? 'follow-page' : 'follow-a'}">${l}</span>`).join('') : ''}
     ${p.pitched_by ? `<span class="by">${esc(p.pitched_by)}</span>` : ''}
     ${p.ep_note && !wall.hideNotes ? `<span class="note">EP: ${esc(p.ep_note)}</span>` : ''}
   </button>`;
+}
+// A follow-up's answers, large enough to read across the room. Read-only; any
+// click outside the note button closes it, as does Esc.
+function renderWallCloseup(p) {
+  const label = PITCH_SOURCES[p.source]?.label || '';
+  return `<div class="wall-closeup" data-action="wall-followup" data-id="" role="dialog" aria-modal="true" aria-labelledby="closeup-title" data-testid="wall-closeup">
+    <div class="closeup-card">
+      <div class="closeup-head">${sourceTag(p, 'wall-tag')}${gateBadge(p)}<span class="spacer"></span>
+        ${wall.present ? '' : `<button data-action="wall-note" data-id="${esc(p.id)}">${p.ep_note ? 'Edit EP note' : 'Add EP note'}</button>`}
+        <button data-action="wall-followup" data-id="" aria-label="Close">✕</button></div>
+      <h2 id="closeup-title">${esc(p.slug)}</h2>
+      ${p.source_title ? `<p class="headline">${esc(label)}: “${esc(p.source_title)}”</p>` : ''}
+      <p class="claims">${esc(pageClaims(p))}</p>
+      <dl>${FOLLOW_QUESTIONS.map(([k, q]) => `<dt>${esc(q)}</dt><dd${answered(p[k]) ? '' : ' class="missing"'}>${answered(p[k]) ? esc(p[k]) : 'Not answered yet'}</dd>`).join('')}</dl>
+    </div>
+  </div>`;
+}
+function setWallCloseup(id) {
+  if (!wall) return;
+  const prev = wall.closeup;
+  wall.closeup = id || null;
+  renderWall();
+  if (wall.closeup) wall.el.querySelector('.wall-closeup [aria-label="Close"]')?.focus({ preventScroll: true });
+  else if (prev) [...wall.el.querySelectorAll('[data-action="wall-followup"]')].find((b) => b.dataset.id === prev)?.focus({ preventScroll: true });
 }
 const spikedLine = (p) => `<s>${esc(p.slug)}</s>${p.spike_reason ? ` · ${esc(p.spike_reason)}` : ''}`;
 
@@ -256,7 +323,7 @@ function renderWallCol(n) {
     ${open ? `<ul class="spiked-list">${g.spiked.map((p) => `<li>${spikedLine(p)}</li>`).join('')}</ul>` : ''}` : '';
   return `<section class="wall-col">
     <button class="col-head" data-action="wall-focus" data-id="${esc(n.id)}" title="Focus on this newsroom"><span class="expand" aria-hidden="true">⤢</span>
-      <span class="name">${esc(n.name)}</span><span class="meta">${wallMeta(n, g)}</span></button>
+      <span class="name">${esc(n.name)}</span><span class="meta">${wallMeta(n, g)}<span class="mix">${mixLine(sourceMix(n.pitches, n.order))}</span></span></button>
     <div class="list" data-id="${esc(n.id)}">${n.pitches.length
       ? `<h3 class="wall-sub">Undecided · ${g.undecided.length}</h3>${g.undecided.map(card).join('')}
         <h3 class="wall-sub">Picked · ${g.picked.length}</h3>${g.picked.map(card).join('')}${spiked}`
@@ -272,7 +339,7 @@ function renderWallFocus(n, data) {
   return `<div class="wall-focus">
     <div class="focus-head">
       <button class="prev" data-action="wall-step" data-val="-1" ${one}>← ${esc(prev.name)}</button>
-      <div class="focus-title"><h2>${esc(n.name)}</h2><div class="meta">${wallMeta(n, g)} · ${i + 1} of ${len}</div></div>
+      <div class="focus-title"><h2>${esc(n.name)}</h2><div class="meta">${wallMeta(n, g)} · ${i + 1} of ${len}<span class="mix">${mixLine(sourceMix(n.pitches, n.order))}</span></div></div>
       <button class="next" data-action="wall-step" data-val="1" ${one}>${esc(next.name)} →</button>
       <button data-action="wall-focus" data-id="">All newsrooms</button>
     </div>
@@ -368,7 +435,8 @@ function wallNote(pitchId) {
 async function wallClick(action, id, btn) {
   if (!wall || !action.startsWith('wall-')) return false;
   if (action === 'wall-close') closeWall();
-  else if (action === 'wall-note') { if (!wall.present) await wallNote(id); }
+  else if (action === 'wall-note') { if (!wall.present) { if (wall.closeup) setWallCloseup(null); await wallNote(id); } }
+  else if (action === 'wall-followup') setWallCloseup(id);
   else if (action === 'wall-zoom') {
     wall.zoom = Math.min(2.2, Math.max(0.7, Math.round((wall.zoom + Number(btn.dataset.val) * 0.15) * 100) / 100));
     wall.el.style.setProperty('--zoom', wall.zoom);
@@ -382,11 +450,11 @@ async function wallClick(action, id, btn) {
   else return false;
   return true;
 }
-// Esc: focus view, then the wall. ← / →: step in focus view. P: Present mode.
+// Esc: a follow-up close-up, then the focus view, then the wall. ← / →: step in focus view. P: Present mode.
 // The note dialog stops its own key events, so typing "p" in a note is safe.
 function wallKeydown(e, dialogOpen) {
   if (!wall || dialogOpen || wall.noteDialog) return false;
-  if (e.key === 'Escape') { if (wall.focus) setWallFocus(null); else closeWall(); }
+  if (e.key === 'Escape') { if (wall.closeup) setWallCloseup(null); else if (wall.focus) setWallFocus(null); else closeWall(); }
   else if (wall.focus && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); stepWall(e.key === 'ArrowLeft' ? -1 : 1); }
   else if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey && !e.altKey) setPresent(!wall.present);
   else return false;
@@ -457,11 +525,26 @@ function reportModel(n) {
     return { tone: 'sub', label: 'Not decided' };
   };
   const pitches = n.pitches.map((p) => ({ p, outcome: outcome(p), format: p.status === 'picked' ? byId[p.story_id]?.format || '' : '' }));
+  // Source mix for the newsroom, from the same function as the EP wall.
+  const mix = sourceMix(n.pitches, order), inOrder = new Set(order.map(String));
+  const reach = (p) => p.status === 'picked' ? (inOrder.has(String(p.story_id)) ? 'Promoted · in the running order' : 'Promoted · no longer in the running order')
+    : p.status === 'spiked' ? 'Not promoted · spiked' : 'Not promoted';
+  // Every follow-up in full: answers word for word, blanks shown as such.
+  const follows = n.pitches.filter((p) => pitchSourceType(p) === 'follow').map((p) => ({
+    p, outlet: PITCH_SOURCES[p.source]?.label || '', headline: p.source_title || '', url: webUrl(p.source_url), claims: pageClaims(p), status: reach(p),
+    answers: FOLLOW_QUESTIONS.map(([k, q]) => ({ q, a: String(p[k] || '').trim() })) }));
+  const wires = n.pitches.filter((p) => pitchSourceType(p) === 'wire').map((p) => ({
+    p, headline: p.source_title || p.angle || '', url: webUrl(p.source_url), status: reach(p) }));
+  const summary = {
+    mix: `Source mix: ${mixLine(mix, 'Original (declared)')}`, note: MIX_NOTE,
+    follow: `Follow-ups: ${mix.follow} · with all three answers: ${mix.followAnswered} · promoted: ${mix.followPromoted}`,
+    pipeline: `Pipeline: ${mix.pitched} pitched → ${mix.promoted} promoted → ${mix.inRunningOrder} in the running order`,
+  };
   const meta = [n.conference_started_at ? `Conference ${fullWhen(n.conference_started_at)}` : 'No conference held',
     `Producer: ${n.producer_name || 'none claimed'}`,
     n.cuez_part_title ? `Cuez: ${n.cuez_episode_title || ''} › ${n.cuez_part_title}` : ''].filter(Boolean).join(' · ');
   return {
-    rows, trt, target, pitches, meta,
+    rows, trt, target, pitches, meta, mix, summary, follows, wires,
     counts: `${n.pitches.length} pitched · ${n.pitches.filter((p) => p.status === 'picked').length} picked · ${n.pitches.filter((p) => p.status === 'spiked').length} spiked`,
     scripts: order.map((id) => byId[id]).filter((s) => s && s.type !== 'segment' && s.script),
     feedback: feedbackGroups(n),
@@ -485,19 +568,31 @@ function reportSection(n, withScripts) {
   }).join('');
   const confRows = m.pitches.map(({ p, outcome: o, format }, i) => `<tr>
       <td class="num">${i + 1}</td>
-      <td><strong>${esc(p.slug)}</strong>${PITCH_SOURCES[p.source] ? ` ${sourceTag(p, 'tag')}` : ''}${format ? ` <span class="tag">${esc(format)}</span>` : ''}${p.angle ? `<div>${esc(p.angle)}</div>` : ''}${isFollow(p) ? followLines(p).map((l) => `<div class="sub">${l}</div>`).join('') : ''}${webUrl(p.source_url) ? `<div class="sub">${sourceLink(p.source_url, p.source)}</div>` : ''}</td>
+      <td><strong>${esc(p.slug)}</strong>${PITCH_SOURCES[p.source] ? ` ${sourceTag(p, 'tag')}` : ''}${format ? ` <span class="tag">${esc(format)}</span>` : ''}${p.angle ? `<div>${esc(p.angle)}</div>` : ''}${webUrl(p.source_url) ? `<div class="sub">${sourceLink(p.source_url, p.source)}</div>` : ''}</td>
       <td>${esc(p.pitched_by)}</td>
       <td><span class="${o.tone}">${o.label}</span>${o.extra ? esc(o.extra) : ''}${o.time ? ` <span class="sub">${o.time}</span>` : ''}</td>
       <td>${p.ep_note ? esc(p.ep_note) : ''}</td></tr>`).join('');
   const scripts = withScripts ? m.scripts.map((s) => `<div class="script"><h4>${esc(s.slug)}</h4><pre>${esc(s.script)}</pre></div>`).join('') : '';
+  const link = (url, label) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label || url)}</a>` : '';
+  const follows = m.follows.map((f) => `<div class="pitch-detail">
+      <h4>${esc(f.p.slug)} ${sourceTag(f.p, 'tag')}</h4>
+      <p>${f.headline ? `${esc(f.outlet)}: “${esc(f.headline)}”` : `${esc(f.outlet)} story`}${f.url ? `<br>${link(f.url)}` : ''}</p>
+      <p class="sub">${esc(f.claims)}${f.p.pitched_by ? ` · Pitched by ${esc(f.p.pitched_by)}` : ''}</p>
+      <dl>${f.answers.map(({ q, a }) => `<dt>${esc(q)}</dt><dd>${a ? esc(a) : '<span class="sub">— not answered —</span>'}</dd>`).join('')}</dl>
+      <p class="sub">Status: ${esc(f.status)}</p></div>`).join('');
+  const wires = m.wires.map((w) => `<li><strong>${esc(w.p.slug)}</strong>${w.headline ? `: ${esc(w.headline)}` : ''}${w.url ? ` · ${link(w.url, 'PA story ↗')}` : ''} <span class="sub">· ${esc(w.status)}</span></li>`).join('');
   const feedback = m.feedback.map((g) => `<div class="fb"><h4>${esc(g.title)}</h4>${g.items.map((f) =>
     `${f.quote ? `<blockquote>${esc(f.quote)}</blockquote>` : ''}<p>${esc(f.body)}</p>`).join('')}</div>`).join('');
 
   return `<section class="newsroom" id="nr-${esc(n.id)}">
     <h2>${esc(n.name)}</h2>
     <p class="meta">${esc(m.meta)}</p>
+    <div class="mix-summary" data-testid="mix-summary"><p><strong>${esc(m.summary.mix)}</strong></p><p class="sub">${esc(m.summary.note)}</p>
+      <p>${esc(m.summary.follow)}</p><p>${esc(m.summary.pipeline)}</p></div>
     <h3>News conference <span class="sub">${m.counts}</span></h3>
     ${m.pitches.length ? `<table><thead><tr><th class="num">#</th><th>Pitch</th><th>Pitched by</th><th>Outcome</th><th>EP note</th></tr></thead><tbody>${confRows}</tbody></table>` : '<p class="sub">No pitches recorded.</p>'}
+    ${follows ? `<h3>Follow-up pitches <span class="sub">${m.follows.length}</span></h3>${follows}` : ''}
+    ${wires ? `<h3>Wire pitches <span class="sub">${m.wires.length}</span></h3><ul class="wires">${wires}</ul>` : ''}
     <h3>Running order <span class="sub">TRT ${dur(m.trt)}${m.target}</span></h3>
     ${roRows ? `<table><thead><tr><th class="num">#</th><th>Slug</th><th>Format</th><th>Reporter / presenter</th><th class="num">Dur</th><th>Checked</th><th>Cuez</th></tr></thead><tbody>${roRows}</tbody></table>` : '<p class="sub">No stories.</p>'}
     ${feedback ? `<h3>EP feedback</h3>${feedback}` : ''}
@@ -508,7 +603,7 @@ function reportSection(n, withScripts) {
 function buildReport(data, withScripts, generated = new Date()) {
   const title = data.length === 1 ? `${data[0].name}: conference and running order` : 'Conference and running orders';
   const contents = data.length > 1 ? `<nav><strong>Newsrooms</strong><ol>${data.map((n) =>
-    `<li><a href="#nr-${esc(n.id)}">${esc(n.name)}</a> <span class="sub">${n.pitches.length} pitched · ${n.pitches.filter((p) => p.status === 'picked').length} picked${n.producer_name ? ` · producer ${esc(n.producer_name)}` : ''}</span></li>`).join('')}</ol></nav>` : '';
+    `<li><a href="#nr-${esc(n.id)}">${esc(n.name)}</a> <span class="sub">${n.pitches.length} pitched · ${n.pitches.filter((p) => p.status === 'picked').length} picked${n.producer_name ? ` · producer ${esc(n.producer_name)}` : ''} · ${mixLine(sourceMix(n.pitches, n.order))}</span></li>`).join('')}</ol></nav>` : '';
   return `<!DOCTYPE html>
 <html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
@@ -537,6 +632,15 @@ function buildReport(data, withScripts, generated = new Date()) {
   tr.eop td { background: var(--eop); color: #fff; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; }
   tr.seg td { color: var(--seg); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; background: #eef0ff; }
   tr.dim td { color: var(--muted); }
+  .mix-summary { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 12px 0 4px; }
+  .mix-summary p { margin: 2px 0; }
+  .pitch-detail { border-left: 3px solid #f59e0b; padding: 2px 0 2px 12px; margin: 10px 0 16px; }
+  .pitch-detail h4 { margin: 0 0 4px; }
+  .pitch-detail p { margin: 0 0 4px; overflow-wrap: anywhere; }
+  .pitch-detail dl { margin: 6px 0; }
+  .pitch-detail dt { font-weight: 600; font-size: 13px; }
+  .pitch-detail dd { margin: 0 0 6px; white-space: pre-wrap; }
+  .wires { margin: 0; padding-left: 20px; } .wires li { margin: 3px 0; overflow-wrap: anywhere; }
   .fb { border-left: 3px solid #b45309; padding: 2px 0 2px 12px; margin: 10px 0 14px; }
   .fb h4 { margin: 0 0 6px; }
   .fb blockquote { margin: 6px 0 2px; color: var(--muted); font-style: italic; white-space: pre-wrap; }
@@ -550,7 +654,7 @@ function buildReport(data, withScripts, generated = new Date()) {
     .newsroom { break-before: page; border-top: 0; margin-top: 0; }
     .newsroom:first-of-type { break-before: auto; }
     nav { break-after: page; }
-    tr, .script, .fb { break-inside: avoid; }
+    tr, .script, .fb, .pitch-detail { break-inside: avoid; }
     tr.eop td, tr.seg td, th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style></head>

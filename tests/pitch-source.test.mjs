@@ -28,6 +28,7 @@ await db.exec(migration);
 await db.exec(sites);
 await db.exec(sites);
 await db.exec(follow);
+await db.exec(await readFile(new URL('../supabase/migrations/20261119_source_mix.sql', import.meta.url), 'utf8'));
 assert.equal((await db.query("select count(*)::int as n from pg_proc where proname = 'add_pitch'")).rows[0].n, 1, 'one add_pitch, no overload');
 
 const admin = '00000000-0000-0000-0000-000000000001';

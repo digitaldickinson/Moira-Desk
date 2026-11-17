@@ -23,7 +23,7 @@ await db.exec(migration);
 await db.exec(migration);
 // Later pitch migrations, in order, as on a real database: the follow migration
 // replaces the one-argument pick_pitch this older migration recreates.
-for (const f of ['20261117_pitch_source.sql', '20261117_pitch_source_sites.sql', '20261118_follow_pitches.sql']) {
+for (const f of ['20261117_pitch_source.sql', '20261117_pitch_source_sites.sql', '20261118_follow_pitches.sql', '20261119_source_mix.sql']) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 }
 const admin = '00000000-0000-0000-0000-000000000001';

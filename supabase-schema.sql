@@ -142,6 +142,12 @@ alter table pitches add column if not exists source_modified_at  timestamptz;
 alter table pitches add column if not exists follow_when         text;
 alter table pitches add column if not exists follow_origin       text;
 alter table pitches add column if not exists follow_angle        text;
+-- How each pitch was sourced, for the source mix on the EP wall and report:
+-- 'wire' (PA), 'follow' (BBC/MEN follow-up) or 'original' (everything else).
+alter table pitches add column if not exists source_type text
+  generated always as (case when source = 'pa' then 'wire'
+                            when source in ('bbc', 'men') then 'follow'
+                            else 'original' end) stored;
 
 -- A story picked from conference keeps its pitch, shown in the editor and
 -- never sent to Cuez.
@@ -886,7 +892,7 @@ begin
           left(coalesce(trim(p_format), ''), 20), left(coalesce(trim(p_pitched_by), ''), 60), auth.uid(),
           coalesce((select max(position) + 1 from pitches where bulletin_id = p_bulletin_id and conference_id = v_conf), 0),
           v_source, v_url,
-          case when v_follow then one_line(p_source_title, 300) end,
+          case when v_follow or v_source = 'pa' then one_line(p_source_title, 300) end,
           case when v_follow then one_line(p_source_description, 500) end,
           case when v_follow then safe_timestamptz(p_source_published_at) end,
           case when v_follow then safe_timestamptz(p_source_modified_at) end);
@@ -1417,7 +1423,7 @@ begin
           'id', p.id, 'slug', p.slug, 'angle', p.angle, 'format', p.format, 'pitched_by', p.pitched_by,
           'status', p.status, 'spike_reason', p.spike_reason, 'ep_note', p.ep_note,
           'story_id', p.story_id, 'created_at', p.created_at, 'decided_at', p.decided_at,
-          'source', p.source, 'source_url', p.source_url,
+          'source', p.source, 'source_type', p.source_type, 'source_url', p.source_url,
           'source_title', p.source_title, 'source_published_at', p.source_published_at,
           'source_modified_at', p.source_modified_at,
           'follow_when', p.follow_when, 'follow_origin', p.follow_origin, 'follow_angle', p.follow_angle

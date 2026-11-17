@@ -1367,6 +1367,8 @@
             if (follow && cap.headline && angleEl && !angleEl.value.trim()) angleEl.value = cap.headline;
             const draft = cap.url || cap.source ? { url: cap.url, source: cap.source || null } : null;
             if (follow) Object.assign(draft, { title: cap.headline || '', fetching: true });
+            // A PA drop keeps the dragged headline, for the report's list of wire pitches.
+            else if (draft && cap.source === 'pa' && cap.headline) draft.title = cap.headline;
             state.ui.wireDraft = draft;
             render('main');
             if (draft?.fetching) {
@@ -1433,6 +1435,7 @@
                 p_format: '',
                 p_pitched_by: document.getElementById('pitch-new-by')?.value.trim() || '',
                 ...(draft ? { p_source: WIRE_SOURCES[draft.source] ? draft.source : null, p_source_url: safeWebUrl(draft.url) || null } : {}),
+                ...(draft && draft.source === 'pa' && draft.title ? { p_source_title: draft.title } : {}),
                 ...(draft && isFollowSource(draft.source) ? { p_source_title: draft.title || null, p_source_description: draft.description || null,
                     p_source_published_at: draft.publishedAt || null, p_source_modified_at: draft.modifiedAt || null } : {}),
             });

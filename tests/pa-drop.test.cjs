@@ -108,7 +108,7 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     await page.waitForFunction(() => testDesk.calls.length === 1);
     assert.deepEqual(await page.evaluate(() => testDesk.calls[0]), { name: 'add_pitch', args: {
       p_bulletin_id: 'bulletin-local', p_slug: 'COMMONS Tourism', p_angle: 'Ministers outline proposals for visitor levy',
-      p_format: '', p_pitched_by: 'Sam', p_source: 'pa', p_source_url: PA_URL } });
+      p_format: '', p_pitched_by: 'Sam', p_source: 'pa', p_source_url: PA_URL, p_source_title: 'Ministers outline proposals for visitor levy' } });
     await page.locator('#pitch-drop-hint').waitFor();
     assert.equal(await page.inputValue('#pitch-new-slug'), '');
     console.log('PASS: PA drop fills slug, angle and link for checking; + adds it as a PA pitch; summary not kept');
