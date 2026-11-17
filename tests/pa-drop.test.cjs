@@ -44,12 +44,20 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
           el.dispatchEvent(drop);
           return { overPrevented: over.defaultPrevented, dropPrevented: drop.defaultPrevented, effect: dt.dropEffect };
         },
+        previewCalls: [], previewReply: null, previewGate: null,
+        holdPreview(reply) { testDesk.previewReply = reply; testDesk.previewGate = new Promise(r => { testDesk.releasePreview = r; }); },
         paste(selector, data) {
           const el = document.querySelector(selector); el.focus();
           const ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: testDesk.transfer(data) });
           el.dispatchEvent(ev);
           return ev.defaultPrevented;
         },
+      };
+      invokeLinkPreview = async (body) => {
+        testDesk.previewCalls.push(body);
+        await testDesk.previewGate;
+        if (testDesk.previewReply === 'fail') throw new Error('offline');
+        return testDesk.previewReply;
       };
     `;
     const html = source.replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*>\s*<\/script>/g, '')
@@ -86,7 +94,7 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     assert.equal(await page.inputValue('#pitch-new-angle'), 'Ministers outline proposals for visitor levy');
     assert.equal(await page.inputValue('#pitch-new-by'), 'Sam');
     const draft = page.getByTestId('wire-draft');
-    await draft.locator('.pa-badge').waitFor();
+    await draft.locator('.src-badge').waitFor();
     assert.equal(await draft.locator('a').getAttribute('href'), PA_URL);
     assert.equal(await page.evaluate(() => testDesk.calls.length), 0, 'nothing pitched until + is pressed');
     assert.equal(await page.locator('[data-pitch-id]').count(), 0);
@@ -126,7 +134,7 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     await page.evaluate(() => testDesk.drop('#pitch-drop', { 'text/html': '<a href="https://news.example.org/story">Rail operator announces changes to evening services</a>', 'text/uri-list': 'https://news.example.org/story' }));
     assert.equal(await page.inputValue('#pitch-new-slug'), '');
     assert.equal(await page.inputValue('#pitch-new-angle'), 'Rail operator announces changes to evening services');
-    assert.equal(await page.getByTestId('wire-draft').locator('.pa-badge').count(), 0);
+    assert.equal(await page.getByTestId('wire-draft').locator('.src-badge').count(), 0);
     assert.equal(await page.getByTestId('wire-draft').locator('a').innerText().then(t => t.trim()), 'Source');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'pitch-new-slug', 'missing slug gets focus');
     await page.fill('#pitch-new-slug', 'Rail');
@@ -138,13 +146,13 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     const glued = await page.evaluate(([url]) => testDesk.parseWireTransfer(testDesk.transfer({
       'text/html': `<a href="${url}"><app-ninjs-article-summary><div>21:4616 Nov 2026272 wordsShowbizCelebrity</div><p class="slug"><app-ninjs-slug><span class="keywords">SHOWBIZ</span> <span class="keywords">Awards</span></app-ninjs-slug></p></app-ninjs-article-summary></a>`,
       'text/plain': '21:4616 Nov 2026272 wordsShowbizCelebrity' })), [PA_URL]);
-    assert.deepEqual(glued, { url: PA_URL, slug: 'SHOWBIZ Awards', headline: '', isPA: true, paMarkup: true, linkOnly: false });
+    assert.deepEqual(glued, { url: PA_URL, slug: 'SHOWBIZ Awards', headline: '', source: 'pa', paMarkup: true, linkOnly: false });
     // Real PA Explore event-card shape (fictional text): no headline element, so the
     // one-line summary becomes the angle; the slug leaves out the "Latest" label.
     const card = await page.evaluate(([url]) => testDesk.parseWireTransfer(testDesk.transfer({
       'text/html': `<meta http-equiv="Content-Type" content="text/html;charset=UTF-8"><a _ngcontent-x="" href="${url}" target="_self"><create-event-brief layout="wide"><div class="event-brief"><app-ninjs-article-summary showslug="true" class="layout-wide"><div class="article-metadata"><div class="datetime"><app-ninjs-article-timestamp><!----><time datetime="2026-11-17T08:03:24Z"><span class="time">08:03</span><span class="date">17 Nov 2026</span></time></app-ninjs-article-timestamp><app-ninjs-article-wordcount label="words"><span class="word-count">183 words</span></app-ninjs-article-wordcount></div></div><div class="row-control"><div class="container" data-uri="abc"><p class="slug body-1"><app-ninjs-slug><span class="topic">Politics</span><span class="keywords">Levy</span></app-ninjs-slug><!----><app-ninjs-article-summary-label><span class="article-label latest">Latest</span></app-ninjs-article-summary-label></p><app-embargo-notice><!----></app-embargo-notice><section class="description body-1">A council leader has said plans for a visitor levy were “long overdue”. She said the money would go to parks. </section></div></div></app-ninjs-article-summary></div></create-event-brief></a>`,
       'text/uri-list': url, 'text/plain': url })), [PA_URL]);
-    assert.deepEqual(card, { url: PA_URL, slug: 'Politics Levy', headline: 'A council leader has said plans for a visitor levy were “long overdue”.', isPA: true, paMarkup: true, linkOnly: false });
+    assert.deepEqual(card, { url: PA_URL, slug: 'Politics Levy', headline: 'A council leader has said plans for a visitor levy were “long overdue”.', source: 'pa', paMarkup: true, linkOnly: false });
     const long = await page.evaluate(([url]) => testDesk.parseWireTransfer(testDesk.transfer({
       'text/html': `<a href="${url}"><app-ninjs-article-summary><section class="description">${'word '.repeat(80)}end</section></app-ninjs-article-summary></a>` })), [PA_URL]);
     assert.ok(long.headline.length <= 221 && long.headline.endsWith('word…'), long.headline);
@@ -158,11 +166,75 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     assert.equal(await page.evaluate(url => testDesk.paste('#pitch-new-slug', { 'text/plain': url }), PA_URL), true);
     assert.equal(await page.inputValue('#pitch-new-slug'), 'MY SLUG');
     assert.equal(await page.inputValue('#pitch-new-angle'), 'My angle');
-    await page.getByTestId('wire-draft').locator('.pa-badge').waitFor();
+    await page.getByTestId('wire-draft').locator('.src-badge').waitFor();
     assert.equal(await page.evaluate(() => testDesk.paste('#pitch-new-angle', { 'text/plain': 'just some words' })), false);
     assert.equal(await page.evaluate(() => testDesk.paste('#pitch-new-angle', { 'text/plain': 'https://news.example.org/x' })), false);
     await page.locator('[data-action="clear-wire-draft"]').click();
     console.log('PASS: pasting a PA link attaches it; other pastes behave normally');
+
+    // BBC News / MEN: only the address is pasted, so the headline is looked up.
+    const BBC_URL = 'https://www.bbc.co.uk/news/articles/c8752wyv155xo';
+    const MEN_URL = 'https://www.manchestereveningnews.co.uk/news/greater-manchester-news/m56-traffic-live-drivers-face-34922134';
+    const BBC_TITLE = 'Hundreds of properties hit by power cuts after cable incident';
+    assert.equal((await page.evaluate(url => testDesk.parseWireTransfer(testDesk.transfer({ 'text/plain': url })), MEN_URL)).source, 'men');
+    await page.fill('#pitch-new-slug', ''); await page.fill('#pitch-new-angle', '');
+    await page.evaluate(title => testDesk.holdPreview({ ok: true, title, siteName: 'BBC News', site: 'bbc' }), BBC_TITLE);
+    assert.equal(await page.evaluate(url => testDesk.paste('#pitch-new-angle', { 'text/plain': url }), BBC_URL), true);
+    await page.getByTestId('wire-fetching').waitFor();
+    await page.getByTestId('wire-draft').locator('.src-badge.bbc').waitFor();
+    assert.equal(await page.getByTestId('wire-draft').locator('a').innerText().then(t => t.trim()), 'BBC story');
+    assert.deepEqual(await page.evaluate(() => testDesk.previewCalls), [{ bulletinId: 'bulletin-local', url: BBC_URL }]);
+    await page.evaluate(() => testDesk.releasePreview());
+    await page.getByTestId('wire-fetching').waitFor({ state: 'detached' });
+    assert.equal(await page.inputValue('#pitch-new-angle'), BBC_TITLE);
+    assert.equal(await page.inputValue('#pitch-new-slug'), '');
+    await page.fill('#pitch-new-slug', 'POWER CUTS');
+    await page.locator('[data-action="add-pitch"]').click();
+    await page.waitForFunction(() => testDesk.calls.at(-1).args.p_slug === 'POWER CUTS');
+    assert.deepEqual(await page.evaluate(() => [testDesk.calls.at(-1).args.p_angle, testDesk.calls.at(-1).args.p_source, testDesk.calls.at(-1).args.p_source_url]), [BBC_TITLE, 'bbc', BBC_URL]);
+    console.log('PASS: pasting a BBC link looks up its headline into the angle; + adds it as a BBC pitch');
+
+    // An angle already typed: no lookup, nothing replaced.
+    await page.fill('#pitch-new-angle', 'My own angle');
+    assert.equal(await page.evaluate(url => testDesk.paste('#pitch-new-angle', { 'text/plain': url }), MEN_URL), true);
+    await page.getByTestId('wire-draft').locator('.src-badge.men').waitFor();
+    assert.equal(await page.getByTestId('wire-fetching').count(), 0);
+    assert.equal(await page.evaluate(() => testDesk.previewCalls.length), 1);
+    assert.equal(await page.inputValue('#pitch-new-angle'), 'My own angle');
+    await page.locator('[data-action="clear-wire-draft"]').click();
+
+    // Typed during the lookup: the student's words are kept.
+    await page.fill('#pitch-new-angle', '');
+    await page.evaluate(() => testDesk.holdPreview({ ok: true, title: 'M56 traffic LIVE', site: 'men' }));
+    await page.evaluate(url => testDesk.paste('#pitch-new-slug', { 'text/plain': url }), MEN_URL);
+    await page.getByTestId('wire-fetching').waitFor();
+    await page.fill('#pitch-new-angle', 'Typed meanwhile');
+    await page.evaluate(() => testDesk.releasePreview());
+    await page.getByTestId('wire-fetching').waitFor({ state: 'detached' });
+    assert.equal(await page.inputValue('#pitch-new-angle'), 'Typed meanwhile');
+    await page.locator('[data-action="clear-wire-draft"]').click();
+
+    // Link removed during the lookup: the late answer is ignored.
+    await page.fill('#pitch-new-angle', '');
+    await page.evaluate(() => testDesk.holdPreview({ ok: true, title: 'Too late', site: 'men' }));
+    await page.evaluate(url => testDesk.paste('#pitch-new-slug', { 'text/plain': url }), MEN_URL);
+    await page.getByTestId('wire-fetching').waitFor();
+    await page.locator('[data-action="clear-wire-draft"]').click();
+    await page.evaluate(() => testDesk.releasePreview());
+    await page.waitForTimeout(50);
+    assert.equal(await page.inputValue('#pitch-new-angle'), '');
+    assert.equal(await page.getByTestId('wire-draft').count(), 0);
+
+    // Lookup fails: the link stays attached and the student is asked to type the angle.
+    await page.evaluate(() => testDesk.holdPreview('fail'));
+    await page.evaluate(url => testDesk.paste('#pitch-new-slug', { 'text/plain': url }), BBC_URL);
+    await page.evaluate(() => testDesk.releasePreview());
+    await page.getByTestId('wire-fetching').waitFor({ state: 'detached' });
+    await page.getByText('No headline found').waitFor();
+    assert.equal(await page.inputValue('#pitch-new-angle'), '');
+    assert.equal(await page.getByTestId('wire-draft').locator('a').getAttribute('href'), BBC_URL);
+    await page.locator('[data-action="clear-wire-draft"]').click();
+    console.log('PASS: typed angles are never replaced; late or failed lookups leave the form alone');
 
     // Pitch cards: PA badge and safe link; a bad stored link is not rendered.
     await page.evaluate(url => {
@@ -174,12 +246,12 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
       testDesk.render('main');
     }, PA_URL);
     const paCard = page.locator('[data-pitch-id="pa-1"]');
-    await paCard.locator('.pa-badge').waitFor();
+    await paCard.locator('.src-badge').waitFor();
     assert.equal(await paCard.locator('a').getAttribute('href'), PA_URL);
     assert.equal(await paCard.locator('a').getAttribute('rel'), 'noopener noreferrer');
     const badCard = page.locator('[data-pitch-id="bad-1"]');
     assert.equal(await badCard.locator('a').count(), 0);
-    assert.equal(await badCard.locator('.pa-badge').count(), 0);
+    assert.equal(await badCard.locator('.src-badge').count(), 0);
     console.log('PASS: pitch cards show the PA badge and link; unsafe stored links are dropped');
 
     // Stray drops elsewhere can't navigate away; text fields still accept drops.

@@ -34,7 +34,7 @@ test('desk-shared.js can be inlined for tests', () => {
   assert.ok(!/<\/script/i.test(shared.toString()));
 });
 
-test('EP wall and report mark PA pitches and link their stories safely', () => {
+test('EP wall and report mark PA, BBC and MEN pitches and link their stories safely', () => {
   const ctx = { window: {}, URL, Date, console, document: { head: { insertAdjacentHTML() {} }, addEventListener() {} } };
   vm.createContext(ctx);
   vm.runInContext(`${shared}\nwall = { firstSeen: new Map(), present: false, hideNotes: false };
@@ -51,4 +51,12 @@ test('EP wall and report mark PA pitches and link their stories safely', () => {
   assert.equal(html.match(/<a href="https:\/\/explore\.pa\.media\/story\/commons-tourism-123" target="_blank" rel="noopener noreferrer">PA story ↗<\/a>/g)?.length, 2, 'conference and running-order rows link the PA story');
   assert.match(html, /<strong>COMMONS Tourism<\/strong> <span class="tag">PA<\/span>/);
   assert.doesNotMatch(html, /javascript:/);
+  const bbcUrl = 'https://www.bbc.co.uk/news/articles/c8752wyv155xo';
+  const bbc = { id: 'p3', slug: 'Power cuts', angle: 'Cable incident', status: 'pitched', pitched_by: 'Jo', source: 'bbc', source_url: bbcUrl };
+  assert.match(ctx.t.wallPitch(bbc, {}), /<span class="wall-tag bbc"[^>]*>BBC<\/span>Power cuts/);
+  assert.match(ctx.t.wallPitch({ ...bbc, source: 'men' }, {}), /<span class="wall-tag men"[^>]*>MEN<\/span>/);
+  const bbcHtml = ctx.t.reportSection({ id: 'r2', name: 'Room', order: ['s2', 'marker-line'], pitches: [bbc], feedback: [],
+    stories: [{ id: 's2', slug: 'POWER CUTS', format: 'READ', duration: 20, brief: 'Cable incident', source_url: bbcUrl }] }, false);
+  assert.equal(bbcHtml.match(/>BBC story ↗<\/a>/g)?.length, 2, 'BBC links labelled in both rows');
+  assert.match(bbcHtml, /<strong>Power cuts<\/strong> <span class="tag">BBC<\/span>/);
 });

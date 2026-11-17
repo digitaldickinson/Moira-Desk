@@ -19,10 +19,16 @@ const desk = { rpc: null, conferenceRpc: null, noteRpc: null, zoomKey: 'moirades
 function configureDesk(options) { Object.assign(desk, options); }
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// A pitch's source link (from the PA wire), only if it's a plain web address.
+// A pitch's source (PA wire, BBC News or MEN) and its link, only if it's a plain web address.
 const webUrl = (v) => { try { const u = new URL(String(v || '')); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch { return ''; } };
-const isPaLink = (url) => /(^|\.)(pa\.media|pressassociation\.com)$/i.test(webUrl(url) ? new URL(url).hostname : '');
-const sourceLink = (url, isPA) => webUrl(url) ? `<a href="${esc(webUrl(url))}" target="_blank" rel="noopener noreferrer">${isPA ? 'PA story' : 'Source'} ↗</a>` : '';
+const PITCH_SOURCES = {
+  pa: { label: 'PA', title: 'Pitched from the PA wire', hosts: /(^|\.)(pa\.media|pressassociation\.com)$/i },
+  bbc: { label: 'BBC', title: 'Pitched from a BBC News story', hosts: /(^|\.)bbc\.(co\.uk|com)$/i },
+  men: { label: 'MEN', title: 'Pitched from a Manchester Evening News story', hosts: /(^|\.)manchestereveningnews\.co\.uk$/i },
+};
+const linkSource = (url) => { const h = webUrl(url) ? new URL(url).hostname : ''; return Object.keys(PITCH_SOURCES).find((k) => PITCH_SOURCES[k].hosts.test(h)) || null; };
+const sourceLabel = (source) => PITCH_SOURCES[source] ? `${PITCH_SOURCES[source].label} story` : 'Source';
+const sourceLink = (url, source) => webUrl(url) ? `<a href="${esc(webUrl(url))}" target="_blank" rel="noopener noreferrer">${sourceLabel(source)} ↗</a>` : '';
 const CHECKED = { 'needs-checking': 'Needs checking', 'checked-ok': 'Checked OK', 'checked-needs-work': 'Needs work' };
 const dur = (s) => { s = Math.max(0, Number(s) || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const fullWhen = (t) => t ? new Date(t).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
@@ -85,6 +91,8 @@ document.head.insertAdjacentHTML('beforeend', `<style id="desk-shared-style">
   .wall-tag.picked { background: #126b43; }
   .wall-tag.new { background: #2563eb; }
   .wall-tag.pa { background: #075985; }
+  .wall-tag.bbc { background: #0f172a; }
+  .wall-tag.men { background: #991b1b; }
   .wall-pitch .note { margin-top: .4em; font-size: .85em; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: .3em .5em; }
   .spiked-toggle { width: 100%; text-align: left; font-size: .85em; white-space: normal; color: var(--muted); background: transparent; border: 1px dashed var(--line); border-radius: 8px; padding: .4em .7em; }
   .spiked-list { list-style: none; margin: 0; padding: 0 .3em; display: grid; gap: .25em; font-size: .85em; color: var(--muted); }
@@ -217,7 +225,7 @@ const wallMeta = (n, g) => `${n.producer_name ? `Producer: ${esc(n.producer_name
 function wallPitch(p, fmtOf) {
   const seen = wall.firstSeen.get(p.id), isNew = seen > 0 && Date.now() - seen < 30000, picked = p.status === 'picked';
   return `<button class="wall-pitch${picked ? ' picked' : ''}${isNew ? ' new' : ''}" data-action="wall-note" data-id="${esc(p.id)}" ${wall.present ? 'disabled' : `title="${p.ep_note ? 'Edit your EP note' : 'Add an EP note'}"`}>
-    <span class="slug">${isNew ? '<span class="wall-tag new">NEW</span>' : ''}${picked ? '<span class="wall-tag picked">PICKED</span>' : ''}${p.source === 'pa' ? '<span class="wall-tag pa" title="Pitched from the PA wire">PA</span>' : ''}${esc(p.slug)}${picked && fmtOf[p.story_id] ? ` <span class="pill">${esc(fmtOf[p.story_id])}</span>` : ''}</span>
+    <span class="slug">${isNew ? '<span class="wall-tag new">NEW</span>' : ''}${picked ? '<span class="wall-tag picked">PICKED</span>' : ''}${PITCH_SOURCES[p.source] ? `<span class="wall-tag ${p.source}" title="${PITCH_SOURCES[p.source].title}">${PITCH_SOURCES[p.source].label}</span>` : ''}${esc(p.slug)}${picked && fmtOf[p.story_id] ? ` <span class="pill">${esc(fmtOf[p.story_id])}</span>` : ''}</span>
     ${p.angle ? `<span class="angle">${esc(p.angle)}</span>` : ''}
     ${p.pitched_by ? `<span class="by">${esc(p.pitched_by)}</span>` : ''}
     ${p.ep_note && !wall.hideNotes ? `<span class="note">EP: ${esc(p.ep_note)}</span>` : ''}
@@ -451,7 +459,7 @@ function reportSection(n, withScripts) {
     const s = r.s;
     return `<tr class="${r.dim ? 'dim' : ''}">
       <td class="num">${r.num}</td>
-      <td><strong>${esc(s.slug)}</strong>${r.tags ? ` <span class="tag">${r.tags}</span>` : ''}${s.brief || webUrl(s.source_url) ? `<div class="sub">Pitch: ${esc(s.brief || '(no angle given)')}${s.pitched_by ? ` (${esc(s.pitched_by)})` : ''}${webUrl(s.source_url) ? ` · ${sourceLink(s.source_url, isPaLink(s.source_url))}` : ''}</div>` : ''}</td>
+      <td><strong>${esc(s.slug)}</strong>${r.tags ? ` <span class="tag">${r.tags}</span>` : ''}${s.brief || webUrl(s.source_url) ? `<div class="sub">Pitch: ${esc(s.brief || '(no angle given)')}${s.pitched_by ? ` (${esc(s.pitched_by)})` : ''}${webUrl(s.source_url) ? ` · ${sourceLink(s.source_url, linkSource(s.source_url))}` : ''}</div>` : ''}</td>
       <td>${esc(s.format)}</td>
       <td>${esc(s.reporter)}${s.reporter && s.presenter ? '<br>' : ''}<span class="sub">${esc(s.presenter)}</span></td>
       <td class="num">${dur(s.duration)}</td>
@@ -460,7 +468,7 @@ function reportSection(n, withScripts) {
   }).join('');
   const confRows = m.pitches.map(({ p, outcome: o, format }, i) => `<tr>
       <td class="num">${i + 1}</td>
-      <td><strong>${esc(p.slug)}</strong>${p.source === 'pa' ? ' <span class="tag">PA</span>' : ''}${format ? ` <span class="tag">${esc(format)}</span>` : ''}${p.angle ? `<div>${esc(p.angle)}</div>` : ''}${webUrl(p.source_url) ? `<div class="sub">${sourceLink(p.source_url, p.source === 'pa')}</div>` : ''}</td>
+      <td><strong>${esc(p.slug)}</strong>${PITCH_SOURCES[p.source] ? ` <span class="tag">${PITCH_SOURCES[p.source].label}</span>` : ''}${format ? ` <span class="tag">${esc(format)}</span>` : ''}${p.angle ? `<div>${esc(p.angle)}</div>` : ''}${webUrl(p.source_url) ? `<div class="sub">${sourceLink(p.source_url, p.source)}</div>` : ''}</td>
       <td>${esc(p.pitched_by)}</td>
       <td><span class="${o.tone}">${o.label}</span>${o.extra ? esc(o.extra) : ''}${o.time ? ` <span class="sub">${o.time}</span>` : ''}</td>
       <td>${p.ep_note ? esc(p.ep_note) : ''}</td></tr>`).join('');

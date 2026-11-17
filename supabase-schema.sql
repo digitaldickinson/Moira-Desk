@@ -128,7 +128,7 @@ create index if not exists pitches_conference_idx on pitches(bulletin_id, confer
 alter table pitches add column if not exists source     text;   -- 'pa' or null
 alter table pitches add column if not exists source_url text;
 alter table pitches drop constraint if exists pitches_source_check;
-alter table pitches add constraint pitches_source_check check (source is null or source = 'pa');
+alter table pitches add constraint pitches_source_check check (source is null or source in ('pa', 'bbc', 'men'));
 alter table pitches drop constraint if exists pitches_source_url_check;
 alter table pitches add constraint pitches_source_url_check
   check (source_url is null or (source_url ~* '^https?://[^[:space:]]+$' and length(source_url) <= 2000));
@@ -775,7 +775,7 @@ begin
   if coalesce(trim(p_slug), '') = '' then
     raise exception 'Give the pitch a slug.';
   end if;
-  if v_source is not null and v_source <> 'pa' then
+  if v_source is not null and v_source not in ('pa', 'bbc', 'men') then
     raise exception 'Unknown pitch source.';
   end if;
   if v_url is not null and (v_url !~* '^https?://[^[:space:]]+$' or length(v_url) > 2000) then

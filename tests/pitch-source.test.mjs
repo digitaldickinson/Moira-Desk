@@ -7,6 +7,7 @@ const { PGlite } = await import(process.env.MOIRA_PGLITE_MODULE || '@electric-sq
 const db = new PGlite();
 const schema = await readFile(new URL('../supabase-schema.sql', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../supabase/migrations/20261117_pitch_source.sql', import.meta.url), 'utf8');
+const sites = await readFile(new URL('../supabase/migrations/20261117_pitch_source_sites.sql', import.meta.url), 'utf8');
 await db.exec(`
   create role anon; create role authenticated; create role service_role;
   create schema auth;
@@ -23,6 +24,8 @@ const baseline = process.env.MOIRA_BASELINE_SCHEMA
 await db.exec(baseline.replace('create extension if not exists pgcrypto;', ''));
 await db.exec(migration);
 await db.exec(migration);
+await db.exec(sites);
+await db.exec(sites);
 assert.equal((await db.query("select count(*)::int as n from pg_proc where proname = 'add_pitch'")).rows[0].n, 1, 'one add_pitch, no overload');
 
 const admin = '00000000-0000-0000-0000-000000000001';
@@ -51,7 +54,11 @@ const plain = await value("select add_pitch($1, 'Council', 'Local angle', '', 'S
 assert.deepEqual({ ...(await row('select source, source_url from pitches where id = $1', [plain])) }, { source: null, source_url: null });
 const blank = await value("select add_pitch($1, 'Blank', '', '', 'Sam', '', '')", [room]);
 assert.deepEqual({ ...(await row('select source, source_url from pitches where id = $1', [blank])) }, { source: null, source_url: null });
-console.log('PASS: PA source and link stored; five-argument calls and blanks still work');
+for (const [src, link] of [['bbc', 'https://www.bbc.co.uk/news/articles/c8752wyv155xo'], ['MEN', 'https://www.manchestereveningnews.co.uk/news/x-34922134']]) {
+    const id = await value("select add_pitch($1, 'Site', '', '', 'Sam', $2, $3)", [room, src, link]);
+    assert.equal(await value('select source from pitches where id = $1', [id]), src.toLowerCase());
+}
+console.log('PASS: PA, BBC and MEN sources and links stored; five-argument calls and blanks still work');
 
 for (const bad of ['javascript:alert(1)', 'data:text/html,hi', 'ftp://example.org/x', 'https://exa mple.org', 'https://x.org/' + 'a'.repeat(2000)]) {
     await assert.rejects(db.query("select add_pitch($1, 'Bad', '', '', '', 'pa', $2)", [room, bad]), /web address/, bad);

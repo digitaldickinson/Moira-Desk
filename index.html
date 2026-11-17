@@ -12,7 +12,9 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         .drag-over { border-top: 4px solid #3b82f6 !important; }
         .pitch-drop-active { outline: 2px dashed #3b82f6; outline-offset: 2px; background-color: #eff6ff !important; }
-        .pa-badge { display: inline-block; vertical-align: middle; font-size: 10px; font-weight: 800; letter-spacing: .04em; line-height: 1; padding: 3px 5px; border-radius: 4px; background: #e0f2fe; color: #075985; border: 1px solid #7dd3fc; text-transform: uppercase; }
+        .src-badge { display: inline-block; vertical-align: middle; font-size: 10px; font-weight: 800; letter-spacing: .04em; line-height: 1; padding: 3px 5px; border-radius: 4px; background: #e0f2fe; color: #075985; border: 1px solid #7dd3fc; text-transform: uppercase; }
+        .src-badge.bbc { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+        .src-badge.men { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
         #main-container { -webkit-overflow-scrolling: touch; overflow-y: auto; }
 
         .form-label-sm { font-size: 0.625rem; font-weight: 700; color: #64748b; text-transform: uppercase; }
@@ -229,7 +231,7 @@
                 view: lsGet(LS.view) === 'conference' ? 'conference' : 'rundown',
                 editingPitchId: null, // pitch being edited inline
                 pitchBusy: false,     // waiting on a pitch/producer action
-                wireDraft: null,      // { url, isPA } from a PA headline dropped on the new-pitch box
+                wireDraft: null,      // { url, source, fetching } from a story dropped or pasted on the new-pitch box
                 draggedStoryId: null,
                 inlineEditingId: null,
                 editingStoryId: null,
@@ -1224,7 +1226,17 @@
                 return ['http:', 'https:'].includes(u.protocol) && u.href.length <= 2000 ? u.href : '';
             } catch { return ''; }
         }
-        const isPaUrl = (url) => { try { return PA_HOST_RE.test(new URL(url).hostname); } catch { return false; } };
+        // Where a pitch came from. PA comes by drag; for BBC News and MEN links the
+        // link-preview function looks up the headline, as only the address is pasted.
+        const WIRE_SOURCES = {
+            pa:  { label: 'PA',  story: 'PA story',  from: 'From PA',       title: 'Pitched from the PA wire', hosts: PA_HOST_RE },
+            bbc: { label: 'BBC', story: 'BBC story', from: 'From BBC News', title: 'Pitched from a BBC News story', hosts: /(^|\.)bbc\.(co\.uk|com)$/i, lookup: true },
+            men: { label: 'MEN', story: 'MEN story', from: 'From the MEN',  title: 'Pitched from a Manchester Evening News story', hosts: /(^|\.)manchestereveningnews\.co\.uk$/i, lookup: true },
+        };
+        const LINK_PREVIEW_FUNCTION = 'link-preview';
+        const sourceOfUrl = (url) => { try { const h = new URL(url).hostname; return Object.keys(WIRE_SOURCES).find(k => WIRE_SOURCES[k].hosts.test(h)) || null; } catch { return null; } };
+        const sourceBadge = (source, cls = '') => WIRE_SOURCES[source]
+            ? `<span class="src-badge ${source}${cls ? ` ${cls}` : ''}" title="${WIRE_SOURCES[source].title}">${WIRE_SOURCES[source].label}</span>` : '';
         const squash = (s) => String(s || '').replace(/\s+/g, ' ').trim();
         const ownText = (el) => squash([...(el?.childNodes || [])].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join(' '));
         // Text nodes joined with spaces: PA's markup often puts words in separate spans.
@@ -1302,7 +1314,7 @@
                 return { url: anchor ? safeWebUrl(anchor.getAttribute('href')) : '', slug: wireSlug(scope, headline), headline, paMarkup: !!pa };
             } catch { return none; }
         }
-        // What a drop or paste carried: { url, slug, headline, isPA, paMarkup, linkOnly }.
+        // What a drop or paste carried: { url, slug, headline, source, paMarkup, linkOnly }.
         function parseWireTransfer(dt) {
             if (!dt) return null;
             const get = (type) => { try { return dt.getData(type) || ''; } catch { return ''; } };
@@ -1314,7 +1326,7 @@
             if (!headline && moz.length > 1 && !/^https?:\/\//i.test(squash(moz.slice(1).join(' ')))) headline = squash(moz.slice(1).join(' '));
             // PA's plain text runs its fields together ("21:4616 Nov 2026272 words…"), so don't guess from it.
             if (!headline && !html.paMarkup) headline = plain.replace(/https?:\/\/[^\s<>"']+/gi, '').split(/\r?\n/).map(squash).find(Boolean) || '';
-            return { url, slug: html.slug.slice(0, 80), headline: headline.slice(0, 220), isPA: html.paMarkup || isPaUrl(url),
+            return { url, slug: html.slug.slice(0, 80), headline: headline.slice(0, 220), source: html.paMarkup ? 'pa' : sourceOfUrl(url),
                 paMarkup: html.paMarkup, linkOnly: !!safeWebUrl(plain) && !html.paMarkup };
         }
         // Fill the new-pitch form from a dropped or pasted story. Nothing is added
@@ -1330,17 +1342,49 @@
                 if (slugEl) slugEl.value = cap.slug;
                 if (angleEl) angleEl.value = cap.headline;
             }
-            state.ui.wireDraft = cap.url || cap.isPA ? { url: cap.url, isPA: cap.isPA } : null;
+            const draft = cap.url || cap.source ? { url: cap.url, source: cap.source || null } : null;
+            // Look the headline up only when there's no angle yet, so nothing typed is replaced.
+            if (draft && draft.url && WIRE_SOURCES[draft.source]?.lookup && !angleEl?.value.trim()) draft.fetching = true;
+            state.ui.wireDraft = draft;
             render('main');
-            const from = cap.isPA ? 'From PA' : 'Story captured';
-            const missing = [!document.getElementById('pitch-new-slug')?.value.trim() && 'a slug', !document.getElementById('pitch-new-angle')?.value.trim() && 'the angle'].filter(Boolean);
-            showNotice(from, missing.length ? `Add ${missing.join(' and ')}, check the rest, then press + to pitch it.` : 'Check the slug and angle, then press + to pitch it.');
-            const focus = !document.getElementById('pitch-new-slug')?.value.trim() ? 'pitch-new-slug' : 'pitch-new-angle';
-            document.getElementById(focus)?.focus();
+            if (draft?.fetching) {
+                if (!document.getElementById('pitch-new-slug')?.value.trim()) document.getElementById('pitch-new-slug')?.focus();
+                fetchWireHeadline(draft);
+                return;
+            }
+            wireNotice(cap.source);
         }
-        function sourceLinkHtml(url, isPA, cls = 'text-blue-600 hover:text-blue-800 hover:underline') {
+        function wireNotice(source) {
+            const slugMissing = !document.getElementById('pitch-new-slug')?.value.trim();
+            const missing = [slugMissing && 'a slug', !document.getElementById('pitch-new-angle')?.value.trim() && 'the angle'].filter(Boolean);
+            showNotice(WIRE_SOURCES[source]?.from || 'Story captured', missing.length ? `Add ${missing.join(' and ')}, check the rest, then press + to pitch it.` : 'Check the slug and angle, then press + to pitch it.');
+            document.getElementById(slugMissing ? 'pitch-new-slug' : 'pitch-new-angle')?.focus();
+        }
+        async function invokeLinkPreview(body) {
+            const { data, error } = await supabase.functions.invoke(LINK_PREVIEW_FUNCTION, { body });
+            if (error) throw error;
+            return data;
+        }
+        // Ask the link-preview function for a BBC/MEN headline and put it in the
+        // angle box, unless the student has typed an angle in the meantime.
+        async function fetchWireHeadline(draft) {
+            let title = '';
+            try {
+                const data = await invokeLinkPreview({ bulletinId: state.currentBulletinId, url: draft.url });
+                if (data?.ok) title = squash(data.title).slice(0, 220);
+            } catch { /* reported below */ }
+            if (state.ui.wireDraft !== draft) return;   // removed, replaced or already pitched
+            draft.fetching = false;
+            const angleEl = document.getElementById('pitch-new-angle');
+            const filled = !!(title && angleEl && !angleEl.value.trim());
+            if (filled) angleEl.value = title;
+            render('main');
+            if (filled) showNotice(WIRE_SOURCES[draft.source]?.from || 'Story captured', 'Headline added as the angle. Check it, add a slug if needed, then press +.');
+            else if (!title) showNotice('No headline found', "The link is attached, but its headline couldn't be fetched. Type the angle, check the slug, then press +.", 'warn');
+        }
+        function sourceLinkHtml(url, source, cls = 'text-blue-600 hover:text-blue-800 hover:underline') {
             const safe = safeWebUrl(url);
-            return safe ? `<a href="${escapeHTML(safe)}" target="_blank" rel="noopener noreferrer" class="${cls}" title="${escapeHTML(safe)}">${isPA ? 'PA story' : 'Source'} <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>` : '';
+            return safe ? `<a href="${escapeHTML(safe)}" target="_blank" rel="noopener noreferrer" class="${cls}" title="${escapeHTML(safe)}">${WIRE_SOURCES[source]?.story || 'Source'} <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>` : '';
         }
 
         async function addPitch() {
@@ -1356,7 +1400,7 @@
                 p_angle: angleEl?.value || '',
                 p_format: '',
                 p_pitched_by: document.getElementById('pitch-new-by')?.value.trim() || '',
-                ...(draft ? { p_source: draft.isPA ? 'pa' : null, p_source_url: safeWebUrl(draft.url) || null } : {}),
+                ...(draft ? { p_source: WIRE_SOURCES[draft.source] ? draft.source : null, p_source_url: safeWebUrl(draft.url) || null } : {}),
             });
             if (ok) {
                 // Ready for the next pitch: keep "pitched by", clear the rest.
@@ -2259,10 +2303,10 @@
                 <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start gap-2">
                 <div class="flex-1 min-w-0">
                     <div class="font-bold uppercase tracking-wide text-slate-800 ${p.status === 'spiked' ? 'line-through decoration-slate-400' : ''}">${escapeHTML(p.slug)}
-                        ${p.source === 'pa' ? '<span class="pa-badge ml-1.5" title="Pitched from the PA wire">PA</span>' : ''}
+                        ${sourceBadge(p.source, 'ml-1.5')}
                         ${story && !producer && story.format ? `<span class="ml-2 align-middle bg-slate-100 border px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-slate-600">${escapeHTML(story.format)}</span>` : ''}</div>
                     ${p.angle ? `<div class="text-sm text-slate-600 mt-0.5">${escapeHTML(p.angle)}</div>` : ''}
-                    <div class="text-xs text-slate-400 mt-1">${p.pitchedBy ? `Pitched by ${escapeHTML(p.pitchedBy)}` : 'Pitched'}${safeWebUrl(p.sourceUrl) ? ` · ${sourceLinkHtml(p.sourceUrl, p.source === 'pa')}` : ''}${p.status === 'spiked' && p.spikeReason ? ` · <span class="text-slate-600">Spiked: ${escapeHTML(p.spikeReason)}</span>` : p.status === 'spiked' ? ' · Spiked' : ''}</div>
+                    <div class="text-xs text-slate-400 mt-1">${p.pitchedBy ? `Pitched by ${escapeHTML(p.pitchedBy)}` : 'Pitched'}${safeWebUrl(p.sourceUrl) ? ` · ${sourceLinkHtml(p.sourceUrl, p.source)}` : ''}${p.status === 'spiked' && p.spikeReason ? ` · <span class="text-slate-600">Spiked: ${escapeHTML(p.spikeReason)}</span>` : p.status === 'spiked' ? ' · Spiked' : ''}</div>
                     ${story && !producer ? `<div class="text-xs text-blue-700 mt-1">Reporter: ${escapeHTML(story.reporter || 'Unassigned')}</div>` : ''}
                     ${p.epNote ? `<div class="mt-2 text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-2.5 py-1.5"><i class="fa-solid fa-chalkboard-user mr-1.5 text-amber-500"></i><b>EP:</b> ${escapeHTML(p.epNote)}</div>` : ''}
                 </div>
@@ -2304,11 +2348,12 @@
                         <button data-action="add-pitch" ${state.ui.pitchBusy ? 'disabled' : ''} class="sm:col-span-1 btn-primary !py-2.5"><i class="fa-solid fa-plus"></i><span class="sm:hidden ml-2">Add pitch</span></button>
                     </div>
                     ${wire ? `<div class="mt-2 flex items-center gap-2 text-xs text-slate-500 min-w-0" data-testid="wire-draft">
-                            ${wire.isPA ? '<span class="pa-badge">PA</span>' : ''}
-                            <span class="truncate min-w-0">${wire.url ? sourceLinkHtml(wire.url, wire.isPA) : 'From the PA wire (no link came across)'}</span>
+                            ${sourceBadge(wire.source)}
+                            <span class="truncate min-w-0">${wire.url ? sourceLinkHtml(wire.url, wire.source) : 'From the PA wire (no link came across)'}</span>
+                            ${wire.fetching ? '<span class="shrink-0 text-slate-400" data-testid="wire-fetching" role="status"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching headline…</span>' : ''}
                             <button data-action="clear-wire-draft" class="ml-auto shrink-0 px-2 py-1 rounded text-slate-400 hover:text-red-600 hover:bg-slate-100" title="Don't attach this link"><i class="fa-solid fa-xmark"></i><span class="sr-only">Remove the link</span></button>
                         </div>`
-                    : `<p id="pitch-drop-hint" class="mt-2 text-xs text-slate-400"><i class="fa-solid fa-file-import mr-1.5"></i>Drag a headline from PA Explore onto this box to fill in the slug, angle and link. Check them, then press +.</p>`}
+                    : `<p id="pitch-drop-hint" class="mt-2 text-xs text-slate-400"><i class="fa-solid fa-file-import mr-1.5"></i>Drag a headline from PA Explore onto this box, or paste a BBC News or MEN link into it, to fill in the details. Check them, then press +.</p>`}
                 </div>
                 ${section('Pitched', pitched, 'No pitches yet. Add the first one above.')}
                 ${section('Picked for the bulletin', picked, isProducer() ? 'Nothing picked yet.' : 'The producer hasn\'t picked anything yet.')}
@@ -2594,7 +2639,7 @@
                         <i class="fa-solid fa-tower-broadcast mr-2"></i>Sent to Cuez at ${sentAt}${story.cuezItemNumber ? ` as item ${escapeHTML(story.cuezItemNumber)}` : ''}. Changes here won't update Cuez${status === 'changed' ? ', and this story has changed since it was sent' : ''}.
                     </div>` : ''}
                     ${story.brief || story.pitchedBy || story.sourceUrl ? `<div class="bg-violet-50 border-b border-violet-200 px-6 py-2.5 text-sm text-violet-900">
-                        <i class="fa-solid fa-lightbulb mr-2 text-violet-400"></i><b>Pitch:</b> ${escapeHTML(story.brief || '(no angle given)')}${story.pitchedBy ? ` <span class="text-violet-500">· pitched by ${escapeHTML(story.pitchedBy)}</span>` : ''}${safeWebUrl(story.sourceUrl) ? ` <span class="text-violet-500">·</span> ${sourceLinkHtml(story.sourceUrl, isPaUrl(story.sourceUrl), 'font-semibold text-violet-700 hover:text-violet-900 underline')}` : ''}
+                        <i class="fa-solid fa-lightbulb mr-2 text-violet-400"></i><b>Pitch:</b> ${escapeHTML(story.brief || '(no angle given)')}${story.pitchedBy ? ` <span class="text-violet-500">· pitched by ${escapeHTML(story.pitchedBy)}</span>` : ''}${safeWebUrl(story.sourceUrl) ? ` <span class="text-violet-500">·</span> ${sourceLinkHtml(story.sourceUrl, sourceOfUrl(story.sourceUrl), 'font-semibold text-violet-700 hover:text-violet-900 underline')}` : ''}
                     </div>` : ''}
                     <div class="p-6 overflow-y-auto flex-1 min-h-0 space-y-5">
                         <input type="hidden" id="edit-rev" value="${story.rev}">
@@ -3103,12 +3148,12 @@
                 if (wireZone(e.target)) { e.preventDefault(); fillPitchFromWire(parseWireTransfer(e.dataTransfer)); return; }
                 if (!editable(e.target)) e.preventDefault();
             });
-            // Pasting a copied PA story or PA link into the box does the same as
-            // dropping it. Anything else pastes into the fields as usual.
+            // Pasting a copied PA story, or a PA, BBC News or MEN link, into the box does
+            // the same as dropping it. Anything else pastes into the fields as usual.
             document.addEventListener('paste', e => {
                 if (!wireZone(e.target)) return;
                 const cap = parseWireTransfer(e.clipboardData);
-                if (!cap || !(cap.paMarkup || (cap.linkOnly && cap.isPA))) return;
+                if (!cap || !(cap.paMarkup || (cap.linkOnly && cap.source))) return;
                 e.preventDefault();
                 fillPitchFromWire(cap);
             });
