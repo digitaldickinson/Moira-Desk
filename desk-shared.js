@@ -28,6 +28,17 @@ const PITCH_SOURCES = {
 };
 const linkSource = (url) => { const h = webUrl(url) ? new URL(url).hostname : ''; return Object.keys(PITCH_SOURCES).find((k) => PITCH_SOURCES[k].hosts.test(h)) || null; };
 const sourceLabel = (source) => PITCH_SOURCES[source] ? `${PITCH_SOURCES[source].label} story` : 'Source';
+// BBC News and MEN pitches are follows: three questions answered before picking.
+const isFollow = (p) => p.source === 'bbc' || p.source === 'men';
+const FOLLOW_QUESTIONS = [['follow_when', 'When did this actually happen?'], ['follow_origin', 'Who is the original source?'], ['angle', "What's new, or what's our angle?"]];
+const answered = (v) => String(v || '').replace(/\s/g, '').length >= 3;
+const claimTime = (t) => t ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'not given';
+const pageClaims = (p) => `Page claims: published ${claimTime(p.source_published_at)} / updated ${claimTime(p.source_modified_at)}`;
+const sourceTag = (p, cls) => PITCH_SOURCES[p.source] ? `<span class="${cls} ${p.source}" title="${PITCH_SOURCES[p.source].title}">${isFollow(p) ? 'FOLLOW · ' : ''}${PITCH_SOURCES[p.source].label}</span>` : '';
+// The follow details as lines: outlet headline, page claims, then each answer.
+const followLines = (p) => [
+  ...(p.source_title ? [`${PITCH_SOURCES[p.source].label}: “${esc(p.source_title)}”`] : []), esc(pageClaims(p)),
+  ...FOLLOW_QUESTIONS.map(([k, q]) => `<b>${esc(q)}</b> ${answered(p[k]) ? esc(p[k]) : '<i>Not answered yet</i>'}`)];
 const sourceLink = (url, source) => webUrl(url) ? `<a href="${esc(webUrl(url))}" target="_blank" rel="noopener noreferrer">${sourceLabel(source)} ↗</a>` : '';
 const CHECKED = { 'needs-checking': 'Needs checking', 'checked-ok': 'Checked OK', 'checked-needs-work': 'Needs work' };
 const dur = (s) => { s = Math.max(0, Number(s) || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -93,6 +104,10 @@ document.head.insertAdjacentHTML('beforeend', `<style id="desk-shared-style">
   .wall-tag.pa { background: #0284c7; }
   .wall-tag.bbc { background: #000; color: #fff; }
   .wall-tag.men { background: #ffd400; color: #000; }
+  .wall-pitch.follow { border-left: 4px solid #f59e0b; }
+  .wall-pitch .follow-page { color: var(--muted); font-size: .78em; margin-top: 3px; }
+  .wall-pitch .follow-a { font-size: .85em; margin-top: 3px; }
+  .wall-pitch .follow-a i { color: var(--muted); }
   .wall-pitch .note { margin-top: .4em; font-size: .85em; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: .3em .5em; }
   .spiked-toggle { width: 100%; text-align: left; font-size: .85em; white-space: normal; color: var(--muted); background: transparent; border: 1px dashed var(--line); border-radius: 8px; padding: .4em .7em; }
   .spiked-list { list-style: none; margin: 0; padding: 0 .3em; display: grid; gap: .25em; font-size: .85em; color: var(--muted); }
@@ -224,9 +239,11 @@ const wallMeta = (n, g) => `${n.producer_name ? `Producer: ${esc(n.producer_name
 // The whole card opens the note dialog, except in Present mode.
 function wallPitch(p, fmtOf) {
   const seen = wall.firstSeen.get(p.id), isNew = seen > 0 && Date.now() - seen < 30000, picked = p.status === 'picked';
-  return `<button class="wall-pitch${picked ? ' picked' : ''}${isNew ? ' new' : ''}" data-action="wall-note" data-id="${esc(p.id)}" ${wall.present ? 'disabled' : `title="${p.ep_note ? 'Edit your EP note' : 'Add an EP note'}"`}>
-    <span class="slug">${isNew ? '<span class="wall-tag new">NEW</span>' : ''}${picked ? '<span class="wall-tag picked">PICKED</span>' : ''}${PITCH_SOURCES[p.source] ? `<span class="wall-tag ${p.source}" title="${PITCH_SOURCES[p.source].title}">${PITCH_SOURCES[p.source].label}</span>` : ''}${esc(p.slug)}${picked && fmtOf[p.story_id] ? ` <span class="pill">${esc(fmtOf[p.story_id])}</span>` : ''}</span>
-    ${p.angle ? `<span class="angle">${esc(p.angle)}</span>` : ''}
+  const follow = isFollow(p);
+  return `<button class="wall-pitch${picked ? ' picked' : ''}${isNew ? ' new' : ''}${follow ? ' follow' : ''}" data-action="wall-note" data-id="${esc(p.id)}" ${wall.present ? 'disabled' : `title="${p.ep_note ? 'Edit your EP note' : 'Add an EP note'}"`}>
+    <span class="slug">${isNew ? '<span class="wall-tag new">NEW</span>' : ''}${picked ? '<span class="wall-tag picked">PICKED</span>' : ''}${sourceTag(p, 'wall-tag')}${esc(p.slug)}${picked && fmtOf[p.story_id] ? ` <span class="pill">${esc(fmtOf[p.story_id])}</span>` : ''}</span>
+    ${p.angle && !follow ? `<span class="angle">${esc(p.angle)}</span>` : ''}
+    ${follow ? followLines(p).map((l, i, all) => `<span class="${i < all.length - FOLLOW_QUESTIONS.length ? 'follow-page' : 'follow-a'}">${l}</span>`).join('') : ''}
     ${p.pitched_by ? `<span class="by">${esc(p.pitched_by)}</span>` : ''}
     ${p.ep_note && !wall.hideNotes ? `<span class="note">EP: ${esc(p.ep_note)}</span>` : ''}
   </button>`;
@@ -468,7 +485,7 @@ function reportSection(n, withScripts) {
   }).join('');
   const confRows = m.pitches.map(({ p, outcome: o, format }, i) => `<tr>
       <td class="num">${i + 1}</td>
-      <td><strong>${esc(p.slug)}</strong>${PITCH_SOURCES[p.source] ? ` <span class="tag">${PITCH_SOURCES[p.source].label}</span>` : ''}${format ? ` <span class="tag">${esc(format)}</span>` : ''}${p.angle ? `<div>${esc(p.angle)}</div>` : ''}${webUrl(p.source_url) ? `<div class="sub">${sourceLink(p.source_url, p.source)}</div>` : ''}</td>
+      <td><strong>${esc(p.slug)}</strong>${PITCH_SOURCES[p.source] ? ` ${sourceTag(p, 'tag')}` : ''}${format ? ` <span class="tag">${esc(format)}</span>` : ''}${p.angle && !isFollow(p) ? `<div>${esc(p.angle)}</div>` : ''}${isFollow(p) ? followLines(p).map((l) => `<div class="sub">${l}</div>`).join('') : ''}${webUrl(p.source_url) ? `<div class="sub">${sourceLink(p.source_url, p.source)}</div>` : ''}</td>
       <td>${esc(p.pitched_by)}</td>
       <td><span class="${o.tone}">${o.label}</span>${o.extra ? esc(o.extra) : ''}${o.time ? ` <span class="sub">${o.time}</span>` : ''}</td>
       <td>${p.ep_note ? esc(p.ep_note) : ''}</td></tr>`).join('');

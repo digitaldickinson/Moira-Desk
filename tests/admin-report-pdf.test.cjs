@@ -24,6 +24,8 @@ const conference = (id, name) => ({
  pitches: [
   { slug: 'Bridge closure', angle: 'Commuters face delays', pitched_by: 'Ana', status: 'picked', story_id: 's1', decided_at: '2026-11-02T09:10:00Z', ep_note: 'Get a council voice', source: 'pa', source_url: 'https://explore.pa.media/story/bridge-1' },
   { slug: 'Cat show', pitched_by: 'Ben', status: 'spiked', spike_reason: 'Too soft', decided_at: '2026-11-02T09:12:00Z' },
+  { slug: 'Power cuts', angle: 'Second night without power', pitched_by: 'Cal', status: 'pitched', source: 'bbc', source_url: 'https://www.bbc.co.uk/news/articles/c8752wyv155xo',
+    source_title: 'Hundreds hit by power cuts', source_published_at: '2026-11-17T08:46:54Z', follow_when: 'Sunday night', follow_origin: '' },
  ],
  stories: [
   { id: 'seg', type: 'segment', slug: 'Headlines', duration: 20 },
@@ -116,6 +118,9 @@ const conference = (id, name) => ({
   assert.ok(doc.indexOf('SCRIPTS') > doc.indexOf('RUNNING ORDER'), 'scripts come after the running order');
   assert.equal(doc.split('"link":"https://explore.pa.media/story/bridge-1"').length - 1, 2, 'PA link in the conference and running order');
   assert.ok(doc.includes('PA story: https://explore.pa.media/story/bridge-1') && doc.includes('"text":"  PA"'), 'PA pitch marked');
+  assert.ok(doc.includes('"text":"  FOLLOW · BBC"') && doc.includes('BBC: “Hundreds hit by power cuts”') && doc.includes('Page claims: published 17 Nov 2026'), 'follow pitch marked with page claims');
+  assert.ok(doc.includes('"text":"When did this actually happen? ","bold":true},"Sunday night"') && doc.includes('{"text":"Not answered yet","italics":true}'), 'follow answers listed');
+  assert.equal(doc.split('Second night without power').length - 1, 1, 'follow angle shown once');
   for (const text of ['EP FEEDBACK', 'The bulletin as a whole', 'Good pace, lead buried.', '“The bridge shuts tonight.”', 'Attribute this.', 'Dropped (removed from the running order)'])
    assert.ok(doc.includes(text), `PDF feedback includes ${text}`);
   assert.ok(doc.indexOf('RUNNING ORDER') < doc.indexOf('EP FEEDBACK') && doc.indexOf('EP FEEDBACK') < doc.indexOf('SCRIPTS'), 'feedback sits between the running order and scripts');

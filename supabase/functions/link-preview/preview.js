@@ -3,7 +3,7 @@
 //
 // Only these sites are fetched. Each redirect is checked against the same
 // list, only the top of the page is read, nothing on the page is run, and
-// only the headline and site name come back.
+// only the headline, summary, the dates the page claims and the site name come back.
 
 export const SITES = {
   bbc: { name: 'BBC News', hosts: ['bbc.co.uk', 'www.bbc.co.uk', 'bbc.com', 'www.bbc.com'] },
@@ -45,9 +45,22 @@ function metaContent(html, names) {
   return '';
 }
 
-// { title, siteName } from the top of a page; title '' if none was found.
+// A date the page claims (meta tag or structured data), as ISO text, or ''.
+function claimedDate(html, metaNames, ldKey) {
+  const raw = metaContent(html, metaNames) || (html.match(new RegExp(`"${ldKey}"\\s*:\\s*"([^"]{8,40})"`)) || [])[1] || '';
+  const t = Date.parse(raw);
+  return Number.isFinite(t) && t > Date.UTC(1990, 0, 1) && t < Date.UTC(2100, 0, 1) ? new Date(t).toISOString() : '';
+}
+
+// { title, description, publishedAt, modifiedAt, siteName } from the top of a
+// page; any of them '' if not found. Dates are what the page claims, which
+// sites often bump: they aren't evidence of when the story happened.
 export function extractPreview(html, site) {
   const siteName = SITES[site]?.name || '';
+  let description = metaContent(html, ['og:description', 'twitter:description', 'description']);
+  if (description.length > 500) description = description.slice(0, 500).replace(/\s+\S*$/, '') + '…';
+  const publishedAt = claimedDate(html, ['article:published_time'], 'datePublished');
+  const modifiedAt = claimedDate(html, ['article:modified_time', 'og:updated_time'], 'dateModified');
   let title = metaContent(html, ['og:title', 'twitter:title']);
   if (!title) {
     title = clean((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]);
@@ -55,7 +68,7 @@ export function extractPreview(html, site) {
     title = title.replace(/\s+[-|–]\s+(?:BBC(?: News| Sport)?|Manchester Evening News)$/i, '');
   }
   if (title.length > 220) title = title.slice(0, 220).replace(/\s+\S*$/, '') + '…';
-  return { title, siteName };
+  return { title, description, publishedAt, modifiedAt, siteName };
 }
 
 async function readTop(res) {
@@ -88,11 +101,13 @@ export async function fetchPreview(url, fetchImpl = fetch) {
   let current = url;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     let res;
+    const request = () => fetchImpl(current, {
+      redirect: 'manual', signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MoiraDesk link preview)', Accept: 'text/html' },
+    });
     try {
-      res = await fetchImpl(current, {
-        redirect: 'manual', signal,
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MoiraDesk link preview)', Accept: 'text/html' },
-      });
+      // One retry for a dropped connection, within the same overall time limit.
+      res = await request().catch((e) => { if (signal.aborted) throw e; return request(); });
     } catch {
       throw new PreviewError(502, "Couldn't reach that page.");
     }

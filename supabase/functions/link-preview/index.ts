@@ -1,16 +1,18 @@
 // supabase/functions/link-preview/index.ts
 //
-// Looks up the headline of a BBC News or Manchester Evening News link pasted
-// into the conference's new-pitch box, so the desk can fill in the angle.
+// Looks up what a BBC News or Manchester Evening News page says about itself
+// (headline, summary, the dates it claims), for a follow pitch in conference.
 //
 // POST JSON: { bulletinId, url }
-//   -> { ok: true, title, siteName, site }   title may be '' if none was found
+//   -> { ok: true, title, description, publishedAt, modifiedAt, siteName, site }
+//      (any of them '' if the page doesn't give it)
 //   -> { ok: false, message }                on refusal or failure
 //
 // Security: the caller must be signed in (Moira:Desk's anonymous session) and
 // a member of the newsroom. Only the sites listed in preview.js are fetched,
 // redirects are re-checked, only the top of the page is read, and only the
-// headline and site name are returned. Nothing is stored.
+// headline, summary, claimed dates and site name are returned. Story text is
+// never read. Nothing is stored here: the desk saves it with the pitch.
 //
 // Deploy: supabase functions deploy link-preview
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are provided by Supabase automatically.

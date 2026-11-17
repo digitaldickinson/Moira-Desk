@@ -84,6 +84,7 @@
         .desk-dialog input:focus, .desk-dialog textarea:focus { outline: 2px solid #2563eb; outline-offset: 1px; }
         .desk-dialog-count { text-align: right; color: #64748b; font-size: 12px; margin-top: 4px; }
         .desk-dialog-error { color: #b91c1c; font-size: 13px; }
+        .desk-dialog-help { margin: -2px 0 6px; color: #64748b; font-size: 13px; }
         .desk-dialog-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid #e2e8f0; }
         .desk-dialog button { border: 0; border-radius: 8px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; background: #f1f5f9; color: #475569; }
         .desk-dialog button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
@@ -231,7 +232,7 @@
                 view: lsGet(LS.view) === 'conference' ? 'conference' : 'rundown',
                 editingPitchId: null, // pitch being edited inline
                 pitchBusy: false,     // waiting on a pitch/producer action
-                wireDraft: null,      // { url, source, fetching } from a story dropped or pasted on the new-pitch box
+                wireDraft: null,      // { url, source, fetching, title, description, publishedAt, modifiedAt } from a story dropped or pasted on the new-pitch box
                 draggedStoryId: null,
                 inlineEditingId: null,
                 editingStoryId: null,
@@ -629,6 +630,9 @@
                 format: row.format || '', pitchedBy: row.pitched_by || '', createdBy: row.created_by || null,
                 status: row.status || 'pitched', spikeReason: row.spike_reason || '', epNote: row.ep_note || '',
                 source: row.source || '', sourceUrl: row.source_url || '',
+                sourceTitle: row.source_title || '', sourceDescription: row.source_description || '',
+                sourcePublishedAt: row.source_published_at || null, sourceModifiedAt: row.source_modified_at || null,
+                followWhen: row.follow_when || '', followOrigin: row.follow_origin || '',
                 storyId: row.story_id || null, position: row.position ?? 0,
                 createdAt: row.created_at || null, decidedAt: row.decided_at || null,
             };
@@ -1235,8 +1239,22 @@
         };
         const LINK_PREVIEW_FUNCTION = 'link-preview';
         const sourceOfUrl = (url) => { try { const h = new URL(url).hostname; return Object.keys(WIRE_SOURCES).find(k => WIRE_SOURCES[k].hosts.test(h)) || null; } catch { return null; } };
+        // BBC News and MEN pitches are follows of someone else's journalism: the
+        // producer answers three questions before one can be picked.
+        const isFollowSource = (source) => !!WIRE_SOURCES[source]?.lookup;
+        const isFollowPitch = (p) => isFollowSource(p?.source);
+        const FOLLOW_QUESTIONS = [
+            { key: 'when', label: 'When did this actually happen?', help: 'Find the event date in the copy, not the page timestamp.', max: 300 },
+            { key: 'origin', label: 'Who is the original source?', help: "Not 'BBC' or 'MEN'. Who did they get it from?", max: 300 },
+            { key: 'angle', label: "What's new, or what's our angle?", help: 'This becomes the brief for whoever writes it.', max: 500 },
+        ];
+        const followAnswers = (p) => ({ when: p.followWhen || '', origin: p.followOrigin || '', angle: p.angle || '' });
+        const followAnswered = (v) => String(v || '').replace(/\s/g, '').length >= 3;
+        const followMissing = (p) => FOLLOW_QUESTIONS.filter(q => !followAnswered(followAnswers(p)[q.key]));
+        const claimTime = (t) => t ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'not given';
+        const pageClaims = (published, modified) => `Page claims: published ${claimTime(published)} / updated ${claimTime(modified)}`;
         const sourceBadge = (source, cls = '') => WIRE_SOURCES[source]
-            ? `<span class="src-badge ${source}${cls ? ` ${cls}` : ''}" title="${WIRE_SOURCES[source].title}">${WIRE_SOURCES[source].label}</span>` : '';
+            ? `<span class="src-badge ${source}${cls ? ` ${cls}` : ''}" title="${isFollowSource(source) ? `${WIRE_SOURCES[source].title}: a follow, with three questions to answer before it's picked` : WIRE_SOURCES[source].title}">${isFollowSource(source) ? 'Follow · ' : ''}${WIRE_SOURCES[source].label}</span>` : '';
         const squash = (s) => String(s || '').replace(/\s+/g, ' ').trim();
         const ownText = (el) => squash([...(el?.childNodes || [])].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join(' '));
         // Text nodes joined with spaces: PA's markup often puts words in separate spans.
@@ -1338,13 +1356,15 @@
                 return;
             }
             const slugEl = document.getElementById('pitch-new-slug'), angleEl = document.getElementById('pitch-new-angle');
-            if (cap.slug || cap.headline) {   // a link on its own keeps whatever's been typed
+            // A BBC/MEN follow keeps the outlet's headline apart from our angle,
+            // and always looks the page up for its headline, summary and dates.
+            const follow = !!(cap.url && isFollowSource(cap.source));
+            if (!follow && (cap.slug || cap.headline)) {   // a link on its own keeps whatever's been typed
                 if (slugEl) slugEl.value = cap.slug;
                 if (angleEl) angleEl.value = cap.headline;
             }
             const draft = cap.url || cap.source ? { url: cap.url, source: cap.source || null } : null;
-            // Look the headline up only when there's no angle yet, so nothing typed is replaced.
-            if (draft && draft.url && WIRE_SOURCES[draft.source]?.lookup && !angleEl?.value.trim()) draft.fetching = true;
+            if (follow) Object.assign(draft, { title: cap.headline || '', fetching: true });
             state.ui.wireDraft = draft;
             render('main');
             if (draft?.fetching) {
@@ -1355,6 +1375,11 @@
             wireNotice(cap.source);
         }
         function wireNotice(source) {
+            if (isFollowSource(source)) {
+                showNotice(WIRE_SOURCES[source].from, 'Add a slug, and your own angle if you have one, then press +. This is a follow: the producer answers three questions before picking it.');
+                document.getElementById('pitch-new-slug')?.focus();
+                return;
+            }
             const slugMissing = !document.getElementById('pitch-new-slug')?.value.trim();
             const missing = [slugMissing && 'a slug', !document.getElementById('pitch-new-angle')?.value.trim() && 'the angle'].filter(Boolean);
             showNotice(WIRE_SOURCES[source]?.from || 'Story captured', missing.length ? `Add ${missing.join(' and ')}, check the rest, then press + to pitch it.` : 'Check the slug and angle, then press + to pitch it.');
@@ -1365,22 +1390,23 @@
             if (error) throw error;
             return data;
         }
-        // Ask the link-preview function for a BBC/MEN headline and put it in the
-        // angle box, unless the student has typed an angle in the meantime.
+        // Ask the link-preview function what a BBC/MEN page says about itself:
+        // headline, summary and the dates it claims. Nothing goes in the form.
         async function fetchWireHeadline(draft) {
-            let title = '';
+            let data = null;
             try {
-                const data = await invokeLinkPreview({ bulletinId: state.currentBulletinId, url: draft.url });
-                if (data?.ok) title = squash(data.title).slice(0, 220);
+                const reply = await invokeLinkPreview({ bulletinId: state.currentBulletinId, url: draft.url });
+                if (reply?.ok) data = reply;
             } catch { /* reported below */ }
             if (state.ui.wireDraft !== draft) return;   // removed, replaced or already pitched
             draft.fetching = false;
-            const angleEl = document.getElementById('pitch-new-angle');
-            const filled = !!(title && angleEl && !angleEl.value.trim());
-            if (filled) angleEl.value = title;
+            if (data) Object.assign(draft, {
+                title: squash(data.title).slice(0, 300) || draft.title, description: squash(data.description).slice(0, 500),
+                publishedAt: data.publishedAt || '', modifiedAt: data.modifiedAt || '',
+            });
             render('main');
-            if (filled) showNotice(WIRE_SOURCES[draft.source]?.from || 'Story captured', 'Headline added as the angle. Check it, add a slug if needed, then press +.');
-            else if (!title) showNotice('No headline found', "The link is attached, but its headline couldn't be fetched. Type the angle, check the slug, then press +.", 'warn');
+            if (data?.title || draft.title) wireNotice(draft.source);
+            else showNotice('No headline found', "The link is attached, but the page's details couldn't be fetched. Add a slug and press +. The producer answers three follow questions before picking it.", 'warn');
         }
         function sourceLinkHtml(url, source, cls = 'text-blue-600 hover:text-blue-800 hover:underline') {
             const safe = safeWebUrl(url);
@@ -1394,6 +1420,7 @@
             if (!await ensureMyName()) return;
             const angleEl = document.getElementById('pitch-new-angle');
             const draft = state.ui.wireDraft;
+            if (draft?.fetching) { showNotice('One moment', 'Still fetching the story details. Press + again in a second.'); return; }
             const ok = await conferenceAction('add_pitch', {
                 p_bulletin_id: state.currentBulletinId,
                 p_slug: slug,
@@ -1401,6 +1428,8 @@
                 p_format: '',
                 p_pitched_by: document.getElementById('pitch-new-by')?.value.trim() || '',
                 ...(draft ? { p_source: WIRE_SOURCES[draft.source] ? draft.source : null, p_source_url: safeWebUrl(draft.url) || null } : {}),
+                ...(draft && isFollowSource(draft.source) ? { p_source_title: draft.title || null, p_source_description: draft.description || null,
+                    p_source_published_at: draft.publishedAt || null, p_source_modified_at: draft.modifiedAt || null } : {}),
             });
             if (ok) {
                 // Ready for the next pitch: keep "pitched by", clear the rest.
@@ -1426,6 +1455,34 @@
                 confirmLabel: 'Spike pitch', input: { label: 'Reason (optional)', value: p?.spikeReason || '', multiline: true, maxLength: 300 } });
             if (reason === null) return;
             await conferenceAction('spike_pitch', { p_pitch_id: id, p_reason: reason });
+        }
+
+        // The follow questions, asked in a dialog: when picking (all three needed)
+        // or to answer/edit them on the card (blanks allowed until it's picked).
+        function askFollowQuestions(p, picking) {
+            const outlet = WIRE_SOURCES[p.source]?.from.replace(/^From (the )?/, '') || 'another outlet';
+            const intro = picking
+                ? `"${p.slug}" follows a ${outlet} story. Agree these as a newsroom before it goes into the running order.`
+                : `"${p.slug}" follows a ${outlet} story.`;
+            const page = `${p.sourceTitle ? `\n\n${outlet}: "${p.sourceTitle}"` : ''}\n${pageClaims(p.sourcePublishedAt, p.sourceModifiedAt)}`;
+            const values = followAnswers(p);
+            return deskDialog({ title: picking ? 'Pick a follow' : 'Follow questions', message: intro + page,
+                confirmLabel: picking ? 'Pick' : 'Save answers',
+                fields: FOLLOW_QUESTIONS.map(q => ({ ...q, value: values[q.key] })), requireAll: picking || p.status === 'picked' });
+        }
+        async function pickFollowPitch(id) {
+            const p = state.pitchesMap[id];
+            if (!p) return;
+            const a = await askFollowQuestions(p, true);
+            if (!a) return;
+            await conferenceAction('pick_pitch', { p_pitch_id: id, p_follow_when: a.when, p_follow_origin: a.origin, p_follow_angle: a.angle });
+        }
+        async function editFollowAnswers(id) {
+            const p = state.pitchesMap[id];
+            if (!p) return;
+            const a = await askFollowQuestions(p, false);
+            if (!a) return;
+            await conferenceAction('set_follow_answers', { p_pitch_id: id, p_when: a.when, p_origin: a.origin, p_angle: a.angle });
         }
 
         async function unpickPitch(id) {
@@ -1536,7 +1593,9 @@
         // Keep it separate from renderModals so background updates cannot erase it.
         let activeDeskDialog = null;
         const deferredDialogRender = new Set();
-        function deskDialog({ title, message, confirmLabel = 'Continue', danger = false, input = null }) {
+        // fields: several short answers, returned as { key: value }. With requireAll,
+        // each needs at least 3 non-space characters (the follow questions).
+        function deskDialog({ title, message, confirmLabel = 'Continue', danger = false, input = null, fields = null, requireAll = false }) {
             if (activeDeskDialog) return Promise.resolve(null);
             const previousFocus = document.activeElement;
             const roomId = state.currentBulletinId, userId = supabaseUser?.id;
@@ -1546,7 +1605,11 @@
             dialog.setAttribute('aria-describedby', 'desk-dialog-message');
             const field = input ? `<div><label for="desk-dialog-input">${escapeHTML(input.label)}</label>
                 ${input.multiline ? '<textarea id="desk-dialog-input"></textarea>' : '<input id="desk-dialog-input" type="text" autocomplete="name">'}
-                <div class="desk-dialog-count"></div><div class="desk-dialog-error" role="alert" hidden></div></div>` : '';
+                <div class="desk-dialog-count"></div><div class="desk-dialog-error" role="alert" hidden></div></div>`
+                : fields ? fields.map((f, i) => `<div><label for="desk-dialog-f${i}">${escapeHTML(f.label)}</label>
+                    ${f.help ? `<p class="desk-dialog-help" id="desk-dialog-f${i}-help">${escapeHTML(f.help)}</p>` : ''}
+                    <input id="desk-dialog-f${i}" data-field="${escapeHTML(f.key)}" type="text" autocomplete="off" spellcheck="true" lang="en-GB"${f.help ? ` aria-describedby="desk-dialog-f${i}-help"` : ''}>
+                    <div class="desk-dialog-error" role="alert" hidden></div></div>`).join('') : '';
             dialog.innerHTML = `<form novalidate>
                 <div class="desk-dialog-head"><h2 id="desk-dialog-title">${escapeHTML(title)}</h2><button type="button" class="desk-dialog-close" data-dialog-cancel aria-label="Close">×</button></div>
                 <div class="desk-dialog-body"><p class="desk-dialog-message" id="desk-dialog-message">${escapeHTML(message)}</p>${field}</div>
@@ -1576,6 +1639,12 @@
                     field.addEventListener('input', () => { count(); dialog.querySelector('.desk-dialog-error').hidden = true; });
                     count();
                 }
+                const multi = fields ? [...dialog.querySelectorAll('[data-field]')] : [];
+                multi.forEach((el, i) => {
+                    el.value = fields[i].value || '';
+                    el.maxLength = fields[i].max || 300;
+                    el.addEventListener('input', () => { el.parentElement.querySelector('.desk-dialog-error').hidden = true; });
+                });
                 dialog.querySelectorAll('[data-dialog-cancel]').forEach(b => b.addEventListener('click', () => finish(null)));
                 dialog.addEventListener('cancel', e => { e.preventDefault(); finish(null); });
                 dialog.addEventListener('keydown', e => e.stopPropagation());
@@ -1585,10 +1654,21 @@
                         const error = dialog.querySelector('.desk-dialog-error');
                         error.textContent = 'Please enter your name.'; error.hidden = false; field.focus(); return;
                     }
+                    if (multi.length) {
+                        const short = requireAll ? multi.filter(el => el.value.replace(/\s/g, '').length < 3) : [];
+                        multi.forEach(el => {
+                            const error = el.parentElement.querySelector('.desk-dialog-error');
+                            error.hidden = !short.includes(el);
+                            error.textContent = error.hidden ? '' : el.value.trim() ? 'Needs at least 3 characters.' : 'Needs an answer.';
+                        });
+                        if (short.length) { short[0].focus(); return; }
+                        finish(Object.fromEntries(multi.map(el => [el.dataset.field, el.value.trim()])));
+                        return;
+                    }
                     finish(field ? field.value : true);
                 });
                 dialog.showModal();
-                (field || dialog.querySelector('[data-dialog-cancel]:not(.desk-dialog-close)')).focus();
+                (field || multi.find(el => !el.value.trim()) || multi[0] || dialog.querySelector('[data-dialog-cancel]:not(.desk-dialog-close)')).focus();
             });
         }
         async function confirmAction(message, options = {}) {
@@ -2298,16 +2378,30 @@
                     <button data-action="unspike-pitch" data-id="${p.id}" ${busy} class="text-xs text-slate-500 hover:text-slate-800 underline px-1">Back in</button>` : '';
             }
             const tone = p.status === 'picked' ? 'border-emerald-200 bg-emerald-50/40' : p.status === 'spiked' ? 'border-slate-200 bg-slate-50 opacity-75' : 'border-slate-200 bg-white';
-            return `<div class="border ${tone} rounded-xl p-3 flex gap-3 items-start" data-pitch-id="${p.id}">
+            const follow = isFollowPitch(p);
+            const canAnswer = follow && p.status !== 'spiked' && (producer || (!!supabaseUser && p.createdBy === supabaseUser.id));
+            const missing = follow ? followMissing(p) : [];
+            const answers = followAnswers(p);
+            const followBlock = follow ? `
+                    <div class="mt-2 text-xs text-slate-500" data-testid="follow-page">${p.sourceTitle ? `<div class="text-slate-600"><span class="font-semibold">${escapeHTML(WIRE_SOURCES[p.source].label)}:</span> “${escapeHTML(p.sourceTitle)}”</div>` : ''}
+                        <div>${escapeHTML(pageClaims(p.sourcePublishedAt, p.sourceModifiedAt))}</div></div>
+                    <dl class="mt-2 grid gap-1 text-sm border-l-2 border-amber-300 pl-3" data-testid="follow-answers">
+                        ${FOLLOW_QUESTIONS.map(q => `<div><dt class="text-[11px] font-semibold text-slate-500">${escapeHTML(q.label)}</dt>
+                            <dd class="${followAnswered(answers[q.key]) ? 'text-slate-800' : 'text-slate-400 italic'}">${followAnswered(answers[q.key]) ? escapeHTML(answers[q.key]) : 'Not answered yet'}</dd></div>`).join('')}
+                    </dl>
+                    ${p.status === 'pitched' && missing.length ? `<div class="mt-1.5 text-xs text-amber-800" data-testid="follow-gate"><i class="fa-solid fa-circle-info mr-1"></i>Can't go in the running order until it has ${missing.length === 3 ? 'all three answers' : `an answer to: ${missing.map(q => q.label.replace(/\?$/, '')).join('; ')}`}.${producer ? ' Pick asks for them.' : ''}</div>` : ''}
+                    ${canAnswer ? `<button data-action="follow-answers" data-id="${p.id}" class="mt-1.5 text-xs font-semibold text-amber-800 hover:text-amber-950 underline">${missing.length === 3 ? 'Answer the follow questions' : 'Edit answers'}</button>` : ''}` : '';
+            return `<div class="border ${tone}${follow ? ' border-l-4 border-l-amber-400' : ''} rounded-xl p-3 flex gap-3 items-start" data-pitch-id="${p.id}"${follow ? ' data-follow="true"' : ''}>
                 <div class="text-slate-400 font-mono text-sm w-6 text-right pt-0.5 shrink-0">${n}</div>
                 <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start gap-2">
                 <div class="flex-1 min-w-0">
                     <div class="font-bold uppercase tracking-wide text-slate-800 ${p.status === 'spiked' ? 'line-through decoration-slate-400' : ''}">${escapeHTML(p.slug)}
                         ${sourceBadge(p.source, 'ml-1.5')}
                         ${story && !producer && story.format ? `<span class="ml-2 align-middle bg-slate-100 border px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-slate-600">${escapeHTML(story.format)}</span>` : ''}</div>
-                    ${p.angle ? `<div class="text-sm text-slate-600 mt-0.5">${escapeHTML(p.angle)}</div>` : ''}
+                    ${p.angle && !follow ? `<div class="text-sm text-slate-600 mt-0.5">${escapeHTML(p.angle)}</div>` : ''}
                     <div class="text-xs text-slate-400 mt-1">${p.pitchedBy ? `Pitched by ${escapeHTML(p.pitchedBy)}` : 'Pitched'}${safeWebUrl(p.sourceUrl) ? ` · ${sourceLinkHtml(p.sourceUrl, p.source)}` : ''}${p.status === 'spiked' && p.spikeReason ? ` · <span class="text-slate-600">Spiked: ${escapeHTML(p.spikeReason)}</span>` : p.status === 'spiked' ? ' · Spiked' : ''}</div>
                     ${story && !producer ? `<div class="text-xs text-blue-700 mt-1">Reporter: ${escapeHTML(story.reporter || 'Unassigned')}</div>` : ''}
+                    ${followBlock}
                     ${p.epNote ? `<div class="mt-2 text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-2.5 py-1.5"><i class="fa-solid fa-chalkboard-user mr-1.5 text-amber-500"></i><b>EP:</b> ${escapeHTML(p.epNote)}</div>` : ''}
                 </div>
                 <div class="flex items-center gap-1 flex-wrap sm:justify-end shrink-0">${actions}</div>
@@ -2348,8 +2442,9 @@
                         <button data-action="add-pitch" ${state.ui.pitchBusy ? 'disabled' : ''} class="sm:col-span-1 btn-primary !py-2.5"><i class="fa-solid fa-plus"></i><span class="sm:hidden ml-2">Add pitch</span></button>
                     </div>
                     ${wire ? `<div class="mt-2 flex items-center gap-2 text-xs text-slate-500 min-w-0" data-testid="wire-draft">
-                            ${sourceBadge(wire.source)}
-                            <span class="truncate min-w-0">${wire.url ? sourceLinkHtml(wire.url, wire.source) : 'From the PA wire (no link came across)'}</span>
+                            ${sourceBadge(wire.source, 'shrink-0')}
+                            ${wire.title ? `<span class="truncate min-w-0 text-slate-700" title="${escapeHTML(wire.title)}">“${escapeHTML(wire.title)}”</span>` : ''}
+                            <span class="${wire.title ? 'shrink-0' : 'truncate min-w-0'}">${wire.url ? sourceLinkHtml(wire.url, wire.source) : 'From the PA wire (no link came across)'}</span>
                             ${wire.fetching ? '<span class="shrink-0 text-slate-400" data-testid="wire-fetching" role="status"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching headline…</span>' : ''}
                             <button data-action="clear-wire-draft" class="ml-auto shrink-0 px-2 py-1 rounded text-slate-400 hover:text-red-600 hover:bg-slate-100" title="Don't attach this link"><i class="fa-solid fa-xmark"></i><span class="sr-only">Remove the link</span></button>
                         </div>`
@@ -2871,7 +2966,8 @@
                 if (action === 'cancel-pitch-edit') { state.ui.editingPitchId = null; render('main'); return true; }
                 if (action === 'save-pitch-edit')   { savePitchEdit(id); return true; }
                 if (action === 'delete-pitch')      { deletePitch(id); return true; }
-                if (action === 'pick-pitch')        { conferenceAction('pick_pitch', { p_pitch_id: id }); return true; }
+                if (action === 'pick-pitch')        { if (isFollowPitch(state.pitchesMap[id])) pickFollowPitch(id); else conferenceAction('pick_pitch', { p_pitch_id: id }); return true; }
+                if (action === 'follow-answers')    { editFollowAnswers(id); return true; }
                 if (action === 'unpick-pitch')      { unpickPitch(id); return true; }
                 if (action === 'spike-pitch')       { spikePitch(id); return true; }
                 if (action === 'unspike-pitch')     { conferenceAction('unspike_pitch', { p_pitch_id: id }); return true; }

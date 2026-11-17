@@ -8,6 +8,7 @@ const db = new PGlite();
 const schema = await readFile(new URL('../supabase-schema.sql', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../supabase/migrations/20261117_pitch_source.sql', import.meta.url), 'utf8');
 const sites = await readFile(new URL('../supabase/migrations/20261117_pitch_source_sites.sql', import.meta.url), 'utf8');
+const follow = await readFile(new URL('../supabase/migrations/20261118_follow_pitches.sql', import.meta.url), 'utf8');
 await db.exec(`
   create role anon; create role authenticated; create role service_role;
   create schema auth;
@@ -26,6 +27,7 @@ await db.exec(migration);
 await db.exec(migration);
 await db.exec(sites);
 await db.exec(sites);
+await db.exec(follow);
 assert.equal((await db.query("select count(*)::int as n from pg_proc where proname = 'add_pitch'")).rows[0].n, 1, 'one add_pitch, no overload');
 
 const admin = '00000000-0000-0000-0000-000000000001';

@@ -21,6 +21,11 @@ const baseline = process.env.MOIRA_BASELINE_SCHEMA
 await db.exec(baseline.replace('create extension if not exists pgcrypto;', ''));
 await db.exec(migration);
 await db.exec(migration);
+// Later pitch migrations, in order, as on a real database: the follow migration
+// replaces the one-argument pick_pitch this older migration recreates.
+for (const f of ['20261117_pitch_source.sql', '20261117_pitch_source_sites.sql', '20261118_follow_pitches.sql']) {
+    await db.exec(await readFile(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8'));
+}
 const admin = '00000000-0000-0000-0000-000000000001';
 const student = '00000000-0000-0000-0000-000000000002';
 const reporter = '00000000-0000-0000-0000-000000000003';

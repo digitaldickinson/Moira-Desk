@@ -49,14 +49,28 @@ test('EP wall and report mark PA, BBC and MEN pitches and link their stories saf
   const html = ctx.t.reportSection({ id: 'r1', name: 'Room', order: ['s1', 'marker-line'], pitches: [pa, plain], feedback: [],
     stories: [{ id: 's1', slug: 'COMMONS TOURISM', format: 'READ', duration: 20, brief: 'Visitor levy', pitched_by: 'Sam', source_url: url }] }, false);
   assert.equal(html.match(/<a href="https:\/\/explore\.pa\.media\/story\/commons-tourism-123" target="_blank" rel="noopener noreferrer">PA story ↗<\/a>/g)?.length, 2, 'conference and running-order rows link the PA story');
-  assert.match(html, /<strong>COMMONS Tourism<\/strong> <span class="tag">PA<\/span>/);
+  assert.match(html, /<strong>COMMONS Tourism<\/strong> <span class="tag pa"[^>]*>PA<\/span>/);
   assert.doesNotMatch(html, /javascript:/);
   const bbcUrl = 'https://www.bbc.co.uk/news/articles/c8752wyv155xo';
   const bbc = { id: 'p3', slug: 'Power cuts', angle: 'Cable incident', status: 'pitched', pitched_by: 'Jo', source: 'bbc', source_url: bbcUrl };
-  assert.match(ctx.t.wallPitch(bbc, {}), /<span class="wall-tag bbc"[^>]*>BBC<\/span>Power cuts/);
-  assert.match(ctx.t.wallPitch({ ...bbc, source: 'men' }, {}), /<span class="wall-tag men"[^>]*>MEN<\/span>/);
+  assert.match(ctx.t.wallPitch(bbc, {}), /<span class="wall-tag bbc"[^>]*>FOLLOW · BBC<\/span>Power cuts/);
+  assert.match(ctx.t.wallPitch({ ...bbc, source: 'men' }, {}), /<span class="wall-tag men"[^>]*>FOLLOW · MEN<\/span>/);
   const bbcHtml = ctx.t.reportSection({ id: 'r2', name: 'Room', order: ['s2', 'marker-line'], pitches: [bbc], feedback: [],
     stories: [{ id: 's2', slug: 'POWER CUTS', format: 'READ', duration: 20, brief: 'Cable incident', source_url: bbcUrl }] }, false);
   assert.equal(bbcHtml.match(/>BBC story ↗<\/a>/g)?.length, 2, 'BBC links labelled in both rows');
-  assert.match(bbcHtml, /<strong>Power cuts<\/strong> <span class="tag">BBC<\/span>/);
+  assert.match(bbcHtml, /<strong>Power cuts<\/strong> <span class="tag bbc"[^>]*>FOLLOW · BBC<\/span>/);
+  // Follow pitches: headline, page claims and the three answers, on the wall and in the report.
+  const fol = { ...bbc, id: 'p4', slug: 'Follow', source_title: 'Hundreds hit by <power> cuts', source_published_at: '2026-11-17T08:46:54Z', source_modified_at: null,
+    follow_when: 'Sunday night', follow_origin: 'ab', angle: 'Second night without power' };
+  const folCard = ctx.t.wallPitch(fol, {});
+  assert.match(folCard, /class="wall-pitch follow"/);
+  assert.match(folCard, /BBC: “Hundreds hit by &lt;power&gt; cuts”/);
+  assert.match(folCard, /Page claims: published 17 Nov 2026, \d\d:46 \/ updated not given/);
+  assert.match(folCard, /When did this actually happen\?<\/b> Sunday night/);
+  assert.match(folCard, /Who is the original source\?<\/b> <i>Not answered yet<\/i>/, '2 characters is not an answer');
+  assert.match(folCard, /What&#39;s new, or what&#39;s our angle\?<\/b> Second night without power/);
+  assert.equal(folCard.match(/Second night without power/g).length, 1, 'angle not repeated');
+  const folHtml = ctx.t.reportSection({ id: 'r3', name: 'Room', order: ['marker-line'], pitches: [fol], feedback: [], stories: [] }, false);
+  assert.match(folHtml, /<div class="sub"><b>When did this actually happen\?<\/b> Sunday night<\/div>/);
+  assert.match(folHtml, /Page claims: published 17 Nov 2026/);
 });

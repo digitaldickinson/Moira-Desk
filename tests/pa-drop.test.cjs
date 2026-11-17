@@ -172,66 +172,63 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     await page.locator('[data-action="clear-wire-draft"]').click();
     console.log('PASS: pasting a PA link attaches it; other pastes behave normally');
 
-    // BBC News / MEN: only the address is pasted, so the headline is looked up.
+    // BBC News / MEN follows: the page is looked up for its headline, summary and
+    // claimed dates, kept apart from our angle. Nothing typed is replaced.
     const BBC_URL = 'https://www.bbc.co.uk/news/articles/c8752wyv155xo';
     const MEN_URL = 'https://www.manchestereveningnews.co.uk/news/greater-manchester-news/m56-traffic-live-drivers-face-34922134';
     const BBC_TITLE = 'Hundreds of properties hit by power cuts after cable incident';
+    const BBC_PAGE = { ok: true, title: BBC_TITLE, description: 'Customers remain without electricity.', publishedAt: '2026-11-17T08:46:54.678Z', modifiedAt: '2026-11-17T09:10:00.000Z', siteName: 'BBC News', site: 'bbc' };
     assert.equal((await page.evaluate(url => testDesk.parseWireTransfer(testDesk.transfer({ 'text/plain': url })), MEN_URL)).source, 'men');
     await page.fill('#pitch-new-slug', ''); await page.fill('#pitch-new-angle', '');
-    await page.evaluate(title => testDesk.holdPreview({ ok: true, title, siteName: 'BBC News', site: 'bbc' }), BBC_TITLE);
+    await page.evaluate(reply => testDesk.holdPreview(reply), BBC_PAGE);
     assert.equal(await page.evaluate(url => testDesk.paste('#pitch-new-angle', { 'text/plain': url }), BBC_URL), true);
     await page.getByTestId('wire-fetching').waitFor();
-    await page.getByTestId('wire-draft').locator('.src-badge.bbc').waitFor();
-    assert.equal(await page.getByTestId('wire-draft').locator('a').innerText().then(t => t.trim()), 'BBC story');
+    const chip = page.getByTestId('wire-draft');
+    assert.equal(await chip.locator('.src-badge.bbc').textContent(), 'Follow · BBC');
     assert.deepEqual(await page.evaluate(() => testDesk.previewCalls), [{ bulletinId: 'bulletin-local', url: BBC_URL }]);
-    await page.evaluate(() => testDesk.releasePreview());
-    await page.getByTestId('wire-fetching').waitFor({ state: 'detached' });
-    assert.equal(await page.inputValue('#pitch-new-angle'), BBC_TITLE);
-    assert.equal(await page.inputValue('#pitch-new-slug'), '');
+    const before = await page.evaluate(() => testDesk.calls.length);
     await page.fill('#pitch-new-slug', 'POWER CUTS');
     await page.locator('[data-action="add-pitch"]').click();
-    await page.waitForFunction(() => testDesk.calls.at(-1).args.p_slug === 'POWER CUTS');
-    assert.deepEqual(await page.evaluate(() => [testDesk.calls.at(-1).args.p_angle, testDesk.calls.at(-1).args.p_source, testDesk.calls.at(-1).args.p_source_url]), [BBC_TITLE, 'bbc', BBC_URL]);
-    console.log('PASS: pasting a BBC link looks up its headline into the angle; + adds it as a BBC pitch');
-
-    // An angle already typed: no lookup, nothing replaced.
-    await page.fill('#pitch-new-angle', 'My own angle');
-    assert.equal(await page.evaluate(url => testDesk.paste('#pitch-new-angle', { 'text/plain': url }), MEN_URL), true);
-    await page.getByTestId('wire-draft').locator('.src-badge.men').waitFor();
-    assert.equal(await page.getByTestId('wire-fetching').count(), 0);
-    assert.equal(await page.evaluate(() => testDesk.previewCalls.length), 1);
-    assert.equal(await page.inputValue('#pitch-new-angle'), 'My own angle');
-    await page.locator('[data-action="clear-wire-draft"]').click();
-
-    // Typed during the lookup: the student's words are kept.
-    await page.fill('#pitch-new-angle', '');
-    await page.evaluate(() => testDesk.holdPreview({ ok: true, title: 'M56 traffic LIVE', site: 'men' }));
-    await page.evaluate(url => testDesk.paste('#pitch-new-slug', { 'text/plain': url }), MEN_URL);
-    await page.getByTestId('wire-fetching').waitFor();
-    await page.fill('#pitch-new-angle', 'Typed meanwhile');
+    await page.getByText('Still fetching the story details').waitFor();
+    assert.equal(await page.evaluate(() => testDesk.calls.length), before, '+ waits for the lookup');
     await page.evaluate(() => testDesk.releasePreview());
     await page.getByTestId('wire-fetching').waitFor({ state: 'detached' });
-    assert.equal(await page.inputValue('#pitch-new-angle'), 'Typed meanwhile');
+    assert.equal(await page.inputValue('#pitch-new-angle'), '', 'the outlet headline is not our angle');
+    assert.match(await chip.innerText(), /Hundreds of properties hit by power cuts/);
+    await page.locator('[data-action="add-pitch"]').click();
+    await page.waitForFunction(n => testDesk.calls.length === n + 1, before);
+    const { p_bulletin_id: _b, ...followArgs } = await page.evaluate(() => testDesk.calls.at(-1).args);
+    assert.deepEqual(followArgs, { p_slug: 'POWER CUTS', p_angle: '', p_format: '', p_pitched_by: 'Sam', p_source: 'bbc', p_source_url: BBC_URL,
+      p_source_title: BBC_TITLE, p_source_description: 'Customers remain without electricity.', p_source_published_at: BBC_PAGE.publishedAt, p_source_modified_at: BBC_PAGE.modifiedAt });
+    console.log('PASS: a BBC link is looked up and added as a follow with headline, summary and claimed dates; + waits for the lookup');
+
+    // A typed angle stays: the lookup still runs but never touches the form.
+    await page.fill('#pitch-new-angle', 'My own angle');
+    await page.evaluate(() => testDesk.holdPreview({ ok: true, title: 'M56 traffic LIVE', site: 'men' }));
+    assert.equal(await page.evaluate(url => testDesk.paste('#pitch-new-angle', { 'text/plain': url }), MEN_URL), true);
+    await page.getByTestId('wire-draft').locator('.src-badge.men').waitFor();
+    await page.fill('#pitch-new-angle', 'My own angle, edited');
+    await page.evaluate(() => testDesk.releasePreview());
+    await page.getByTestId('wire-fetching').waitFor({ state: 'detached' });
+    assert.equal(await page.inputValue('#pitch-new-angle'), 'My own angle, edited');
     await page.locator('[data-action="clear-wire-draft"]').click();
 
     // Link removed during the lookup: the late answer is ignored.
-    await page.fill('#pitch-new-angle', '');
     await page.evaluate(() => testDesk.holdPreview({ ok: true, title: 'Too late', site: 'men' }));
     await page.evaluate(url => testDesk.paste('#pitch-new-slug', { 'text/plain': url }), MEN_URL);
     await page.getByTestId('wire-fetching').waitFor();
     await page.locator('[data-action="clear-wire-draft"]').click();
     await page.evaluate(() => testDesk.releasePreview());
     await page.waitForTimeout(50);
-    assert.equal(await page.inputValue('#pitch-new-angle'), '');
     assert.equal(await page.getByTestId('wire-draft').count(), 0);
 
-    // Lookup fails: the link stays attached and the student is asked to type the angle.
+    // Lookup fails: the link stays attached and can still be pitched.
+    await page.fill('#pitch-new-angle', '');
     await page.evaluate(() => testDesk.holdPreview('fail'));
     await page.evaluate(url => testDesk.paste('#pitch-new-slug', { 'text/plain': url }), BBC_URL);
     await page.evaluate(() => testDesk.releasePreview());
     await page.getByTestId('wire-fetching').waitFor({ state: 'detached' });
     await page.getByText('No headline found').waitFor();
-    assert.equal(await page.inputValue('#pitch-new-angle'), '');
     assert.equal(await page.getByTestId('wire-draft').locator('a').getAttribute('href'), BBC_URL);
     await page.locator('[data-action="clear-wire-draft"]').click();
     console.log('PASS: typed angles are never replaced; late or failed lookups leave the form alone');
@@ -253,6 +250,66 @@ const paHtml = (slug, headline) => `<a href="${PA_URL}"><create-event-brief layo
     assert.equal(await badCard.locator('a').count(), 0);
     assert.equal(await badCard.locator('.src-badge').count(), 0);
     console.log('PASS: pitch cards show the PA badge and link; unsafe stored links are dropped');
+
+    // Follow cards: label, page claims and the three answers on show; the gate
+    // message until answered; Pick asks the questions and refuses short answers.
+    await page.evaluate(url => {
+      const base = { status: 'pitched', conferenceId: 'conference-a', angle: '', pitchedBy: 'Sam', createdBy: 'someone-else', source: 'bbc', sourceUrl: url,
+        sourceTitle: 'Hundreds of properties hit by power cuts', sourcePublishedAt: '2026-11-17T08:46:54.678Z', sourceModifiedAt: null };
+      testDesk.state.pitchesMap = {
+        'f-1': { ...base, id: 'f-1', slug: 'POWER CUTS', position: 0 },
+        'f-2': { ...base, id: 'f-2', slug: 'ANSWERED', position: 1, source: 'men', followWhen: 'Sunday night', followOrigin: 'Electricity North West', angle: 'Second night without power' },
+      };
+      testDesk.render('main');
+    }, BBC_URL);
+    const f1 = page.locator('[data-pitch-id="f-1"]');
+    await f1.waitFor();
+    assert.equal(await f1.getAttribute('data-follow'), 'true');
+    assert.equal(await f1.locator('.src-badge.bbc').textContent(), 'Follow · BBC');
+    assert.match(await f1.getByTestId('follow-page').innerText(), /BBC: “Hundreds of properties hit by power cuts”\s+Page claims: published 17 Nov 2026, \d\d:46 \/ updated not given/);
+    assert.equal(await f1.getByText('Not answered yet').count(), 3);
+    assert.match(await f1.getByTestId('follow-gate').innerText(), /Can't go in the running order until it has all three answers\./);
+    assert.equal(await f1.locator('[data-action="follow-answers"]').count(), 0, 'only the pitcher or producer can answer');
+    const f2 = page.locator('[data-pitch-id="f-2"]');
+    assert.match(await f2.getByTestId('follow-answers').innerText(), /Sunday night[\s\S]*Electricity North West[\s\S]*Second night without power/);
+    assert.equal(await f2.getByTestId('follow-gate').count(), 0);
+    console.log('PASS: follow cards show the label, page claims and answers for the whole room');
+
+    await page.evaluate(() => { testDesk.state.meta.producerUser = 'test-user'; testDesk.render('main'); });
+    await f1.locator('[data-action="pick-pitch"]').waitFor();
+    assert.match(await f1.getByTestId('follow-gate').innerText(), /Pick asks for them\./);
+    const callsBefore = await page.evaluate(() => testDesk.calls.length);
+    await f1.locator('[data-action="pick-pitch"]').click();
+    const dlg = page.locator('dialog.desk-dialog');
+    await dlg.waitFor();
+    assert.match(await dlg.innerText(), /Pick a follow[\s\S]*follows a BBC News story[\s\S]*Page claims: published/);
+    assert.match(await dlg.innerText(), /Find the event date in the copy, not the page timestamp\.[\s\S]*Not 'BBC' or 'MEN'\. Who did they get it from\?/);
+    await dlg.locator('[data-field="when"]').fill('Sunday night');
+    await dlg.locator('[data-field="origin"]').fill(' a b ');
+    await dlg.locator('button[type="submit"]').click();
+    await dlg.getByText('Needs at least 3 characters.').waitFor();
+    await dlg.getByText('Needs an answer.').waitFor();
+    assert.equal(await page.evaluate(() => testDesk.calls.length), callsBefore, 'nothing sent with short answers');
+    await dlg.locator('[data-field="origin"]').fill('Electricity North West');
+    await dlg.locator('[data-field="angle"]').fill('Second night without power');
+    await dlg.locator('button[type="submit"]').click();
+    await page.waitForFunction(n => testDesk.calls.length === n + 1, callsBefore);
+    assert.deepEqual(await page.evaluate(() => testDesk.calls.at(-1)), { name: 'pick_pitch', args: {
+      p_pitch_id: 'f-1', p_follow_when: 'Sunday night', p_follow_origin: 'Electricity North West', p_follow_angle: 'Second night without power' } });
+    // A plain pitch still picks straight away.
+    await page.evaluate(() => { testDesk.state.pitchesMap['t-1'] = { id: 't-1', status: 'pitched', conferenceId: 'conference-a', slug: 'TYPED', angle: 'x', pitchedBy: 'Sam', source: '', sourceUrl: '', position: 2 }; testDesk.render('main'); });
+    await page.locator('[data-pitch-id="t-1"] [data-action="pick-pitch"]').click();
+    await page.waitForFunction(n => testDesk.calls.length === n + 2, callsBefore);
+    assert.deepEqual(await page.evaluate(() => testDesk.calls.at(-1)), { name: 'pick_pitch', args: { p_pitch_id: 't-1' } });
+    // Answers can be saved from the card, blanks allowed before picking.
+    await f1.locator('[data-action="follow-answers"]').click();
+    await dlg.waitFor();
+    await dlg.locator('[data-field="when"]').fill('Sunday');
+    await dlg.locator('button[type="submit"]').click();
+    await page.waitForFunction(n => testDesk.calls.length === n + 3, callsBefore);
+    assert.deepEqual(await page.evaluate(() => testDesk.calls.at(-1)), { name: 'set_follow_answers', args: { p_pitch_id: 'f-1', p_when: 'Sunday', p_origin: '', p_angle: '' } });
+    await page.evaluate(() => { testDesk.state.meta.producerUser = 'producer-user'; testDesk.render('main'); });
+    console.log('PASS: Pick on a follow asks the three questions, refuses short answers and sends them; plain picks unchanged');
 
     // Stray drops elsewhere can't navigate away; text fields still accept drops.
     const stray = await page.evaluate(url => testDesk.drop('h2', { 'text/uri-list': url }), PA_URL);
