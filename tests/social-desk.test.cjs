@@ -18,7 +18,7 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')
     const hook = `
       state.currentBulletinId = 'bulletin-local';
       seedLocalData(); bindGlobalEvents(); render();
-      window.testDesk = { state, render, productionSheetHTML, composeSocialScript, calls: [], confirms: [],
+      window.testDesk = { state, render, productionSheetHTML, composeSocialScript, captionsSRT, calls: [], confirms: [],
         social(kind = 'social') {
           state.localMode = false; supabaseUser = { id: 'me' }; state.myName = 'Sam';
           state.meta.kind = kind; state.meta.formats = ['OOV/CLIP', 'ONCAM']; state.meta.conferenceId = 'c1';
@@ -196,6 +196,36 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')
     assert.match(sheet, /<span class="miss">MISSING<\/span>/);
     assert.doesNotMatch(sheet, /<script/i);
     console.log('PASS: read only while someone else edits; the production sheet shows sources and missing credits');
+
+    // Captions: the words read out, in order, two short lines at most; cues and on-screen text left out.
+    const srt = await page.evaluate(() => {
+      const st = testDesk.state, sec = (says, extra = {}) => ({ title: 'S', says, treatment: 'footage', onscreen: 'ON SCREEN', clip: '', ...extra });
+      Object.assign(st.storiesMap.intro, { sections: [sec('Hello, here is your news.', { treatment: 'presenter' })] });
+      Object.assign(st.storiesMap.rail, { sections: [sec('[FOLLOW-UP NOTE: delete] Trains are cancelled across the north this weekend because of engineering works. Check before you travel.', { clip: '0:06' }), sec('More online.')] });
+      Object.assign(st.storiesMap.outro, { sections: [sec('Bye for now.')] });
+      st.meta.order = ['intro', 'rail', 'outro', 'marker-line', 'extra'];
+      st.storiesMap.extra = { ...st.storiesMap.outro, slug: 'BELOW THE LINE', sections: [sec('Not in the bulletin.')] };
+      return testDesk.captionsSRT();
+    });
+    const cues = srt.split('\r\n\r\n').map(c => c.split('\r\n').filter(Boolean));
+    assert.deepEqual(cues.map(c => c[0]), cues.map((_, i) => String(i + 1)), 'numbered from 1');
+    for (const c of cues) {
+      assert.match(c[1], /^\d\d:\d\d:\d\d,\d{3} --> \d\d:\d\d:\d\d,\d{3}$/);
+      assert.ok(c.length <= 4 && c.slice(2).every(line => line.length <= 32), `two lines of 32 at most: ${JSON.stringify(c)}`);
+    }
+    const text = cues.map(c => c.slice(2).join(' ')).join(' ');
+    assert.equal(text, 'Hello, here is your news. Trains are cancelled across the north this weekend because of engineering works. Check before you travel. More online. Bye for now.');
+    assert.doesNotMatch(srt, /FOLLOW-UP|ON SCREEN|Not in the bulletin/);
+    assert.equal(cues[0][1], '00:00:00,000 --> 00:00:01,667', 'five words at 180 a minute');
+    const after = cues.find(c => c.slice(2).join(' ') === 'More online.'), before = cues[cues.indexOf(after) - 1];
+    const ms = (t) => t.split(/[:,]/).map(Number).reduce((a, n, i) => a + n * [3600000, 60000, 1000, 1][i], 0);
+    assert.equal(ms(after[1].split(' --> ')[0]) - ms(before[1].split(' --> ')[1]), 6000, 'a gap for the clip\'s own sound');
+    // The button downloads it.
+    await page.evaluate(() => testDesk.render('main'));
+    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-action="social-captions"]').click()]);
+    assert.match(download.suggestedFilename(), /^[a-z0-9-]+-captions\.srt$/);
+    assert.equal(fs.readFileSync(await download.path(), 'utf8'), srt);
+    console.log('PASS: captions file: the words read out, in order, in short lines, with gaps for clips');
 
     assert.deepEqual(errors, []);
   } finally {

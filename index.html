@@ -2438,7 +2438,8 @@
                             <div class="flex justify-between text-sm"><span>Scripts checked</span><b class="font-mono">${checked} / ${ids.length}</b></div>${bar(checked, ids.length)}
                             <div class="flex justify-between text-sm"><span>Media ready</span><b class="font-mono">${mediaReady} / ${mediaNeeded}</b></div>${bar(mediaReady, mediaNeeded)}
                             <button data-action="production-sheet" class="w-full mt-1 bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg font-semibold text-sm transition-colors"><i class="fa-solid fa-file-lines mr-2"></i>Production sheet</button>
-                            <p class="text-xs text-slate-400 mt-3">For whoever edits in CapCut or Edits: the order, words, pictures, clips and credits.</p>
+                            <button data-action="social-captions" class="w-full mt-2 bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg font-semibold text-sm transition-colors" title="The words read out, as an .srt captions file. Timings are estimates: line them up in the edit."><i class="fa-solid fa-closed-captioning mr-2"></i>Captions (.srt)</button>
+                            <p class="text-xs text-slate-400 mt-3">For whoever edits in CapCut or Edits: the production sheet has the order, words, pictures, clips and credits; the captions file has the words, with estimated timings to line up in the edit.</p>
                         </div>
                     </div>
                     <section id="social-editor" data-testid="social-editor" class="bg-white border border-slate-200 rounded-xl shadow-sm min-w-0 scroll-mt-4" aria-label="Story">${d ? renderSocialEditor(d) : '<div class="text-center text-slate-400 py-16 px-4">Add a story to start planning.</div>'}</section>
@@ -2740,6 +2741,7 @@
         }
         async function handleSocialAction({ action, id, val }) {
             if (action === 'production-sheet') { printProductionSheet(); return true; }
+            if (action === 'social-captions') { downloadCaptions(); return true; }
             if (!action.startsWith('sd-')) return false;
             if (action === 'sd-select') { selectSocialStory(id); return true; }
             if (action === 'sd-edit') { beginSocialEdit('input[data-sd="slug"]'); return true; }
@@ -2787,6 +2789,72 @@
                 redrawSocialEditor(); return true;
             }
             return true;
+        }
+
+        // ── Captions: the words read out, as an SRT file for the video editor ──
+        // In running order (above END OF PROGRAMME): each section's words, split
+        // into captions of up to two 32-character lines, ending at a sentence
+        // where possible. [Cues] and on-screen text are left out. Timings are
+        // estimates at the social read pace, with a gap for each clip's own
+        // sound, so they need lining up in the edit.
+        const CAPTION_LINE = 32;
+        function captionChunks(text) {
+            const words = String(text || '').replace(/\[[^\]]*\]/g, ' ').split(/\s+/).filter(Boolean);
+            const chunks = [];
+            let cur = [];
+            const len = (ws) => ws.join(' ').length;
+            for (const w of words) {
+                if (cur.length && len([...cur, w]) > CAPTION_LINE * 2) { chunks.push(cur); cur = []; }
+                cur.push(w);
+                if (/[.!?…]["”’')]*$/.test(w) && len(cur) >= CAPTION_LINE * 0.6) { chunks.push(cur); cur = []; }
+            }
+            if (cur.length) chunks.push(cur);
+            return chunks;
+        }
+        // Two lines, as even as possible.
+        function captionLines(ws) {
+            const text = ws.join(' ');
+            if (text.length <= CAPTION_LINE || ws.length < 2) return text;
+            let best = 1, bestLongest = Infinity;
+            for (let i = 1; i < ws.length; i++) {
+                const longest = Math.max(ws.slice(0, i).join(' ').length, ws.slice(i).join(' ').length);
+                if (longest < bestLongest) { bestLongest = longest; best = i; }
+            }
+            return `${ws.slice(0, best).join(' ')}\n${ws.slice(best).join(' ')}`;
+        }
+        function srtTime(ms) {
+            const p = (n, w = 2) => String(Math.floor(n)).padStart(w, '0');
+            return `${p(ms / 3600000)}:${p(ms / 60000 % 60)}:${p(ms / 1000 % 60)},${p(ms % 1000, 3)}`;
+        }
+        function captionsSRT() {
+            const fullOrder = state.meta.order || [];
+            const endIdx = fullOrder.indexOf('marker-line');
+            const ids = (endIdx < 0 ? fullOrder : fullOrder.slice(0, endIdx)).filter(id => state.storiesMap[id] && state.storiesMap[id].type !== 'segment');
+            const cues = [];
+            let at = 0;
+            for (const id of ids) {
+                for (const x of storySections(state.storiesMap[id])) {
+                    for (const chunk of captionChunks(x.says)) {
+                        const length = Math.max(1000, Math.round(chunk.length * 60000 / SOCIAL_WPM));
+                        cues.push(`${cues.length + 1}\r\n${srtTime(at)} --> ${srtTime(at + length)}\r\n${captionLines(chunk).replace(/\n/g, '\r\n')}\r\n`);
+                        at += length;
+                    }
+                    at += clipSeconds(x.clip) * 1000;   // the clip's own sound: no caption from the script
+                }
+            }
+            return cues.join('\r\n');
+        }
+        function downloadCaptions() {
+            const srt = captionsSRT();
+            if (!srt) { showNotice('Captions', 'There are no words to caption yet.', 'warn'); return; }
+            const name = (state.roomDisplayName || 'bulletin').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'bulletin';
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(new Blob([srt], { type: 'application/x-subrip' }));
+            link.download = `${name}-captions.srt`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
         }
 
         // ── Production sheet: everything the editor needs, printed or saved as PDF ──

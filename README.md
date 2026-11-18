@@ -76,7 +76,7 @@ The page has three columns: the running order, the story you've selected, and it
 
 **Media & credits** asks where the pictures come from (PA, your own footage, or elsewhere), a link, what it shows and the on-screen credit. For PA, tick **Newsroom Ready** and **No embargo** once you've checked them in PA Explore. Dual footage has two shots, each with its own source and credit. A story shows **Media ready** once everything is filled in. **Review** sets the editorial check and shows the script the desk saves from your sections: cues in [square brackets] appear on the prompter, and the on-screen text is kept off it.
 
-**Production sheet** prints, or saves as a PDF, everything the person editing in CapCut or Edits needs: the order, each section's words and picture, clip lengths, on-screen text, sources and credits, with any missing credit flagged.
+**Production sheet** prints, or saves as a PDF, everything the person editing in CapCut or Edits needs: the order, each section's words and picture, clip lengths, on-screen text, sources and credits, with any missing credit flagged. **Captions (.srt)** downloads the words read out as a captions file to import into the video editor. It leaves out the [cues] and on-screen text, and its timings are estimates (with a gap for each clip's own sound), so line the captions up with the video in the edit.
 
 ## For tutors and executive producers
 
