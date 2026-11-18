@@ -18,7 +18,7 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')
     const hook = `
       state.currentBulletinId = 'bulletin-local';
       seedLocalData(); bindGlobalEvents(); render();
-      window.testDesk = { state, render, productionSheetHTML, composeSocialScript, calls: [],
+      window.testDesk = { state, render, productionSheetHTML, composeSocialScript, calls: [], confirms: [],
         social(kind = 'social') {
           state.localMode = false; supabaseUser = { id: 'me' }; state.myName = 'Sam';
           state.meta.kind = kind; state.meta.formats = ['OOV/CLIP', 'ONCAM']; state.meta.conferenceId = 'c1';
@@ -36,7 +36,7 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')
           state.ui.view = 'rundown'; render();
         },
       };
-      confirmAction = async () => true;
+      confirmAction = async (msg) => { testDesk.confirms.push(msg); return true; };
     `;
     const html = source.replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*>\s*<\/script>/g, '')
       .replace(/import \{ createClient \} from "[^"]+";/, 'const createClient = () => { throw Error("No live backend in tests"); };')
@@ -87,11 +87,23 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')
     assert.deepEqual(await page.evaluate(() => testDesk.state.meta.order), ['intro', 'outro', 'rail', 'marker-line']);
     console.log('PASS: reordering by arrows and drag; the end zone keeps stories in the bulletin');
 
-    // The editor: a picked story starts with one section from its script.
-    await page.locator('.social-card[data-story-id="rail"] [data-action="edit-story"]').click();
+    // Three columns, no dialog: selecting a story shows it, read only, beside the running order.
+    await page.locator('.social-card[data-story-id="rail"] [data-action="sd-select"]').click();
+    await frame();
     const editor = page.getByTestId('social-editor');
-    await editor.waitFor();
+    assert.equal(await page.locator('#modal-container > *').count(), 0, 'no dialog');
+    assert.equal(await page.locator('.social-card[data-story-id="rail"] [data-action="sd-select"]').getAttribute('aria-pressed'), 'true');
     assert.equal(await editor.locator('textarea[data-sd="says"]').inputValue(), 'Rail passengers face disruption.');
+    assert.equal(await editor.locator('textarea[data-sd="says"]').getAttribute('readonly'), '');
+    assert.equal(await page.evaluate(() => testDesk.calls.filter(c => c.name === 'lockStory').length), 0, 'looking takes no lock');
+    // Clicking into a field starts editing: the story is locked and the field stays focused.
+    await editor.locator('textarea[data-sd="says"]').click();
+    await page.waitForFunction(() => testDesk.state.ui.editingStoryId === 'rail');
+    await frame(); await frame();
+    assert.deepEqual((await calls('lockStory')).map(a => a[0]), ['rail']);
+    assert.equal(await editor.locator('textarea[data-sd="says"]').getAttribute('readonly'), null);
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.sd), 'says');
+    // The editor: a picked story starts with one section from its script.
     assert.match(await editor.innerText(), /Brief: Weekend engineering works/);
     assert.match(await editor.locator('label', { hasText: 'Voiceover' }).first().innerText(), /Voiceover/);
     // Typing updates timings and the picture plan in place.
@@ -141,17 +153,39 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')
     assert.equal(saved.script, await page.evaluate(s => testDesk.composeSocialScript(s), saved.sections));
     assert.match(saved.script, /\[CLIP:0:06 Story\]/);
     assert.equal(saved.duration, 10 + 6 + 2);
-    await editor.waitFor({ state: 'detached' });
+    await frame();
     assert.match(await page.locator('.social-card[data-story-id="rail"]').innerText(), /Media ready/);
+    assert.equal(await editor.locator('[data-action="sd-edit"]').count(), 1, 'back to read only after saving');
+    assert.match(await page.locator('#sd-script').innerText(), /Rail passengers face more/, 'shows what was saved');
+    await editor.locator('[data-action="sd-tab"][data-val="words"]').click();
+    await frame();
     console.log('PASS: saving stores sections, shots, the composed script and the estimate');
 
-    // Someone else editing: read only.
+    // Leaving a story with unsaved changes asks first, then lets it go.
+    await editor.locator('[data-action="sd-edit"]').click();
+    await page.waitForFunction(() => testDesk.state.ui.editingStoryId === 'rail');
+    await frame(); await frame();
+    await editor.locator('input[data-sd="onscreen"]').first().fill('Changed my mind');
+    await page.locator('.social-card[data-story-id="outro"] [data-action="sd-select"]').click();
+    await page.waitForFunction(() => testDesk.state.ui.socialSelected === 'outro');
+    assert.equal((await page.evaluate(() => testDesk.confirms)).filter(m => /haven't saved/.test(m)).length, 1);
+    assert.equal(await page.evaluate(() => testDesk.state.ui.editingStoryId), null);
+    assert.ok((await calls('unlockStory')).some(a => a[0] === 'rail'));
+    assert.equal(await page.evaluate(() => testDesk.state.storiesMap.rail.sections[0].onscreen), 'Check before you travel', 'unsaved change not kept');
+    console.log('PASS: three columns, no dialog; clicking a field starts editing; leaving unsaved changes asks first');
+
+    // Someone else editing: read only, with their name; clicking a field offers the take-over.
     await page.evaluate(() => Object.assign(testDesk.state.storiesMap.intro, { lockedBySession: 'other/tab', lockedByName: 'Priya', lockedAt: Date.now() }));
-    await page.evaluate(() => { testDesk.state.ui.editingStoryId = 'intro'; testDesk.render('modal'); });
-    await editor.waitFor();
-    assert.equal(await editor.locator('textarea[data-sd="says"]').isDisabled(), true);
-    assert.equal(await editor.locator('[data-action="sd-save"]').count(), 0);
-    await page.evaluate(() => { testDesk.state.ui.editingStoryId = null; testDesk.render('modal'); });
+    await page.locator('.social-card[data-story-id="intro"] [data-action="sd-select"]').click();
+    await frame();
+    assert.match(await editor.innerText(), /Priya/);
+    assert.equal(await editor.locator('[data-action="sd-edit"], [data-action="sd-save"]').count(), 0);
+    await editor.locator('textarea[data-sd="says"]').click();
+    await frame(); await frame();
+    assert.equal(await editor.locator('textarea[data-sd="says"]').getAttribute('readonly'), '', 'still read only');
+    assert.equal(await editor.locator('#takeover-btn').count(), 1);
+    await editor.locator('[data-action="cancel-edit"]').click();
+    await frame();
 
     // The production sheet lists the shots and flags a missing credit.
     await page.evaluate(() => Object.assign(testDesk.state.storiesMap.outro, { sections: [{ title: 'Sign-off', says: 'Bye.', treatment: 'graphic', onscreen: '', clip: '' }],

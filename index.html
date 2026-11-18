@@ -262,7 +262,8 @@
                 inlineEditingId: null,
                 editingStoryId: null,
                 pendingConflict: null,
-                socialDraft: null,      // the social story editor's unsaved draft
+                socialDraft: null,      // the social story editor's draft (unsaved while editing)
+                socialSelected: null,   // the story shown in the social editor
                 pendingScrollToStoryId: null,
                 isSettingsModalOpen: false,
                 settingsTab: 'editorial',
@@ -1054,6 +1055,7 @@
             state.storiesMap[newId] = newStory;
             insertStoryIntoOrder(newId);
             state.ui.pendingScrollToStoryId = newId;
+            if (isSocialRoom() && !state.ui.editingStoryId) state.ui.socialSelected = newId;
             render('main');
             try { await DB.createStory(newId, newStory); }
             catch (e) { showError('Could not save new story: ' + DB.errorMessage(e)); }
@@ -2362,10 +2364,21 @@
         }
 
         // ── Social running order ──
+        // Three columns: the running order, the selected story, its picture plan.
+        // Selecting a story shows it; editing it (click a field, or Edit) takes
+        // the story's lock, as the TV editor does, until Save or Cancel.
+        const socialIds = () => (state.meta.order || []).filter(id => id !== 'marker-line' && state.storiesMap[id] && state.storiesMap[id].type !== 'segment');
+        function socialSelectedId() {
+            const ids = socialIds();
+            if (state.ui.editingStoryId && ids.includes(state.ui.editingStoryId)) state.ui.socialSelected = state.ui.editingStoryId;
+            if (!ids.includes(state.ui.socialSelected)) state.ui.socialSelected = ids[0] || null;
+            return state.ui.socialSelected;
+        }
+        const socialEditing = (id) => !!id && state.ui.editingStoryId === id && !isLockedByOther(state.storiesMap[id]);
         function renderSocialRundown() {
             const fullOrder = state.meta.order || [];
             const endIdx = fullOrder.indexOf('marker-line');
-            const ids = fullOrder.filter(id => id !== 'marker-line' && state.storiesMap[id] && state.storiesMap[id].type !== 'segment');
+            const ids = socialIds(), selected = socialSelectedId();
             let total = 0, checked = 0, mediaNeeded = 0, mediaReady = 0, num = 0;
             const cards = ids.map((id, i) => {
                 const s = state.storiesMap[id];
@@ -2374,28 +2387,30 @@
                 if (s.completed === 'checked-ok') checked++;
                 if (!media.na) { mediaNeeded++; if (media.ready) mediaReady++; }
                 const label = isOncam(s.format) ? '' : ++num;
-                const locked = isLockedByOther(s), blocked = lockState(s) === 'other';
+                const locked = isLockedByOther(s), blocked = lockState(s) === 'other', on = id === selected;
                 const mediaText = media.na ? '' : media.ready ? ' · Media ready' : ' · <span class="text-amber-700 font-semibold">Media needed</span>';
                 const lockText = blocked ? ` · <span class="text-red-600 font-bold"><i class="fa-solid fa-lock mr-1"></i>${escapeHTML(s.lockedByName)}</span>`
-                    : locked ? ' · <span class="text-blue-600 font-bold"><i class="fa-solid fa-lock mr-1"></i>You, other tab</span>' : '';
-                const checkText = { 'checked-ok': 'Script checked', 'checked-needs-work': 'Needs work', 'needs-checking': 'Needs checking' }[s.completed] || 'Script draft';
-                return `<div class="social-card flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2 py-2 shadow-sm hover:border-slate-300 transition-colors" data-story-id="${id}" draggable="${locked ? 'false' : 'true'}">
-                    <div class="flex flex-col items-center w-6 shrink-0 ${locked ? 'text-slate-200' : 'text-slate-400 cursor-grab active:cursor-grabbing'}" title="${locked ? 'Being edited' : 'Drag to reorder'}">
+                    : locked ? ' · <span class="text-blue-600 font-bold"><i class="fa-solid fa-lock mr-1"></i>You, other tab</span>'
+                    : socialEditing(id) ? ' · <span class="text-blue-600 font-bold"><i class="fa-solid fa-pen mr-1"></i>Editing</span>' : '';
+                const checkText = { 'checked-ok': 'Checked', 'checked-needs-work': 'Needs work', 'needs-checking': 'Needs checking' }[s.completed] || 'Draft';
+                return `<div class="social-card flex items-center gap-1.5 border rounded-xl px-1.5 py-1.5 transition-colors ${on ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'}" data-story-id="${id}" draggable="${locked ? 'false' : 'true'}">
+                    <div class="flex flex-col items-center w-5 shrink-0 ${locked ? 'text-slate-200' : 'text-slate-400 cursor-grab active:cursor-grabbing'}" title="${locked ? 'Being edited' : 'Drag to reorder'}">
                         <button data-action="move-story-up" data-id="${id}" class="text-[10px] leading-none py-0.5 hover:text-blue-600 disabled:opacity-30" ${i === 0 || locked ? 'disabled' : ''} aria-label="Move ${escapeHTML(s.slug)} up">▲</button>
                         <i class="fa-solid fa-grip-vertical text-xs" aria-hidden="true"></i>
                         <button data-action="move-story-down" data-id="${id}" class="text-[10px] leading-none py-0.5 hover:text-blue-600 disabled:opacity-30" ${i === ids.length - 1 || locked ? 'disabled' : ''} aria-label="Move ${escapeHTML(s.slug)} down">▼</button>
                     </div>
-                    <button data-action="toggle-complete" data-id="${id}" class="text-lg shrink-0 ${checkColour(s.completed)}" title="${checkTitle(s.completed)}" aria-label="${checkTitle(s.completed)}"><i class="fa-solid fa-circle"></i></button>
-                    <button data-action="edit-story" data-id="${id}" class="flex-1 min-w-0 text-left" ${blocked ? 'disabled' : ''} title="${blocked ? `Being edited by ${escapeHTML(s.lockedByName)}` : 'Open'}">
-                        <span class="block font-bold uppercase text-sm tracking-wide text-slate-800 truncate">${label ? `<span class="text-slate-400 font-mono mr-1.5">${label}</span>` : ''}${escapeHTML(s.slug || 'Untitled')}${s.brief ? ` <i class="fa-solid fa-lightbulb ml-1 text-violet-400 text-xs" title="${escapeHTML(`Pitch: ${s.brief}`)}"></i>` : ''}</span>
-                        <span class="block text-xs text-slate-500 truncate">${checkText}${mediaText}${lockText}</span>
+                    <button data-action="toggle-complete" data-id="${id}" class="text-base shrink-0 ${checkColour(s.completed)}" title="${checkTitle(s.completed)}" aria-label="${checkTitle(s.completed)}"><i class="fa-solid fa-circle"></i></button>
+                    <button data-action="sd-select" data-id="${id}" aria-pressed="${on}" class="flex-1 min-w-0 text-left" title="Show this story">
+                        <span class="block font-bold uppercase text-[13px] tracking-wide text-slate-800 truncate">${label ? `<span class="text-slate-400 font-mono mr-1">${label}</span>` : ''}${escapeHTML(s.slug || 'Untitled')}</span>
+                        <span class="block text-[11px] text-slate-500 truncate">${checkText}${mediaText}${lockText}</span>
                     </button>
-                    <div class="text-right shrink-0 font-mono text-xs"><div class="text-slate-800">${formatDuration(s.duration)}</div><div class="text-violet-700 font-bold">${escapeHTML(s.format)}</div></div>
-                    <button data-action="delete-story" data-id="${id}" class="p-1.5 text-slate-300 hover:text-red-600 shrink-0" title="Delete from the running order" aria-label="Delete ${escapeHTML(s.slug)}"><i class="fa-solid fa-trash text-xs"></i></button>
+                    <div class="text-right shrink-0 font-mono text-[11px] leading-tight"><div class="text-slate-800">${formatDuration(s.duration)}</div><div class="text-violet-700 font-bold">${escapeHTML(s.format)}</div></div>
+                    <button data-action="delete-story" data-id="${id}" class="p-1 text-slate-300 hover:text-red-600 shrink-0" title="Delete from the running order" aria-label="Delete ${escapeHTML(s.slug)}"><i class="fa-solid fa-trash text-xs"></i></button>
                 </div>`;
             }).join('');
             const bar = (a, b) => `<div class="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1 mb-3"><div class="h-full bg-emerald-500" style="width:${b ? Math.round(a / b * 100) : 0}%"></div></div>`;
-            return `<div class="max-w-6xl mx-auto p-4 md:p-6 pb-24">
+            const d = selected ? socialDraft() : null;
+            return `<div class="max-w-[100rem] mx-auto p-4 md:p-6 pb-24">
                 <div class="flex flex-wrap gap-3 items-center justify-between mb-4">
                     <h2 class="text-3xl font-bold text-slate-800"><i class="fa-solid fa-mobile-screen-button mr-3 text-blue-500"></i>Social bulletin</h2>
                     <div class="flex flex-wrap gap-2 items-center">
@@ -2412,18 +2427,22 @@
                     </div>
                     <button data-action="clear-trash" class="ml-auto text-amber-400 hover:text-amber-700 text-xs font-bold px-2 py-1 rounded transition-colors">Clear</button>
                 </div>` : ''}
-                <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem] items-start">
-                    <div class="flex flex-col gap-2" data-testid="social-rundown">
-                        ${cards || '<div class="text-center text-slate-400 py-10 bg-white border border-dashed border-slate-300 rounded-xl">The running order is empty. Add a story, or pick one at conference.</div>'}
-                        <div data-story-id="marker-line" class="h-10 rounded-xl border border-dashed border-transparent text-xs text-slate-400 flex items-center justify-center" aria-hidden="true">${ids.length ? 'Drop here to move to the end' : ''}</div>
+                <div class="grid gap-4 grid-cols-[minmax(0,1fr)] lg:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[18rem_minmax(0,1fr)_19rem] items-start">
+                    <div class="lg:row-span-2 xl:row-span-1">
+                        <div class="flex flex-col gap-1.5" data-testid="social-rundown">
+                            ${cards || '<div class="text-center text-sm text-slate-400 py-8 px-3 bg-white border border-dashed border-slate-300 rounded-xl">The running order is empty. Add a story, or pick one at conference.</div>'}
+                            <div data-story-id="marker-line" class="h-9 rounded-xl text-[11px] text-slate-400 flex items-center justify-center" aria-hidden="true">${ids.length ? 'Drop here to move to the end' : ''}</div>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                            <h3 class="font-bold text-slate-800 mb-3">Production readiness</h3>
+                            <div class="flex justify-between text-sm"><span>Scripts checked</span><b class="font-mono">${checked} / ${ids.length}</b></div>${bar(checked, ids.length)}
+                            <div class="flex justify-between text-sm"><span>Media ready</span><b class="font-mono">${mediaReady} / ${mediaNeeded}</b></div>${bar(mediaReady, mediaNeeded)}
+                            <button data-action="production-sheet" class="w-full mt-1 bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg font-semibold text-sm transition-colors"><i class="fa-solid fa-file-lines mr-2"></i>Production sheet</button>
+                            <p class="text-xs text-slate-400 mt-3">For whoever edits in CapCut or Edits: the order, words, pictures, clips and credits.</p>
+                        </div>
                     </div>
-                    <aside class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-                        <h3 class="font-bold text-slate-800 mb-3">Production readiness</h3>
-                        <div class="flex justify-between text-sm"><span>Scripts checked</span><b class="font-mono">${checked} / ${ids.length}</b></div>${bar(checked, ids.length)}
-                        <div class="flex justify-between text-sm"><span>Media ready</span><b class="font-mono">${mediaReady} / ${mediaNeeded}</b></div>${bar(mediaReady, mediaNeeded)}
-                        <button data-action="production-sheet" class="w-full mt-1 bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg font-semibold text-sm transition-colors"><i class="fa-solid fa-file-lines mr-2"></i>Production sheet</button>
-                        <p class="text-xs text-slate-400 mt-3">For whoever edits in CapCut or Edits: the order, words, pictures, clips and credits.</p>
-                    </aside>
+                    <section id="social-editor" data-testid="social-editor" class="bg-white border border-slate-200 rounded-xl shadow-sm min-w-0 scroll-mt-4" aria-label="Story">${d ? renderSocialEditor(d) : '<div class="text-center text-slate-400 py-16 px-4">Add a story to start planning.</div>'}</section>
+                    <aside id="sd-plan" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 min-w-0 lg:col-start-2 xl:col-start-auto xl:sticky xl:top-4" aria-label="Picture plan">${d ? socialPlanHTML(d, !socialEditing(d.storyId)) : ''}</aside>
                 </div>
             </div>`;
         }
@@ -2437,14 +2456,18 @@
                 reporter: story.reporter || '', presenter: story.presenter || '', sections, shots: storyShots(story),
                 tab: prev?.tab || 'words', sec: Math.min(prev?.sec || 0, sections.length - 1) };
         }
+        // While you're editing, the draft is yours; otherwise it shows the saved
+        // story, including anyone else's changes as they arrive.
         function socialDraft() {
-            const id = state.ui.editingStoryId, story = id && state.storiesMap[id];
+            const id = socialSelectedId(), story = id && state.storiesMap[id];
             if (!story) { state.ui.socialDraft = null; return null; }
             let d = state.ui.socialDraft;
-            // Someone else is editing it: show their saved version as it arrives.
-            if (!d || d.storyId !== id || isLockedByOther(story)) d = state.ui.socialDraft = socialDraftFrom(id, story, d?.storyId === id ? d : null);
+            const same = d?.storyId === id ? d : null;
+            if (!same || !socialEditing(id)) d = state.ui.socialDraft = socialDraftFrom(id, story, same);
             return d;
         }
+        const draftKey = (d) => JSON.stringify([d.slug, d.format, d.reporter, d.presenter, d.sections, d.shots]);
+        const socialDirty = (d) => !!d && !!state.storiesMap[d.storyId] && draftKey(d) !== draftKey(socialDraftFrom(d.storyId, state.storiesMap[d.storyId]));
         const socialSeconds = (d) => d.sections.reduce((a, x) => a + sectionSeconds(x), 0);
         function socialEstHTML(d) {
             const w = d.sections.reduce((a, x) => a + socialWords(x.says), 0);
@@ -2456,14 +2479,14 @@
         const socialLabel = (text, hint = '') => `<span class="text-xs font-bold text-slate-600">${text}</span>${hint ? ` <span class="text-xs text-slate-400">· ${hint}</span>` : ''}`;
         const socialInput = 'w-full max-w-full min-w-0 border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 bg-white disabled:bg-slate-50';
         function socialWordsTab(d, locked) {
-            const dis = locked ? 'disabled' : '';
+            const dis = locked ? 'disabled' : '', ro = locked ? 'readonly' : '';
             const media = socialMedia(d.sections, d.shots);
             return d.sections.map((x, i) => {
                 const vo = SOCIAL_TREATMENTS[x.treatment].vo;
                 return `<div class="sd-section border rounded-xl mb-3 ${i === d.sec ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-200'}" data-sec-i="${i}">
                     <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border-b border-slate-200 rounded-t-xl">
-                        <span class="font-mono font-bold text-slate-400 text-xs">${String(i + 1).padStart(2, '0')}</span>
-                        <input data-sd="title" data-i="${i}" value="${escapeHTML(x.title)}" maxlength="60" placeholder="Section name" aria-label="Section ${i + 1} name" class="flex-1 min-w-0 font-semibold bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded px-1.5 py-0.5 outline-none" ${dis}>
+                        <button type="button" data-action="sd-sec" data-id="${i}" class="font-mono font-bold text-slate-400 hover:text-blue-600 text-xs" title="Show in the picture plan" aria-label="Show section ${i + 1} in the picture plan">${String(i + 1).padStart(2, '0')}</button>
+                        <input data-sd="title" data-i="${i}" value="${escapeHTML(x.title)}" maxlength="60" placeholder="Section name" aria-label="Section ${i + 1} name" class="flex-1 min-w-0 font-semibold bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded px-1.5 py-0.5 outline-none" ${ro}>
                         <span id="sd-t-${i}" class="font-mono text-xs text-slate-500">${formatDuration(sectionSeconds(x))}</span>
                         ${locked ? '' : `<button type="button" data-action="sd-up" data-id="${i}" class="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-30" ${i === 0 ? 'disabled' : ''} aria-label="Move section ${i + 1} up"><i class="fa-solid fa-arrow-up text-xs"></i></button>
                         <button type="button" data-action="sd-down" data-id="${i}" class="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-30" ${i === d.sections.length - 1 ? 'disabled' : ''} aria-label="Move section ${i + 1} down"><i class="fa-solid fa-arrow-down text-xs"></i></button>
@@ -2471,13 +2494,13 @@
                     </div>
                     <div class="p-3 grid gap-3 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
                         <label class="sm:col-span-2 block min-w-0">${vo ? socialLabel('Voiceover', 'read out of shot; goes to the prompter') : socialLabel('Presenter says', 'to camera; goes to the prompter')}
-                            <textarea data-sd="says" data-i="${i}" rows="3" spellcheck="true" lang="en-GB" class="${socialInput} mt-1 text-base resize-y" ${dis}>${escapeHTML(x.says)}</textarea></label>
+                            <textarea data-sd="says" data-i="${i}" rows="3" spellcheck="true" lang="en-GB" class="${socialInput} mt-1 text-base resize-y" ${ro}>${escapeHTML(x.says)}</textarea></label>
                         <label class="block min-w-0">${socialLabel('Picture treatment')}
                             <select data-sd="treatment" data-i="${i}" class="${socialInput} mt-1" ${dis}>${Object.entries(SOCIAL_TREATMENTS).map(([k, v]) => `<option value="${k}" ${k === x.treatment ? 'selected' : ''}>${escapeHTML(v.label)}</option>`).join('')}</select></label>
                         <label class="block min-w-0">${socialLabel('On-screen text', 'burned-in caption')}
-                            <input data-sd="onscreen" data-i="${i}" value="${escapeHTML(x.onscreen)}" maxlength="120" placeholder="e.g. Have your say" class="${socialInput} mt-1" ${dis}></label>
+                            <input data-sd="onscreen" data-i="${i}" value="${escapeHTML(x.onscreen)}" maxlength="120" placeholder="e.g. Have your say" class="${socialInput} mt-1" ${ro}></label>
                         <label class="block min-w-0">${socialLabel('Clip with sound', 'm:ss, after the words; blank if none')}
-                            <input data-sd="clip" data-i="${i}" value="${escapeHTML(x.clip)}" maxlength="8" placeholder="e.g. 0:06" inputmode="numeric" class="${socialInput} mt-1 font-mono" ${dis}></label>
+                            <input data-sd="clip" data-i="${i}" value="${escapeHTML(x.clip)}" maxlength="8" placeholder="e.g. 0:06" inputmode="numeric" class="${socialInput} mt-1 font-mono" ${ro}></label>
                     </div>
                 </div>`;
             }).join('') + (locked ? '' : `<button type="button" data-action="sd-add-sec" class="w-full border border-dashed border-slate-300 rounded-xl py-2 text-blue-600 font-semibold hover:bg-blue-50"><i class="fa-solid fa-plus mr-1.5"></i>Add section</button>`)
@@ -2490,7 +2513,7 @@
                    <button type="button" data-action="sd-tab" data-val="media" class="text-xs text-blue-600 underline ml-1">Media &amp; credits</button>`;
         }
         function socialShotHTML(k, m, n, title, locked) {
-            const dis = locked ? 'disabled' : '';
+            const dis = locked ? 'disabled' : '', ro = locked ? 'readonly' : '';
             const pa = m.source === 'pa';
             return `<div class="border border-slate-200 rounded-xl p-3 mb-3">
                 ${title ? `<h4 class="text-sm font-bold mb-2"><span class="bg-slate-800 text-white rounded px-1.5 text-xs mr-1.5">${n}</span>${title}</h4>` : ''}
@@ -2500,11 +2523,11 @@
                 </div>
                 <div class="grid gap-3 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
                     <label class="block min-w-0">${socialLabel(pa ? 'PA source page for the clip or image' : m.source === 'own' ? 'Link to the footage, or where it is' : 'Link to the original')}
-                        <input data-sd="link" data-shot="${k}" value="${escapeHTML(m.link)}" maxlength="2000" placeholder="${pa ? 'https://explore.pressassociation.com/…' : 'https://…'}" class="${socialInput} mt-1" ${dis}></label>
+                        <input data-sd="link" data-shot="${k}" value="${escapeHTML(m.link)}" maxlength="2000" placeholder="${pa ? 'https://explore.pressassociation.com/…' : 'https://…'}" class="${socialInput} mt-1" ${ro}></label>
                     <label class="block min-w-0">${socialLabel('What it shows', 'for the editor')}
-                        <input data-sd="note" data-shot="${k}" value="${escapeHTML(m.note)}" maxlength="200" placeholder="e.g. Library interior, people reading" class="${socialInput} mt-1" ${dis}></label>
+                        <input data-sd="note" data-shot="${k}" value="${escapeHTML(m.note)}" maxlength="200" placeholder="e.g. Library interior, people reading" class="${socialInput} mt-1" ${ro}></label>
                     <label class="block min-w-0">${socialLabel('On-screen credit', m.source === 'own' ? 'optional for your own footage' : '')}
-                        <input data-sd="credit" data-shot="${k}" value="${escapeHTML(m.credit)}" maxlength="120" placeholder="${pa ? 'PA, or the Source Restrictions credit' : 'e.g. Courtesy of …'}" class="${socialInput} mt-1" ${dis}></label>
+                        <input data-sd="credit" data-shot="${k}" value="${escapeHTML(m.credit)}" maxlength="120" placeholder="${pa ? 'PA, or the Source Restrictions credit' : 'e.g. Courtesy of …'}" class="${socialInput} mt-1" ${ro}></label>
                 </div>
                 ${pa ? `<div class="grid gap-2 mt-3">
                     <label class="flex gap-2 items-start text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><input type="checkbox" data-sd="newsroomReady" data-shot="${k}" class="mt-0.5" ${m.newsroomReady ? 'checked' : ''} ${dis}><span><b>Newsroom Ready</b>: marked Newsroom Ready in PA Explore</span></label>
@@ -2573,55 +2596,81 @@
             const strip = document.querySelector('#sd-plan .sp-layouts'), on = strip?.querySelector('.on');
             if (on) strip.scrollLeft = on.offsetLeft - (strip.clientWidth - on.offsetWidth) / 2;
         }
-        function renderSocialEditModal() {
-            const id = state.ui.editingStoryId, story = state.storiesMap[id], d = socialDraft();
-            if (!story || !d) return '';
-            const locked = isLockedByOther(story), dis = locked ? 'disabled' : '';
+        function renderSocialEditor(d) {
+            const id = d.storyId, story = state.storiesMap[id];
+            const editing = socialEditing(id), blocked = lockState(story) !== 'free';
+            const ro = editing ? '' : 'readonly', dis = editing ? '' : 'disabled';
             const media = socialMedia(d.sections, d.shots);
             const formats = [...new Set([...(state.meta.formats || []), 'OOV/CLIP', 'ONCAM', d.format].filter(Boolean))];
             const names = [...new Set(Object.values(state.storiesMap).flatMap(s => [s.reporter, s.presenter]).filter(Boolean))];
             const badge = media.na ? '' : media.ready ? ' <span id="sd-media-badge" class="ml-1 text-[10px] bg-emerald-50 text-emerald-700 rounded-full px-1.5">✓</span>'
                 : ` <span id="sd-media-badge" class="ml-1 text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded-full px-1.5">${media.missing.length}</span>`;
             const tab = (t, label, extra = '') => `<button type="button" data-action="sd-tab" data-val="${t}" aria-pressed="${d.tab === t}" class="px-3 py-2 text-sm font-bold border-b-2 -mb-px whitespace-nowrap ${d.tab === t ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">${label}${extra}</button>`;
-            const body = d.tab === 'media' ? socialMediaTab(d, locked) : d.tab === 'review' ? socialReviewTab(id, story, d) : socialWordsTab(d, locked);
+            const body = d.tab === 'media' ? socialMediaTab(d, !editing) : d.tab === 'review' ? socialReviewTab(id, story, d) : socialWordsTab(d, !editing);
             setTimeout(centreLayoutCard, 0);
-            return `<div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center sm:p-4 z-[60]">
-                <datalist id="staff-names">${names.map(n => `<option value="${escapeHTML(n)}">`).join('')}</datalist>
-                <div class="bg-white sm:rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col h-full sm:h-auto sm:max-h-full overflow-hidden" data-testid="social-editor">
-                    <div class="px-4 md:px-6 py-3 border-b border-slate-200 flex gap-2 items-center bg-slate-50">
-                        <i class="fa-solid fa-mobile-screen-button text-blue-500" aria-hidden="true"></i>
-                        <input data-sd="slug" value="${escapeHTML(d.slug)}" maxlength="80" aria-label="Slug" spellcheck="true" lang="en-GB" class="flex-1 min-w-0 text-lg font-bold uppercase bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded px-2 py-1 outline-none" ${dis}>
-                        <select data-sd="format" aria-label="Format" class="text-xs font-bold border border-violet-200 rounded px-2 py-1 bg-violet-50 text-violet-700" ${dis}>${formats.map(f => `<option ${f === d.format ? 'selected' : ''}>${escapeHTML(f)}</option>`).join('')}</select>
-                        <button data-action="cancel-edit" class="text-slate-400 hover:text-slate-600 text-2xl px-1" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                    ${locked ? renderLockBanner(story) : ''}
-                    ${story.brief || story.pitchedBy || story.sourceUrl ? `<div class="bg-violet-50 border-b border-violet-200 px-4 md:px-6 py-2 text-sm text-violet-900">
-                        <i class="fa-solid fa-lightbulb mr-2 text-violet-400"></i><b>Brief:</b> ${escapeHTML(story.brief || '(no angle given)')}${story.pitchedBy ? ` <span class="text-violet-500">· pitched by ${escapeHTML(story.pitchedBy)}</span>` : ''}${safeWebUrl(story.sourceUrl) ? ` <span class="text-violet-500">·</span> ${sourceLinkHtml(story.sourceUrl, sourceOfUrl(story.sourceUrl), 'font-semibold text-violet-700 hover:text-violet-900 underline')}` : ''}
-                    </div>` : ''}
-                    <div class="flex-1 min-h-0 overflow-y-auto">
-                        <div class="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_20rem]">
-                            <div class="p-4 md:p-6 min-w-0">
-                                <div class="flex flex-wrap gap-x-4 gap-y-2 items-center text-sm text-slate-600 mb-3">
-                                    <label class="flex items-center gap-1.5">Reporter <input data-sd="reporter" list="staff-names" maxlength="60" spellcheck="false" value="${escapeHTML(d.reporter)}" class="border border-slate-300 rounded px-2 py-1 w-36 outline-none focus:border-blue-500" ${dis}></label>
-                                    <label class="flex items-center gap-1.5">Presenter <input data-sd="presenter" list="staff-names" maxlength="60" spellcheck="false" value="${escapeHTML(d.presenter)}" class="border border-slate-300 rounded px-2 py-1 w-36 outline-none focus:border-blue-500" ${dis}></label>
-                                    <span id="sd-est">${socialEstHTML(d)}</span>
-                                </div>
-                                <div class="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto">${tab('words', 'Words + picture')}${tab('media', 'Media &amp; credits', badge)}${tab('review', 'Review')}</div>
-                                <div id="sd-body">${body}</div>
-                            </div>
-                            <aside id="sd-plan" class="p-4 md:p-6 border-t lg:border-t-0 lg:border-l border-slate-200 bg-slate-50/60 min-w-0">${socialPlanHTML(d, locked)}</aside>
-                        </div>
-                    </div>
-                    <div class="px-4 md:px-6 py-3 border-t border-slate-200 bg-slate-50 flex justify-between items-center gap-3 flex-wrap">
-                        <div>${state.ui.storySnapshots[id] && !locked ? `<button data-action="revert-story" data-id="${id}" class="flex items-center gap-2 px-4 py-2 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 font-medium text-sm"><i class="fa-solid fa-clock-rotate-left"></i>Revert to previous version</button>` : ''}</div>
-                        <div class="flex gap-3 items-center flex-wrap justify-end">
-                            <span id="edit-save-error" class="text-sm text-red-600 max-w-xs" style="display:none"></span>
-                            <button data-action="cancel-edit" class="px-5 py-2.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors">${locked ? 'Close' : 'Cancel'}</button>
-                            ${locked ? '' : '<button data-action="sd-save" data-label="Save changes" class="btn-primary">Save changes</button>'}
-                        </div>
-                    </div>
+            const status = editing ? '<span class="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5 whitespace-nowrap"><i class="fa-solid fa-pen mr-1"></i>Editing</span>'
+                : blocked ? `<span class="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 whitespace-nowrap"><i class="fa-solid fa-lock mr-1"></i>${lockState(story) === 'other' ? escapeHTML(story.lockedByName) : 'You, other tab'}</span>`
+                : `<button type="button" data-action="sd-edit" class="text-sm font-bold text-blue-700 bg-white border border-blue-300 hover:bg-blue-50 rounded-lg px-3 py-1 whitespace-nowrap"><i class="fa-solid fa-pen mr-1.5"></i>Edit</button>`;
+            return `<datalist id="staff-names">${names.map(n => `<option value="${escapeHTML(n)}">`).join('')}</datalist>
+                <div class="px-4 md:px-5 py-3 border-b border-slate-200 flex gap-2 items-center bg-slate-50 rounded-t-xl">
+                    <input data-sd="slug" value="${escapeHTML(d.slug)}" maxlength="80" aria-label="Slug" spellcheck="true" lang="en-GB" class="flex-1 min-w-0 text-lg font-bold uppercase bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded px-2 py-1 outline-none" ${ro}>
+                    <select data-sd="format" aria-label="Format" class="text-xs font-bold border border-violet-200 rounded px-2 py-1 bg-violet-50 text-violet-700" ${dis}>${formats.map(f => `<option ${f === d.format ? 'selected' : ''}>${escapeHTML(f)}</option>`).join('')}</select>
+                    ${status}
                 </div>
-            </div>`;
+                ${state.ui.editingStoryId === id && lockState(story) !== 'free' ? renderLockBanner(story) : ''}
+                ${story.brief || story.pitchedBy || story.sourceUrl ? `<div class="bg-violet-50 border-b border-violet-200 px-4 md:px-5 py-2 text-sm text-violet-900">
+                    <i class="fa-solid fa-lightbulb mr-2 text-violet-400"></i><b>Brief:</b> ${escapeHTML(story.brief || '(no angle given)')}${story.pitchedBy ? ` <span class="text-violet-500">· pitched by ${escapeHTML(story.pitchedBy)}</span>` : ''}${safeWebUrl(story.sourceUrl) ? ` <span class="text-violet-500">·</span> ${sourceLinkHtml(story.sourceUrl, sourceOfUrl(story.sourceUrl), 'font-semibold text-violet-700 hover:text-violet-900 underline')}` : ''}
+                </div>` : ''}
+                <div class="p-4 md:p-5">
+                    <div class="flex flex-wrap gap-x-4 gap-y-2 items-center text-sm text-slate-600 mb-3">
+                        <label class="flex items-center gap-1.5">Reporter <input data-sd="reporter" list="staff-names" maxlength="60" spellcheck="false" value="${escapeHTML(d.reporter)}" class="border border-slate-300 rounded px-2 py-1 w-36 outline-none focus:border-blue-500" ${ro}></label>
+                        <label class="flex items-center gap-1.5">Presenter <input data-sd="presenter" list="staff-names" maxlength="60" spellcheck="false" value="${escapeHTML(d.presenter)}" class="border border-slate-300 rounded px-2 py-1 w-36 outline-none focus:border-blue-500" ${ro}></label>
+                        <span id="sd-est">${socialEstHTML(d)}</span>
+                    </div>
+                    <div class="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto">${tab('words', 'Words + picture')}${tab('media', 'Media &amp; credits', badge)}${tab('review', 'Review')}</div>
+                    <div id="sd-body">${body}</div>
+                </div>
+                <div class="px-4 md:px-5 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl flex justify-between items-center gap-3 flex-wrap">
+                    <div>${editing && state.ui.storySnapshots[id] ? `<button data-action="revert-story" data-id="${id}" class="flex items-center gap-2 px-3 py-2 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 font-medium text-sm"><i class="fa-solid fa-clock-rotate-left"></i>Revert to previous version</button>`
+                        : editing ? '' : `<span class="text-xs text-slate-500">${blocked ? 'Someone else is editing this story.' : 'Click any field, or Edit, to change this story.'}</span>`}</div>
+                    <div class="flex gap-3 items-center flex-wrap justify-end">
+                        <span id="edit-save-error" class="text-sm text-red-600 max-w-xs" style="display:none"></span>
+                        ${editing ? `<button data-action="cancel-edit" class="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors">Cancel</button>
+                            <button data-action="sd-save" data-label="Save changes" class="btn-primary">Save changes</button>` : ''}
+                        ${!editing && state.ui.editingStoryId === id ? '<button data-action="cancel-edit" class="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors">Close</button>' : ''}
+                    </div>
+                </div>`;
+        }
+        // Show a story. Leaving one you're editing lets it go (asking first if
+        // there are unsaved changes).
+        async function selectSocialStory(id) {
+            if (!state.storiesMap[id]) return;
+            const editingId = state.ui.editingStoryId;
+            if (editingId && editingId !== id) {
+                const d = state.ui.socialDraft;
+                if (d?.storyId === editingId && socialEditing(editingId) && socialDirty(d)
+                    && !await confirmAction(`You haven't saved your changes to "${d.slug || 'this story'}". Leave it and lose them?`, { title: 'Unsaved changes', confirmLabel: 'Lose changes', danger: true })) return;
+                state.ui.editingStoryId = null;
+                stopLockRefresh();
+                unlockStory(editingId);
+            }
+            state.ui.socialSelected = id;
+            render('main');
+            // On a narrow screen the story is below the running order.
+            if (window.innerWidth < 1024) requestAnimationFrame(() => document.getElementById('social-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        }
+        // Start editing the selected story: take its lock, as the TV editor does.
+        async function beginSocialEdit(focusSelector) {
+            const id = socialSelectedId(), story = id && state.storiesMap[id];
+            if (!story || !canMutate() || state.ui.editingStoryId === id) return;
+            if (state.ui.editingStoryId) await selectSocialStory(id);
+            if (state.ui.editingStoryId) return;
+            if (!await ensureMyName()) return;
+            state.ui.editingStoryId = id;
+            state.ui.socialDraft = socialDraftFrom(id, story, state.ui.socialDraft?.storyId === id ? state.ui.socialDraft : null);
+            lockStory(id);
+            startLockRefresh(id);
+            redrawSocialEditor(focusSelector);
         }
         // Typing updates the draft and the live parts (timings, picture plan,
         // media status) in place, so the text being typed is never redrawn.
@@ -2645,7 +2694,7 @@
         function onSocialInput(e) {
             const el = e.target?.closest?.('[data-sd]');
             const d = state.ui.socialDraft;
-            if (!el || !d || d.storyId !== state.ui.editingStoryId) return;
+            if (!el || !d || !socialEditing(d.storyId) || !el.closest('#social-editor')) return;
             const f = el.dataset.sd, i = el.dataset.i !== undefined ? +el.dataset.i : null, k = el.dataset.shot;
             const isBox = el.type === 'checkbox', isSelect = el.tagName === 'SELECT';
             if ((isBox || isSelect) !== (e.type === 'change')) return;   // text on input; boxes and lists on change
@@ -2663,20 +2712,20 @@
         // desk holds back redraws while a text box has focus, so let go of it
         // first, then put focus back where it was.
         function redrawSocialEditor(focusSelector) {
-            if (document.activeElement && document.getElementById('modal-container')?.contains(document.activeElement)) document.activeElement.blur();
-            render('modal');
-            if (focusSelector) requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`#modal-container ${focusSelector}`)?.focus()));
+            if (document.activeElement && document.getElementById('social-editor')?.contains(document.activeElement)) document.activeElement.blur();
+            render('main');
+            if (focusSelector) requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`#social-editor ${focusSelector}`)?.focus()));
         }
         function focusSocialSection(i) {
             const d = state.ui.socialDraft;
             if (!d || !d.sections[i] || d.sec === i) return;
             d.sec = i;
-            document.querySelectorAll('#modal-container .sd-section').forEach(el => {
+            document.querySelectorAll('#social-editor .sd-section').forEach(el => {
                 const on = +el.dataset.secI === i;
                 el.classList.toggle('border-blue-500', on); el.classList.toggle('ring-1', on); el.classList.toggle('ring-blue-500', on); el.classList.toggle('border-slate-200', !on);
             });
             const plan = document.getElementById('sd-plan');
-            if (plan) { plan.innerHTML = socialPlanHTML(d, false); centreLayoutCard(); }
+            if (plan) { plan.innerHTML = socialPlanHTML(d, !socialEditing(d.storyId)); centreLayoutCard(); }
         }
         function saveSocialStory() {
             const d = socialDraft();
@@ -2692,49 +2741,50 @@
         async function handleSocialAction({ action, id, val }) {
             if (action === 'production-sheet') { printProductionSheet(); return true; }
             if (!action.startsWith('sd-')) return false;
+            if (action === 'sd-select') { selectSocialStory(id); return true; }
+            if (action === 'sd-edit') { beginSocialEdit('input[data-sd="slug"]'); return true; }
             const d = socialDraft();
             if (!d) return true;
             const story = state.storiesMap[d.storyId];
-            const locked = isLockedByOther(story);
             const i = id !== null ? +id : null;
-            if (action === 'sd-tab') { d.tab = val; render('modal'); return true; }
+            if (action === 'sd-tab') { d.tab = val; redrawSocialEditor(); return true; }
+            if (action === 'sd-sec') { focusSocialSection(i); return true; }
             if (action === 'sd-check') {
                 if (!canMutate() || !story) return true;
                 const next = story.completed === val ? null : val;
                 story.completed = next;
-                render('main', 'modal');
+                redrawSocialEditor();
                 try { await DB.setStoryStatus(d.storyId, next); }
                 catch (e) { showError('Check not saved: ' + DB.errorMessage(e)); }
                 return true;
             }
-            if (locked) return true;
+            if (!socialEditing(d.storyId)) return true;
             if (action === 'sd-save') { saveSocialStory(); return true; }
             if (action === 'sd-add-sec') {
                 if (d.sections.length >= 20) { showNotice('Sections', 'A story can have up to 20 sections.', 'warn'); return true; }
                 d.sections.push(cleanSection({ treatment: isOncam(d.format) ? 'presenter' : 'footage' }));
                 d.sec = d.sections.length - 1;
-                render('modal');
-                setTimeout(() => document.querySelector(`#modal-container textarea[data-sd="says"][data-i="${d.sec}"]`)?.focus(), 30);
+                redrawSocialEditor(`textarea[data-sd="says"][data-i="${d.sec}"]`);
                 return true;
             }
             if (action === 'sd-del' && d.sections.length > 1 && d.sections[i]) {
                 d.sections.splice(i, 1);
                 d.sec = Math.min(d.sec, d.sections.length - 1);
-                render('modal'); return true;
+                redrawSocialEditor(); return true;
             }
             if ((action === 'sd-up' || action === 'sd-down') && d.sections[i]) {
                 const j = action === 'sd-up' ? i - 1 : i + 1;
                 if (j < 0 || j >= d.sections.length) return true;
                 [d.sections[i], d.sections[j]] = [d.sections[j], d.sections[i]];
                 d.sec = j;
-                render('modal'); return true;
+                redrawSocialEditor(); return true;
             }
-            if (action === 'sd-layout' && SOCIAL_TREATMENTS[val]) { d.sections[d.sec].treatment = val; render('modal'); return true; }
+            if (action === 'sd-layout' && SOCIAL_TREATMENTS[val]) { d.sections[d.sec].treatment = val; redrawSocialEditor(); return true; }
             if (action === 'sd-source' && d.shots[id] && SOCIAL_SOURCES[val]) {
                 const m = d.shots[id];
                 m.source = val;
                 if (val === 'pa' && !m.credit.trim()) m.credit = 'PA';
-                render('modal'); return true;
+                redrawSocialEditor(); return true;
             }
             return true;
         }
@@ -2822,7 +2872,7 @@
                         <button data-action="claim-producer" ${state.ui.pitchBusy ? 'disabled' : ''} class="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-full shadow-sm transition-colors" title="For whoever is leading the bulletin"><i class="fa-solid fa-crown mr-1.5"></i>I'm the producer</button></span>`;
                 }
             }
-            return `<div class="${state.ui.view === 'conference' ? 'max-w-5xl' : 'max-w-7xl'} mx-auto px-4 md:px-6 pt-4 flex flex-wrap items-center justify-between gap-3">
+            return `<div class="${state.ui.view === 'conference' ? 'max-w-5xl' : isSocialRoom() ? 'max-w-[100rem]' : 'max-w-7xl'} mx-auto px-4 md:px-6 pt-4 flex flex-wrap items-center justify-between gap-3">
                 <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                     ${tab('conference', 'fa-comments', 'Conference', open)}
                     ${tab('rundown', isSocialRoom() ? 'fa-mobile-screen-button' : 'fa-bars-staggered', isSocialRoom() ? 'Running order <span class="ml-1 text-[10px] font-bold bg-violet-600 text-white px-1.5 py-0.5 rounded align-middle">SOCIAL</span>' : 'Running order', stories)}
@@ -3182,10 +3232,9 @@
 
         // ── Modals ─────────────────────────────────────────────────────────
         function renderModals() {
-            if (!state.ui.editingStoryId) state.ui.socialDraft = null;
             if (state.ui.isShortcutsModalOpen) return renderShortcutsModal();
             if (state.ui.pendingConflict) return renderConflictModal();
-            if (state.ui.editingStoryId) return isSocialRoom() && state.storiesMap[state.ui.editingStoryId]?.type !== 'segment' ? renderSocialEditModal() : renderEditModal();
+            if (state.ui.editingStoryId && !(isSocialRoom() && state.storiesMap[state.ui.editingStoryId]?.type !== 'segment')) return renderEditModal();
             if (state.ui.join && !state.ui.needsJoin) return renderJoinModal();
             if (state.ui.isSettingsModalOpen) return renderSettingsModal();
             return '';
@@ -3557,7 +3606,7 @@
                     const s = state.storiesMap[storyId];
                     if (s) { s.lockedBySession = state.sessionId; s.lockedByName = userName; s.lockedAt = now; }
                     startLockRefresh(storyId);
-                    render('modal');
+                    render('main', 'modal');   // the social editor is in the page
                     try { await DB.takeLock(storyId, state.sessionId, userName); }
                     catch (e) { showError('Could not take over: ' + DB.errorMessage(e)); }
                     return true;
@@ -3727,8 +3776,13 @@
             document.body.addEventListener('input', onSocialInput);
             document.body.addEventListener('change', onSocialInput);
             document.body.addEventListener('focusin', e => {
-                const sec = e.target?.closest?.('#modal-container .sd-section');
+                const sec = e.target?.closest?.('#social-editor .sd-section');
                 if (sec) focusSocialSection(+sec.dataset.secI);
+                const field = e.target?.closest?.('#social-editor [data-sd][readonly]');
+                if (field && !state.ui.editingStoryId) {
+                    const sel = `${field.tagName.toLowerCase()}[data-sd="${field.dataset.sd}"]${field.dataset.i !== undefined ? `[data-i="${field.dataset.i}"]` : ''}${field.dataset.shot ? `[data-shot="${field.dataset.shot}"]` : ''}`;
+                    beginSocialEdit(sel);
+                }
             });
             document.body.addEventListener('change', e => {
                 if (e.target.id === 'room-select' && e.target.value !== state.currentBulletinId) openRoom(e.target.value);
