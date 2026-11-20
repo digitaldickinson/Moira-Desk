@@ -2570,9 +2570,10 @@
             if (m.credit.trim()) return `<div class="sp-credit" style="top:${top}">${escapeHTML(m.credit)}</div>`;
             return m.source === 'own' ? '' : `<div class="sp-credit missing" style="top:${top}">CREDIT?</div>`;
         }
-        function socialPlanHTML(d, locked) {
-            const i = Math.min(d.sec, d.sections.length - 1), x = d.sections[i], a = d.shots.a, b = d.shots.b;
-            const who = d.presenter.trim() || 'Presenter';
+        // A section as a 9:16 phone frame: the picture plan, and the production
+        // sheet's storyboard.
+        function socialFrameHTML(x, shots, presenter) {
+            const a = shots.a, b = shots.b, who = String(presenter || '').trim() || 'Presenter';
             const lbl = (icon, t) => `<span class="sp-lbl"><i class="fa-solid fa-${icon}"></i>${escapeHTML(t)}</span>`;
             const zones = {
                 presenter: `<div class="sp-zone sp-presenter" style="top:0;bottom:0">${lbl('user', who)}</div>`,
@@ -2583,11 +2584,15 @@
                 dual: `<div class="sp-zone sp-footage" style="top:0;height:50%">${lbl('film', a.note || 'Shot 1')}</div>${socialCredit(a, '8px')}
                     <div class="sp-zone sp-footage2" style="top:50%;bottom:0;border-top:2px solid #fff">${lbl('film', b.note || 'Shot 2')}</div>${socialCredit(b, '51%')}`,
                 footage: `<div class="sp-zone sp-footage" style="top:0;bottom:0">${lbl('film', a.note || 'Footage')}</div>${socialCredit(a, '8px')}`,
-                graphic: `<div class="sp-zone sp-graphic" style="top:0;bottom:0">${lbl('chart-simple', a.note || 'Graphic')}</div>${socialCredit(a, '8px')}`,
+                graphic: `<div class="sp-zone sp-graphic" style="top:0;bottom:0">${lbl('chart-column', a.note || 'Graphic')}</div>${socialCredit(a, '8px')}`,
             };
+            return `<div class="sp-phone">${zones[x.treatment]}${SOCIAL_TREATMENTS[x.treatment].vo ? '<div class="sp-vo"><i class="fa-solid fa-microphone"></i> VO</div>' : ''}${x.onscreen.trim() ? `<div class="sp-caption">${escapeHTML(x.onscreen)}</div>` : ''}<div class="sp-safe">app buttons &amp; captions area</div></div>`;
+        }
+        function socialPlanHTML(d, locked) {
+            const i = Math.min(d.sec, d.sections.length - 1), x = d.sections[i];
             return `<h4 class="font-bold text-slate-800">Picture plan <span class="text-xs font-normal text-slate-400">layout preview · 9:16</span></h4>
                 <p class="text-xs text-slate-500 text-center mt-1">Section <b class="text-slate-700">${String(i + 1).padStart(2, '0')}${x.title ? ` · ${escapeHTML(x.title)}` : ''}</b></p>
-                <div class="sp-phone">${zones[x.treatment]}${SOCIAL_TREATMENTS[x.treatment].vo ? '<div class="sp-vo"><i class="fa-solid fa-microphone"></i> VO</div>' : ''}${x.onscreen.trim() ? `<div class="sp-caption">${escapeHTML(x.onscreen)}</div>` : ''}<div class="sp-safe">app buttons &amp; captions area</div></div>
+                ${socialFrameHTML(x, d.shots, d.presenter)}
                 <div class="sp-layouts" role="group" aria-label="Picture treatment for this section">${Object.entries(SOCIAL_TREATMENTS).map(([k, v]) =>
                     `<button type="button" data-action="sd-layout" data-val="${k}" aria-pressed="${k === x.treatment}" class="${k === x.treatment ? 'on' : ''}" ${locked ? 'disabled' : ''}><span class="sp-mini">${v.mini}</span>${escapeHTML(v.short)}</button>`).join('')}</div>
                 <p class="text-xs italic text-slate-500 text-center">What does this picture help the audience understand?</p>`;
@@ -2877,9 +2882,25 @@
                         <td>${formatDuration(sectionSeconds(x))}${clipSeconds(x.clip) ? `<br><i>incl. ${formatDuration(clipSeconds(x.clip))} clip</i>` : ''}</td>
                         <td colspan="2">${x.onscreen.trim() ? `On screen: <b>${escapeHTML(x.onscreen)}</b>` : ''}</td></tr>`).join('');
             }).join('');
+            // The storyboard: each story's sections as picture-plan frames, with
+            // the treatment, time and words under each.
+            const board = ids.map(id => {
+                const s = state.storiesMap[id], sections = storySections(s), shots = storyShots(s);
+                return `<section class="board-story"><h3>${escapeHTML(s.slug || 'Untitled')} · ${escapeHTML(s.format)} · ${formatDuration(s.duration)}</h3><div class="board">`
+                    + sections.map((x, i) => `<figure class="frame">${socialFrameHTML(x, shots, s.presenter)}<figcaption>
+                        <b>${String(i + 1).padStart(2, '0')}${x.title ? ` ${escapeHTML(x.title)}` : ''}</b>
+                        <span class="pic">${escapeHTML(cueText(x))} · ${formatDuration(sectionSeconds(x))}${clipSeconds(x.clip) ? ` (incl. ${formatDuration(clipSeconds(x.clip))} clip)` : ''}</span>
+                        <p>${x.says.trim() ? escapeHTML(x.says) : '<span class="miss">No words yet</span>'}</p></figcaption></figure>`).join('')
+                    + '</div></section>';
+            }).join('');
+            // The picture plan's styles, from this page's own stylesheet.
+            const frameCSS = [...document.styleSheets].flatMap(sheet => { try { return [...sheet.cssRules]; } catch { return []; } })
+                .filter(r => /\.sp-/.test(r.selectorText || '')).map(r => r.cssText).join('\n');
             const printed = new Date().toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
             const title = `${state.roomDisplayName}: production sheet`;
-            return `<!DOCTYPE html><html lang="en-GB"><head><meta charset="UTF-8"><title>${escapeHTML(title)}</title><style>
+            return `<!DOCTYPE html><html lang="en-GB"><head><meta charset="UTF-8"><title>${escapeHTML(title)}</title>
+                <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"><style>
+                ${frameCSS}
                 * { box-sizing: border-box; }
                 body { margin: 0; color: #1b1f27; font: 12.5px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
                 h1 { font-size: 20px; margin: 0 0 2px; } .meta { color: #667085; font-size: 12px; margin: 0 0 10px; }
@@ -2887,11 +2908,17 @@
                 th { background: #f4f6f9; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #667085; }
                 tr.story td { background: #eef1f5; font-weight: 700; } tr { break-inside: avoid; }
                 a { color: #2457d6; word-break: break-all; } .miss { color: #c62828; font-weight: 700; }
+                .board-h { font-size: 16px; margin: 0 0 8px; break-before: page; }
+                .board-story { margin-bottom: 14px; } .board-story h3 { font-size: 13px; margin: 0 0 8px; padding: 5px 6px; background: #eef1f5; break-after: avoid; }
+                .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 12px; }
+                .frame { margin: 0; break-inside: avoid; } .frame .sp-phone { zoom: .7; margin: 0 auto 8px; }
+                .frame figcaption { font-size: 11px; line-height: 1.35; } .frame .pic { display: block; color: #667085; } .frame p { margin: 3px 0 0; }
                 @page { margin: 12mm; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             </style></head><body>
                 <h1>${escapeHTML(title)}</h1>
                 <p class="meta">Printed ${escapeHTML(printed)} · approx. runtime ≈ ${approxDuration(total)}${state.meta.producerName ? ` · producer ${escapeHTML(state.meta.producerName)}` : ''}</p>
                 <table><thead><tr><th>#</th><th>Section &amp; picture</th><th>Words</th><th>Time</th><th>Source</th><th>Credit</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No stories yet.</td></tr>'}</tbody></table>
+                ${board ? `<h2 class="board-h">Storyboard</h2>${board}` : ''}
             </body></html>`;
         }
         function printProductionSheet() {
@@ -2900,9 +2927,10 @@
             frame.id = 'print-frame';
             frame.setAttribute('aria-hidden', 'true');
             frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
-            frame.onload = () => {
+            frame.onload = async () => {
                 const win = frame.contentWindow;
                 win.addEventListener('afterprint', () => setTimeout(() => frame.remove(), 0));
+                try { await win.document.fonts.ready; } catch {}   // the storyboard's icons
                 win.focus();
                 win.print();
             };

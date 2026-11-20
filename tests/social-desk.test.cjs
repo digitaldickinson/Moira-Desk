@@ -195,7 +195,23 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')
     assert.match(sheet, /onedrive\.example\/station\.mp4/);
     assert.match(sheet, /<span class="miss">MISSING<\/span>/);
     assert.doesNotMatch(sheet, /<script/i);
+    // The storyboard: a picture-plan frame for each section, styled like the picture plan.
+    const board = await page.evaluate((html) => {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const frames = [...doc.querySelectorAll('.board-story')].map(st => ({ head: st.querySelector('h3').textContent,
+        frames: [...st.querySelectorAll('.frame')].map(f => ({ zone: [...f.querySelectorAll('.sp-zone')].map(z => z.className.replace('sp-zone ', '')).join('+'),
+          caption: f.querySelector('figcaption').textContent.replace(/\s+/g, ' ').trim(), missingCredit: !!f.querySelector('.sp-credit.missing') })) }));
+      return { frames, css: doc.querySelector('style').textContent };
+    }, sheet);
+    assert.deepEqual(board.frames.map(st => st.frames.length), [1, 1, 2], 'one frame per section, story by story');
+    assert.match(board.frames[2].head, /^RAIL · /);
+    assert.deepEqual(board.frames[2].frames.map(f => f.zone), ['sp-footage', 'sp-footage+sp-footage2']);
+    assert.match(board.frames[2].frames[0].caption, /^01 Story Full footage · VO · 00:16 \(incl\. 00:06 clip\) Rail passengers/);
+    assert.equal(board.frames[1].frames[0].missingCredit, true, 'a missing credit shows on the frame');
+    assert.match(board.css, /\.sp-phone \{/, 'the picture plan styles come with it');
+    if (process.env.SHEET_OUT) fs.writeFileSync(process.env.SHEET_OUT, sheet);
     console.log('PASS: read only while someone else edits; the production sheet shows sources and missing credits');
+    console.log('PASS: the production sheet has a storyboard of picture-plan frames');
 
     // Captions: the words read out, in order, two short lines at most; cues and on-screen text left out.
     const srt = await page.evaluate(() => {
